@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Save, Palette, Bell, ShieldLock } from "lucide-react";
+import { Save, Palette, Bell, Shield } from "lucide-react";
 
 export default function ConfiguracoesPage() {
   // Mock settings state - in a real app, this would come from a data store
@@ -25,7 +25,7 @@ export default function ConfiguracoesPage() {
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <ShieldLock className="h-5 w-5 text-primary" /> Perfil do Treinador
+              <Shield className="h-5 w-5 text-primary" /> Perfil do Treinador
             </CardTitle>
             <CardDescription>Informações básicas do treinador.</CardDescription>
           </CardHeader>
