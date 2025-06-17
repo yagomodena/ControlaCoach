@@ -1,32 +1,66 @@
+
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from 'next-themes';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Save, Palette, Bell, Shield } from "lucide-react"; // Corrected ShieldLock to Shield
+import { Save, Palette, Bell, Shield, CalendarClock } from "lucide-react"; // Added CalendarClock
+import { Separator } from '@/components/ui/separator';
+
+interface DailyScheduleState {
+  name: string;
+  isWorkDay: boolean;
+  workStart: string;
+  workEnd: string;
+  breakStart: string;
+  breakEnd: string;
+}
+
+const initialWeekSchedule: DailyScheduleState[] = [
+  { name: 'Segunda-feira', isWorkDay: true, workStart: '08:00', workEnd: '18:00', breakStart: '12:00', breakEnd: '13:30' },
+  { name: 'Terça-feira', isWorkDay: true, workStart: '08:00', workEnd: '18:00', breakStart: '12:00', breakEnd: '13:30' },
+  { name: 'Quarta-feira', isWorkDay: true, workStart: '08:00', workEnd: '18:00', breakStart: '12:00', breakEnd: '13:30' },
+  { name: 'Quinta-feira', isWorkDay: true, workStart: '08:00', workEnd: '18:00', breakStart: '12:00', breakEnd: '13:30' },
+  { name: 'Sexta-feira', isWorkDay: true, workStart: '08:00', workEnd: '18:00', breakStart: '12:00', breakEnd: '13:30' },
+  { name: 'Sábado', isWorkDay: true, workStart: '08:00', workEnd: '12:00', breakStart: '', breakEnd: '' },
+  { name: 'Domingo', isWorkDay: false, workStart: '08:00', workEnd: '12:00', breakStart: '', breakEnd: '' },
+];
+
 
 export default function ConfiguracoesPage() {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = React.useState(false);
+  const [weekSchedule, setWeekSchedule] = useState<DailyScheduleState[]>(initialWeekSchedule);
 
   React.useEffect(() => {
     setMounted(true);
   }, []);
   
-  // Mock settings state - in a real app, this would come from a data store
   const mockSettings = {
     coachName: "ControlaCoach",
     notificationsEnabled: true,
     defaultPaymentReminderDays: 3,
   };
 
+  const handleScheduleChange = (index: number, field: keyof DailyScheduleState, value: string | boolean) => {
+    const newSchedule = [...weekSchedule];
+    (newSchedule[index] as any)[field] = value;
+    setWeekSchedule(newSchedule);
+  };
+
+  const handleSaveAvailability = () => {
+    // Placeholder for saving logic
+    console.log("Saving availability:", weekSchedule);
+    // Here you would typically call an API or update a global state/mock data
+    alert("Funcionalidade de salvar disponibilidade será implementada em breve!");
+  };
+
+
   if (!mounted) {
-    // Avoid rendering UI that depends on theme until client is mounted
-    // to prevent hydration mismatch.
     return null; 
   }
 
@@ -115,6 +149,94 @@ export default function ConfiguracoesPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Weekly Availability Card */}
+      <Card className="shadow-lg mt-8 lg:col-span-3">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CalendarClock className="h-5 w-5 text-primary" /> Disponibilidade Semanal
+          </CardTitle>
+          <CardDescription>Defina seus horários de trabalho e pausas para cada dia da semana. Estes horários serão refletidos na sua Agenda.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {weekSchedule.map((day, index) => (
+            <React.Fragment key={day.name}>
+              {index > 0 && <Separator className="my-6" />}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-semibold text-lg text-foreground">{day.name}</h4>
+                  <div className="flex items-center space-x-2">
+                    <Label htmlFor={`isWorkDay-${index}`} className="text-sm text-muted-foreground">
+                      Dia de Trabalho
+                    </Label>
+                    <Switch
+                      id={`isWorkDay-${index}`}
+                      checked={day.isWorkDay}
+                      onCheckedChange={(checked) => handleScheduleChange(index, 'isWorkDay', checked)}
+                    />
+                  </div>
+                </div>
+
+                {day.isWorkDay && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+                    {/* Work Hours */}
+                    <div className="space-y-1">
+                      <Label htmlFor={`workStart-${index}`} className="text-xs">Horário de Início (Trabalho)</Label>
+                      <Input
+                        id={`workStart-${index}`}
+                        type="time"
+                        value={day.workStart}
+                        onChange={(e) => handleScheduleChange(index, 'workStart', e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor={`workEnd-${index}`} className="text-xs">Horário de Fim (Trabalho)</Label>
+                      <Input
+                        id={`workEnd-${index}`}
+                        type="time"
+                        value={day.workEnd}
+                        onChange={(e) => handleScheduleChange(index, 'workEnd', e.target.value)}
+                      />
+                    </div>
+
+                    {/* Break Hours */}
+                    <div className="space-y-1">
+                      <Label htmlFor={`breakStart-${index}`} className="text-xs">Início da Pausa (Opcional)</Label>
+                      <Input
+                        id={`breakStart-${index}`}
+                        type="time"
+                        value={day.breakStart}
+                        onChange={(e) => handleScheduleChange(index, 'breakStart', e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor={`breakEnd-${index}`} className="text-xs">Fim da Pausa (Opcional)</Label>
+                      <Input
+                        id={`breakEnd-${index}`}
+                        type="time"
+                        value={day.breakEnd}
+                        onChange={(e) => handleScheduleChange(index, 'breakEnd', e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
+                {!day.isWorkDay && (
+                  <p className="text-sm text-muted-foreground">Dia de descanso.</p>
+                )}
+              </div>
+            </React.Fragment>
+          ))}
+        </CardContent>
+        <CardFooter>
+          <Button onClick={handleSaveAvailability} className="ml-auto bg-primary hover:bg-primary/90 text-primary-foreground">
+            <Save className="mr-2 h-4 w-4" /> Salvar Disponibilidade
+          </Button>
+        </CardFooter>
+      </Card>
+
     </div>
   );
 }
+
+
+    
