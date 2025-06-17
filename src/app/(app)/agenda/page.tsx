@@ -5,6 +5,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChevronLeft, ChevronRight, Users, Edit, PlusCircle, Clock } from "lucide-react";
 import { 
   Dialog,
@@ -15,13 +17,6 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { 
   format, 
@@ -61,11 +56,10 @@ export default function AgendaPage() {
 
   const [isStudentSelectionDialogOpen, setIsStudentSelectionDialogOpen] = useState(false);
   const [slotBeingBooked, setSlotBeingBooked] = useState<string | null>(null);
-  const [studentToBookId, setStudentToBookId] = useState<string | null>(null);
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [studentsList, setStudentsList] = useState<Student[]>([]);
 
   useEffect(() => {
-    // Load students once, or if they might change, add dependencies to re-fetch
     setStudentsList(MOCK_STUDENTS.filter(s => s.status === 'active'));
   }, []);
 
@@ -175,33 +169,51 @@ export default function AgendaPage() {
       return;
     }
     setSlotBeingBooked(time);
-    setStudentToBookId(null); // Reset previous selection
+    setSelectedStudentIds([]); 
     setIsStudentSelectionDialogOpen(true);
   };
 
+  const handleStudentSelectionChange = (studentId: string, checked: boolean) => {
+    setSelectedStudentIds(prevSelectedIds => {
+      if (checked) {
+        return [...prevSelectedIds, studentId];
+      } else {
+        return prevSelectedIds.filter(id => id !== studentId);
+      }
+    });
+  };
+
   const handleConfirmBooking = () => {
-    if (!selectedDate || !slotBeingBooked || !studentToBookId) {
+    if (!selectedDate || !slotBeingBooked || selectedStudentIds.length === 0) {
       toast({
         title: "Erro ao Agendar",
-        description: "Informações incompletas. Selecione data, horário e aluno.",
+        description: "Informações incompletas. Selecione data, horário e pelo menos um aluno.",
         variant: "destructive",
       });
       return;
     }
 
-    const student = MOCK_STUDENTS.find(s => s.id === studentToBookId);
-    if (!student) {
-      toast({ title: "Erro", description: "Aluno não encontrado.", variant: "destructive" });
-      return;
+    let classTitle = "Aula em Grupo";
+    let toastDescription = `Aula em grupo às ${slotBeingBooked} no dia ${format(selectedDate, 'dd/MM/yyyy')} foi agendada com ${selectedStudentIds.length} aluno(s).`;
+
+    if (selectedStudentIds.length === 1) {
+      const student = MOCK_STUDENTS.find(s => s.id === selectedStudentIds[0]);
+      if (student) {
+        classTitle = `Aula Particular - ${student.name}`;
+        toastDescription = `Aula com ${student.name} às ${slotBeingBooked} no dia ${format(selectedDate, 'dd/MM/yyyy')} foi agendada.`;
+      } else {
+         classTitle = `Aula Agendada`; // Fallback
+      }
     }
+
 
     const newBookedClass: BookedClass = {
       id: crypto.randomUUID(),
       date: format(selectedDate, 'yyyy-MM-dd'),
       time: slotBeingBooked,
-      title: `Aula - ${student.name}`, 
+      title: classTitle, 
       location: 'A definir', 
-      studentIds: [studentToBookId],
+      studentIds: selectedStudentIds,
       durationMinutes: 60,
     };
 
@@ -209,11 +221,11 @@ export default function AgendaPage() {
 
     toast({
       title: "Aula Agendada!",
-      description: `Aula com ${student.name} às ${slotBeingBooked} no dia ${format(selectedDate, 'dd/MM/yyyy')} foi agendada.`,
+      description: toastDescription,
     });
     setIsStudentSelectionDialogOpen(false);
     setSlotBeingBooked(null);
-    setStudentToBookId(null);
+    setSelectedStudentIds([]);
   };
 
 
@@ -329,41 +341,39 @@ export default function AgendaPage() {
       </div>
 
       <Dialog open={isStudentSelectionDialogOpen} onOpenChange={setIsStudentSelectionDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Agendar Aula para {slotBeingBooked}</DialogTitle>
             <DialogDescription>
-              Selecione o aluno para o horário de {slotBeingBooked} em {selectedDate ? format(selectedDate, 'dd/MM/yyyy', { locale: ptBR }) : ''}.
+              Selecione o(s) aluno(s) para o horário de {slotBeingBooked} em {selectedDate ? format(selectedDate, 'dd/MM/yyyy', { locale: ptBR }) : ''}.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="student" className="text-right">
-                Aluno
-              </Label>
-              <Select onValueChange={setStudentToBookId} value={studentToBookId || undefined}>
-                <SelectTrigger id="student" className="col-span-3">
-                  <SelectValue placeholder="Selecione um aluno" />
-                </SelectTrigger>
-                <SelectContent>
-                  {studentsList.length > 0 ? (
-                    studentsList.map(student => (
-                      <SelectItem key={student.id} value={student.id}>
-                        {student.name}
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <SelectItem value="no-students" disabled>Nenhum aluno ativo encontrado</SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="py-4">
+            <Label className="mb-2 block">Alunos Ativos</Label>
+            <ScrollArea className="h-[200px] w-full rounded-md border p-4">
+              {studentsList.length > 0 ? (
+                studentsList.map(student => (
+                  <div key={student.id} className="flex items-center space-x-2 mb-2">
+                    <Checkbox
+                      id={`student-${student.id}`}
+                      checked={selectedStudentIds.includes(student.id)}
+                      onCheckedChange={(checked) => handleStudentSelectionChange(student.id, !!checked)}
+                    />
+                    <Label htmlFor={`student-${student.id}`} className="font-normal">
+                      {student.name}
+                    </Label>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground">Nenhum aluno ativo encontrado.</p>
+              )}
+            </ScrollArea>
           </div>
           <DialogFooter>
             <DialogClose asChild>
               <Button type="button" variant="outline">Cancelar</Button>
             </DialogClose>
-            <Button type="button" onClick={handleConfirmBooking} disabled={!studentToBookId}>
+            <Button type="button" onClick={handleConfirmBooking} disabled={selectedStudentIds.length === 0}>
               Confirmar Agendamento
             </Button>
           </DialogFooter>
