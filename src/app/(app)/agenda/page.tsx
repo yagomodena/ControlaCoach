@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
-import { ChevronLeft, ChevronRight, Users, Edit, PlusCircle, Clock, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Users, Edit, PlusCircle, Clock, Trash2, Search } from "lucide-react"; // Added Search
+import Link from 'next/link'; // Added Link
 import { 
   Dialog,
   DialogContent,
@@ -19,7 +20,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; // Added Select
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   format, 
   addMonths, 
@@ -35,8 +36,8 @@ import {
   parseISO
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import type { BookedClass, DailyAvailability, Student, Location } from '@/types'; // Added Location
-import { INITIAL_MOCK_BOOKED_CLASSES, MOCK_COACH_AVAILABILITY, MOCK_STUDENTS, MOCK_LOCATIONS } from '@/types'; // Added MOCK_LOCATIONS
+import type { BookedClass, DailyAvailability, Student, Location } from '@/types';
+import { INITIAL_MOCK_BOOKED_CLASSES, MOCK_COACH_AVAILABILITY, MOCK_STUDENTS, MOCK_LOCATIONS } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 
 interface TimeSlot {
@@ -476,20 +477,34 @@ export default function AgendaPage() {
               </div>
               <div>
                 <Label htmlFor="editClassLocation" className="mb-1 block">Local da Aula</Label>
-                <Select
-                  value={editedClassLocation}
-                  onValueChange={setEditedClassLocation}
-                >
-                  <SelectTrigger id="editClassLocation">
-                    <SelectValue placeholder="Selecione o local" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="A definir">A definir</SelectItem>
-                    {activeLocations.map(loc => (
-                      <SelectItem key={loc.id} value={loc.name}>{loc.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center gap-2">
+                  <Select
+                    value={editedClassLocation}
+                    onValueChange={setEditedClassLocation}
+                  >
+                    <SelectTrigger id="editClassLocation" className="flex-grow">
+                      <SelectValue placeholder="Selecione o local" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="A definir">A definir</SelectItem>
+                      {activeLocations.map(loc => (
+                        <SelectItem key={loc.id} value={loc.name}>{loc.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button variant="outline" size="icon" asChild>
+                    <Link href="/locais/novo" target="_blank" rel="noopener noreferrer">
+                      <PlusCircle className="h-4 w-4" />
+                      <span className="sr-only">Adicionar Novo Local</span>
+                    </Link>
+                  </Button>
+                  <Button variant="outline" size="icon" asChild>
+                    <Link href="/locais" target="_blank" rel="noopener noreferrer">
+                      <Search className="h-4 w-4" />
+                      <span className="sr-only">Consultar Locais</span>
+                    </Link>
+                  </Button>
+                </div>
               </div>
               <div>
                 <Label className="mb-2 block">Alunos Inscritos</Label>
@@ -533,3 +548,4 @@ export default function AgendaPage() {
     </div>
   );
 }
+

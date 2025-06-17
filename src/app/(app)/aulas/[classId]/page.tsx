@@ -4,7 +4,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Edit3, Save, Clock, MapPin, Users, CalendarDays } from 'lucide-react';
+import { ArrowLeft, Edit3, Save, Clock, MapPin, Users, CalendarDays, PlusCircle, Search } from 'lucide-react'; // Added PlusCircle, Search
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -19,7 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 const classSessionSchema = z.object({
   dayOfWeek: z.enum(DAYS_OF_WEEK, { required_error: 'Selecione o dia da semana.' }),
   time: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Formato de hora inválido (HH:MM)." }),
-  location: z.string().min(1, { message: 'Selecione um local.' }), // Location is a string name, required
+  location: z.string().min(1, { message: 'Selecione um local.' }), 
   maxStudents: z.coerce.number().int().positive({ message: 'Número de alunos deve ser positivo.' }).min(1, {message: 'Mínimo 1 aluno'}),
 });
 
@@ -160,28 +160,44 @@ export default function AulaDetalhePage() {
                 </div>
 
                 <div className="space-y-2">
-                <Label htmlFor="location">Local</Label>
-                <Controller 
-                    name="location" 
-                    control={control} 
-                    render={({ field }) => (
-                        <Select onValueChange={field.onChange} value={field.value}>
-                            <SelectTrigger id="location">
-                                <SelectValue placeholder="Selecione o local" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {activeLocations.length > 0 ? (
-                                    activeLocations.map(loc => (
-                                        <SelectItem key={loc.id} value={loc.name}>{loc.name}</SelectItem>
-                                    ))
-                                ) : (
-                                    <SelectItem value="no-location" disabled>Nenhum local ativo</SelectItem>
-                                )}
-                            </SelectContent>
-                        </Select>
-                    )} 
-                />
-                {errors.location && <p className="text-sm text-destructive">{errors.location.message}</p>}
+                  <Label htmlFor="location">Local</Label>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-grow">
+                      <Controller 
+                          name="location" 
+                          control={control} 
+                          render={({ field }) => (
+                              <Select onValueChange={field.onChange} value={field.value}>
+                                  <SelectTrigger id="location">
+                                      <SelectValue placeholder="Selecione o local" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                      {activeLocations.length > 0 ? (
+                                          activeLocations.map(loc => (
+                                              <SelectItem key={loc.id} value={loc.name}>{loc.name}</SelectItem>
+                                          ))
+                                      ) : (
+                                          <SelectItem value="no-location" disabled>Nenhum local ativo</SelectItem>
+                                      )}
+                                  </SelectContent>
+                              </Select>
+                          )} 
+                      />
+                    </div>
+                    <Button variant="outline" size="icon" asChild>
+                      <Link href="/locais/novo" target="_blank" rel="noopener noreferrer">
+                        <PlusCircle className="h-4 w-4" />
+                        <span className="sr-only">Adicionar Novo Local</span>
+                      </Link>
+                    </Button>
+                    <Button variant="outline" size="icon" asChild>
+                      <Link href="/locais" target="_blank" rel="noopener noreferrer">
+                        <Search className="h-4 w-4" />
+                        <span className="sr-only">Consultar Locais</span>
+                      </Link>
+                    </Button>
+                  </div>
+                  {errors.location && <p className="text-sm text-destructive">{errors.location.message}</p>}
                 </div>
                 
                 <div className="space-y-2">
@@ -221,3 +237,4 @@ export default function AulaDetalhePage() {
     </div>
   );
 }
+
