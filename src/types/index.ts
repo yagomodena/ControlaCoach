@@ -1,3 +1,4 @@
+
 export interface Student {
   id: string;
   name: string;
@@ -6,10 +7,9 @@ export interface Student {
   technicalLevel: 'Iniciante' | 'Intermediário' | 'Avançado';
   status: 'active' | 'inactive';
   registrationDate: string; // ISO date string
-  objective?: string; // Added objective field
+  objective?: string;
   attendanceHistory?: { date: string; classId: string; status: 'present' | 'absent' | 'rescheduled' }[];
   
-  // Financial fields - can be part of a separate Payment type if needed
   paymentStatus?: 'pago' | 'pendente' | 'vencido';
   dueDate?: string; // ISO date string
   amountDue?: number;
@@ -21,7 +21,7 @@ export interface ClassSession {
   id: string;
   dayOfWeek: 'Segunda' | 'Terça' | 'Quarta' | 'Quinta' | 'Sexta' | 'Sábado' | 'Domingo';
   time: string; // e.g., "18:00"
-  location: string; // e.g., "Praia Central", "Quadra A"
+  location: string;
   maxStudents: number;
   enrolledStudentIds: string[];
 }
@@ -143,3 +143,14 @@ export const MOCK_STUDENTS: Student[] = [
     ],
   }
 ];
+
+
+export let MOCK_CLASS_SESSIONS: ClassSession[] = [
+  { id: 'c1', dayOfWeek: 'Segunda', time: '18:00', location: 'Praia Central', maxStudents: 10, enrolledStudentIds: ['1', '2', 's3', 's4', 's5', 's6', 's7', 's8'] },
+  { id: 'c2', dayOfWeek: 'Segunda', time: '19:00', location: 'Praia Central', maxStudents: 10, enrolledStudentIds: ['s9', 's10', 's11', 's12', 's13', 's14', 's15', 's16', 's17', 's18'] },
+  { id: 'c3', dayOfWeek: 'Terça', time: '07:00', location: 'Quadra Coberta A', maxStudents: 12, enrolledStudentIds: ['s19', 's20', 's21', 's22', 's23', 's24', 's25', 's26', 's27'] },
+  { id: 'c4', dayOfWeek: 'Quarta', time: '18:30', location: 'Praia do Tombo', maxStudents: 8, enrolledStudentIds: ['s28', 's29', 's30', 's31', 's32'] },
+  { id: 'c5', dayOfWeek: 'Quinta', time: '07:00', location: 'Quadra Coberta B', maxStudents: 12, enrolledStudentIds: ['s33', 's34', 's35', 's36', 's37', 's38', 's39', 's40', 's41', 's42', 's43'] },
+];
+
+export const DAYS_OF_WEEK: ClassSession['dayOfWeek'][] = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
