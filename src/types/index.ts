@@ -180,7 +180,7 @@ export let MOCK_CLASS_SESSIONS: ClassSession[] = [
 export const DAYS_OF_WEEK: ClassSession['dayOfWeek'][] = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
 
 // Mock data for booked classes/events on the agenda
-export const MOCK_BOOKED_CLASSES: BookedClass[] = [
+export const INITIAL_MOCK_BOOKED_CLASSES: BookedClass[] = [
   { id: 'bc1', date: '2024-07-29', time: '18:00', title: 'Futevôlei Iniciante', location: 'Praia Central', studentIds: ['1'], durationMinutes: 60 },
   { id: 'bc2', date: '2024-07-29', time: '19:00', title: 'Futevôlei Intermediário', location: 'Praia Central', studentIds: ['2', '4'], durationMinutes: 60 },
   { id: 'bc3', date: '2024-07-30', time: '07:00', title: 'Futevôlei Avançado', location: 'Quadra Coberta A', studentIds: ['3'], durationMinutes: 60 },
@@ -203,3 +203,4 @@ export const MOCK_COACH_AVAILABILITY: CoachAvailability = {
   0: { workRanges: [{ start: '08:00', end: '12:00' }], breaks: [] },
   defaultDaily: { workRanges: [], breaks: [] } // Default for unconfigured days (e.g., if coach doesn't work)
 };
+

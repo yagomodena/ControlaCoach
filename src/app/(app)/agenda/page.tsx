@@ -1,7 +1,7 @@
 
 'use client'
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,8 +21,8 @@ import {
   parseISO
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import type { BookedClass, CoachAvailability, DailyAvailability, TimeRange } from '@/types';
-import { MOCK_BOOKED_CLASSES, MOCK_COACH_AVAILABILITY } from '@/types';
+import type { BookedClass, CoachAvailability, DailyAvailability } from '@/types';
+import { INITIAL_MOCK_BOOKED_CLASSES, MOCK_COACH_AVAILABILITY } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 
 interface TimeSlot {
@@ -33,28 +33,27 @@ interface TimeSlot {
     location: string;
     studentsCount: number;
   };
-  isBreak?: boolean; // Not currently used to display breaks, but available for future
 }
 
 
 export default function AgendaPage() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+  const [bookedClasses, setBookedClasses] = useState<BookedClass[]>(INITIAL_MOCK_BOOKED_CLASSES);
   const { toast } = useToast();
 
   const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
   const prevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
 
-  // This is used to mark days on the calendar that have any events
   const daysWithEvents = useMemo(() => {
-    return MOCK_BOOKED_CLASSES.map(c => parseISO(c.date));
-  }, []);
+    return bookedClasses.map(c => parseISO(c.date));
+  }, [bookedClasses]);
 
-  const availableTimeSlots = useMemo(() : TimeSlot[] => {
+  const availableTimeSlots = useMemo((): TimeSlot[] => {
     if (!selectedDate) return [];
 
     const slots: TimeSlot[] = [];
-    const numericDayOfWeek = getDay(selectedDate); // 0 for Sunday, 1 for Monday, etc.
+    const numericDayOfWeek = getDay(selectedDate);
     
     const dailySchedule: DailyAvailability = MOCK_COACH_AVAILABILITY[numericDayOfWeek] || MOCK_COACH_AVAILABILITY.defaultDaily;
 
@@ -62,7 +61,7 @@ export default function AgendaPage() {
       return [];
     }
 
-    const slotDurationMinutes = 60; // Assuming 1-hour slots
+    const slotDurationMinutes = 60;
 
     dailySchedule.workRanges.forEach(workRange => {
       let currentSlotStartDateTime = set(selectedDate, {
@@ -98,9 +97,6 @@ export default function AgendaPage() {
             milliseconds: 0,
           });
 
-          // Check if the current slot overlaps with the break range
-          // A slot [currentSlotStart, currentSlotEnd) overlaps with break [breakStart, breakEnd) if:
-          // currentSlotStart < breakEnd AND currentSlotEnd > breakStart
           if (isBefore(currentSlotStartDateTime, breakEndDateTime) && isAfter(currentSlotEndDateTime, breakStartDateTime)) {
             isWithinBreak = true;
             break;
@@ -109,11 +105,10 @@ export default function AgendaPage() {
 
         if (isWithinBreak) {
           currentSlotStartDateTime = addMinutes(currentSlotStartDateTime, slotDurationMinutes);
-          continue; // Skip this slot as it's part of a break
+          continue;
         }
 
-        // Check if this slot is booked
-        const bookedClass = MOCK_BOOKED_CLASSES.find(c => {
+        const bookedClass = bookedClasses.find(c => {
           const classDate = parseISO(c.date);
           const classStartDateTime = set(classDate, {
             hours: parseInt(c.time.split(':')[0]),
@@ -140,15 +135,34 @@ export default function AgendaPage() {
         currentSlotStartDateTime = addMinutes(currentSlotStartDateTime, slotDurationMinutes);
       }
     });
-    // Sort to ensure chronological order, especially if multiple workRanges exist
     return slots.sort((a, b) => a.time.localeCompare(b.time));
-  }, [selectedDate]);
+  }, [selectedDate, bookedClasses]);
 
   const handleBookSlot = (time: string) => {
-    // Placeholder for booking logic
+    if (!selectedDate) {
+      toast({
+        title: "Erro ao Agendar",
+        description: "Por favor, selecione uma data primeiro.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const newBookedClass: BookedClass = {
+      id: crypto.randomUUID(),
+      date: format(selectedDate, 'yyyy-MM-dd'),
+      time: time,
+      title: `Aula Agendada ${time}`, 
+      location: 'A definir', 
+      studentIds: [],
+      durationMinutes: 60,
+    };
+
+    setBookedClasses(prevClasses => [...prevClasses, newBookedClass]);
+
     toast({
-      title: "Agendamento (em breve)",
-      description: `Funcionalidade para agendar aula às ${time} no dia ${selectedDate ? format(selectedDate, 'dd/MM/yyyy') : ''} será implementada.`,
+      title: "Aula Agendada!",
+      description: `Aula às ${time} no dia ${format(selectedDate, 'dd/MM/yyyy')} foi agendada com sucesso.`,
     });
   };
 
@@ -173,8 +187,8 @@ export default function AgendaPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        <Card className="md:col-span-2 shadow-lg">
+      <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-8">
+        <Card className="md:col-span-2 xl:col-span-3 shadow-lg">
           <CardContent className="p-0">
              <Calendar
               mode="single"
@@ -207,7 +221,7 @@ export default function AgendaPage() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-lg">
+        <Card className="md:col-span-1 xl:col-span-2 shadow-lg">
           <CardHeader>
             <CardTitle className="font-headline text-xl">
               Horários para {selectedDate ? format(selectedDate, 'dd/MM/yyyy', { locale: ptBR }) : 'Data não selecionada'}
@@ -217,11 +231,11 @@ export default function AgendaPage() {
           <CardContent>
             {selectedDate ? (
               availableTimeSlots.length > 0 ? (
-                <div className="space-y-3">
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
                   {availableTimeSlots.map((slot, index) => (
                     <div 
                       key={index} 
-                      className={`p-3 border rounded-lg transition-colors text-sm
+                      className={`p-4 border rounded-lg transition-colors text-sm
                         ${slot.isBooked ? 'bg-muted/70 border-muted-foreground/30' : 'bg-background hover:border-primary'}`}
                     >
                       <div className="flex justify-between items-center">
@@ -266,3 +280,4 @@ export default function AgendaPage() {
     </div>
   );
 }
+
