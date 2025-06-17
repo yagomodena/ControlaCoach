@@ -1,6 +1,7 @@
+
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { DollarSign, Search, Filter, FileText, Users, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -25,7 +26,8 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import type { Student, Payment } from '@/types';
-import { MOCK_STUDENTS } from '@/types'; // Using mock students which include payment info
+import { MOCK_STUDENTS } from '@/types'; 
+import { format, parse } from 'date-fns'; // Import parse and format
 
 interface PaymentEntry extends Payment {
   studentName: string;
@@ -48,6 +50,11 @@ const mockPayments: PaymentEntry[] = MOCK_STUDENTS.map(student => ({
 export default function FinanceiroPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilters, setStatusFilters] = useState<Set<Payment['status']>>(new Set(['pendente', 'vencido']));
+  const [clientRendered, setClientRendered] = useState(false);
+
+  useEffect(() => {
+    setClientRendered(true);
+  }, []);
 
   const filteredPayments = useMemo(() => {
     return mockPayments.filter(payment => {
@@ -78,11 +85,11 @@ export default function FinanceiroPage() {
     }
   };
 
-  const summaryStats = {
+  const summaryStats = useMemo(() => ({
     totalRecebidoMes: mockPayments.filter(p => p.status === 'pago').reduce((sum, p) => sum + p.amount, 0),
     totalPendente: mockPayments.filter(p => p.status === 'pendente').reduce((sum, p) => sum + p.amount, 0),
     totalVencido: mockPayments.filter(p => p.status === 'vencido').reduce((sum, p) => sum + p.amount, 0),
-  };
+  }), [mockPayments]); // mockPayments is stable, but good practice if it could change
 
 
   return (
@@ -160,7 +167,7 @@ export default function FinanceiroPage() {
                     onCheckedChange={() => toggleStatusFilter(statusValue)}
                     className="capitalize"
                   >
-                    {statusValue}
+                    {statusValue === 'pago' ? 'Pago' : statusValue === 'pendente' ? 'Pendente' : 'Vencido'}
                   </DropdownMenuCheckboxItem>
                 ))}
               </DropdownMenuContent>
@@ -185,7 +192,13 @@ export default function FinanceiroPage() {
                   <TableRow key={payment.id}>
                     <TableCell className="font-medium">{payment.studentName}</TableCell>
                     <TableCell className="hidden md:table-cell">R$ {payment.amount.toFixed(2)}</TableCell>
-                    <TableCell>{new Date(payment.dueDate).toLocaleDateString('pt-BR')}</TableCell>
+                    <TableCell>
+                      {clientRendered ? (
+                        payment.dueDate.includes('T') ? format(parse(payment.dueDate, "yyyy-MM-dd'T'HH:mm:ss.SSSX", new Date()), 'dd/MM/yyyy') : format(parse(payment.dueDate, 'yyyy-MM-dd', new Date()), 'dd/MM/yyyy')
+                      ) : (
+                        payment.dueDate.split('T')[0] // SSR fallback
+                      )}
+                    </TableCell>
                     <TableCell>{getPaymentStatusBadge(payment.status)}</TableCell>
                     <TableCell className="hidden sm:table-cell">{payment.method}</TableCell>
                     <TableCell className="text-right">
@@ -216,3 +229,4 @@ export default function FinanceiroPage() {
     </div>
   );
 }
+
