@@ -1,7 +1,7 @@
 
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Save } from 'lucide-react';
@@ -20,12 +20,12 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
-import { MOCK_CLASS_SESSIONS, type ClassSession, DAYS_OF_WEEK } from '@/types';
+import { MOCK_CLASS_SESSIONS, type ClassSession, DAYS_OF_WEEK, MOCK_LOCATIONS, type Location } from '@/types';
 
 const classSessionSchema = z.object({
   dayOfWeek: z.enum(DAYS_OF_WEEK, { required_error: 'Selecione o dia da semana.' }),
   time: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Formato de hora inválido (HH:MM)." }),
-  location: z.string().min(3, { message: 'Local deve ter pelo menos 3 caracteres.' }),
+  location: z.string().min(1, { message: 'Selecione um local.' }), // Location is now a string name, required
   maxStudents: z.coerce.number().int().positive({ message: 'Número de alunos deve ser positivo.' }).min(1, {message: 'Mínimo 1 aluno'}),
 });
 
@@ -34,23 +34,29 @@ type ClassSessionFormData = z.infer<typeof classSessionSchema>;
 export default function NovaAulaConfigPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const [activeLocations, setActiveLocations] = useState<Location[]>([]);
+
+  useEffect(() => {
+    setActiveLocations(MOCK_LOCATIONS.filter(loc => loc.status === 'active'));
+  }, []);
+
   const { control, handleSubmit, formState: { errors, isSubmitting } } = useForm<ClassSessionFormData>({
     resolver: zodResolver(classSessionSchema),
     defaultValues: {
       dayOfWeek: undefined,
       time: '',
-      location: '',
+      location: undefined, // Changed from ''
       maxStudents: 10,
     },
   });
 
   const onSubmit = async (data: ClassSessionFormData) => {
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 1000)); 
 
     const newClassSession: ClassSession = {
-      id: crypto.randomUUID(), // Basic ID generation for mock
+      id: crypto.randomUUID(), 
       ...data,
-      enrolledStudentIds: [], // New classes start with no students
+      enrolledStudentIds: [], 
     };
     MOCK_CLASS_SESSIONS.push(newClassSession); 
     
@@ -120,7 +126,22 @@ export default function NovaAulaConfigPage() {
                <Controller
                 name="location"
                 control={control}
-                render={({ field }) => <Input id="location" placeholder="Ex: Praia Central, Quadra Coberta A" {...field} />}
+                render={({ field }) => (
+                    <Select onValueChange={field.onChange} value={field.value}>
+                        <SelectTrigger id="location">
+                            <SelectValue placeholder="Selecione o local" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {activeLocations.length > 0 ? (
+                                activeLocations.map(loc => (
+                                    <SelectItem key={loc.id} value={loc.name}>{loc.name}</SelectItem>
+                                ))
+                            ) : (
+                                <SelectItem value="no-location" disabled>Nenhum local ativo</SelectItem>
+                            )}
+                        </SelectContent>
+                    </Select>
+                )}
               />
               {errors.location && <p className="text-sm text-destructive">{errors.location.message}</p>}
             </div>

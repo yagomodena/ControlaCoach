@@ -13,13 +13,13 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { MOCK_CLASS_SESSIONS, type ClassSession, DAYS_OF_WEEK } from '@/types';
+import { MOCK_CLASS_SESSIONS, type ClassSession, DAYS_OF_WEEK, MOCK_LOCATIONS, type Location } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 
 const classSessionSchema = z.object({
   dayOfWeek: z.enum(DAYS_OF_WEEK, { required_error: 'Selecione o dia da semana.' }),
   time: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Formato de hora inválido (HH:MM)." }),
-  location: z.string().min(3, { message: 'Local deve ter pelo menos 3 caracteres.' }),
+  location: z.string().min(1, { message: 'Selecione um local.' }), // Location is a string name, required
   maxStudents: z.coerce.number().int().positive({ message: 'Número de alunos deve ser positivo.' }).min(1, {message: 'Mínimo 1 aluno'}),
 });
 
@@ -35,6 +35,11 @@ export default function AulaDetalhePage() {
   const [classSession, setClassSession] = useState<ClassSession | null>(null);
   const [isEditMode, setIsEditMode] = useState(searchParams.get('edit') === 'true');
   const [isLoading, setIsLoading] = useState(true);
+  const [activeLocations, setActiveLocations] = useState<Location[]>([]);
+
+  useEffect(() => {
+    setActiveLocations(MOCK_LOCATIONS.filter(loc => loc.status === 'active'));
+  }, []);
 
   const { control, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<ClassSessionFormData>({
     resolver: zodResolver(classSessionSchema),
@@ -58,17 +63,17 @@ export default function AulaDetalhePage() {
   }, [searchParams]);
 
   const onSubmit = async (data: ClassSessionFormData) => {
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 1000)); 
     
     const classSessionIndex = MOCK_CLASS_SESSIONS.findIndex(cs => cs.id === classId);
     if (classSessionIndex !== -1 && classSession) {
         const updatedClassSession: ClassSession = {
             ...MOCK_CLASS_SESSIONS[classSessionIndex],
             ...data,
-            maxStudents: Number(data.maxStudents), // Ensure it's a number
+            maxStudents: Number(data.maxStudents), 
         };
         MOCK_CLASS_SESSIONS[classSessionIndex] = updatedClassSession;
-        setClassSession(updatedClassSession); // Update local state
+        setClassSession(updatedClassSession); 
     }
 
     toast({
@@ -156,7 +161,26 @@ export default function AulaDetalhePage() {
 
                 <div className="space-y-2">
                 <Label htmlFor="location">Local</Label>
-                <Controller name="location" control={control} render={({ field }) => <Input id="location" {...field} />} />
+                <Controller 
+                    name="location" 
+                    control={control} 
+                    render={({ field }) => (
+                        <Select onValueChange={field.onChange} value={field.value}>
+                            <SelectTrigger id="location">
+                                <SelectValue placeholder="Selecione o local" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {activeLocations.length > 0 ? (
+                                    activeLocations.map(loc => (
+                                        <SelectItem key={loc.id} value={loc.name}>{loc.name}</SelectItem>
+                                    ))
+                                ) : (
+                                    <SelectItem value="no-location" disabled>Nenhum local ativo</SelectItem>
+                                )}
+                            </SelectContent>
+                        </Select>
+                    )} 
+                />
                 {errors.location && <p className="text-sm text-destructive">{errors.location.message}</p>}
                 </div>
                 

@@ -19,6 +19,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; // Added Select
 import { 
   format, 
   addMonths, 
@@ -34,15 +35,15 @@ import {
   parseISO
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import type { BookedClass, DailyAvailability, Student } from '@/types';
-import { INITIAL_MOCK_BOOKED_CLASSES, MOCK_COACH_AVAILABILITY, MOCK_STUDENTS } from '@/types';
+import type { BookedClass, DailyAvailability, Student, Location } from '@/types'; // Added Location
+import { INITIAL_MOCK_BOOKED_CLASSES, MOCK_COACH_AVAILABILITY, MOCK_STUDENTS, MOCK_LOCATIONS } from '@/types'; // Added MOCK_LOCATIONS
 import { useToast } from '@/hooks/use-toast';
 
 interface TimeSlot {
-  time: string; // "HH:MM"
+  time: string; 
   isBooked: boolean;
   bookedClassDetails?: {
-    id: string; // Added ID for easy retrieval
+    id: string; 
     title: string;
     location: string;
     studentsCount: number;
@@ -56,12 +57,10 @@ export default function AgendaPage() {
   const [bookedClasses, setBookedClasses] = useState<BookedClass[]>(INITIAL_MOCK_BOOKED_CLASSES);
   const { toast } = useToast();
 
-  // State for booking dialog
   const [isStudentSelectionDialogOpen, setIsStudentSelectionDialogOpen] = useState(false);
   const [slotBeingBooked, setSlotBeingBooked] = useState<string | null>(null);
   const [selectedStudentIdsForBooking, setSelectedStudentIdsForBooking] = useState<string[]>([]);
   
-  // State for editing dialog
   const [isEditClassDialogOpen, setIsEditClassDialogOpen] = useState(false);
   const [classBeingEdited, setClassBeingEdited] = useState<BookedClass | null>(null);
   const [editedClassTitle, setEditedClassTitle] = useState('');
@@ -69,9 +68,11 @@ export default function AgendaPage() {
   const [editedClassStudentIds, setEditedClassStudentIds] = useState<string[]>([]);
 
   const [studentsList, setStudentsList] = useState<Student[]>([]);
+  const [activeLocations, setActiveLocations] = useState<Location[]>([]);
 
   useEffect(() => {
     setStudentsList(MOCK_STUDENTS.filter(s => s.status === 'active'));
+    setActiveLocations(MOCK_LOCATIONS.filter(loc => loc.status === 'active'));
   }, []);
 
   const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
@@ -156,7 +157,7 @@ export default function AgendaPage() {
             time: slotTimeFormatted,
             isBooked: true,
             bookedClassDetails: {
-              id: bookedClass.id, // Store ID here
+              id: bookedClass.id, 
               title: bookedClass.title,
               location: bookedClass.location,
               studentsCount: bookedClass.studentIds.length,
@@ -214,7 +215,7 @@ export default function AgendaPage() {
         classTitle = `Aula Particular - ${student.name}`;
         toastDescription = `Aula com ${student.name} às ${slotBeingBooked} no dia ${format(selectedDate, 'dd/MM/yyyy')} foi agendada.`;
       } else {
-         classTitle = `Aula Agendada`; // Fallback
+         classTitle = `Aula Agendada`; 
       }
     }
 
@@ -239,7 +240,6 @@ export default function AgendaPage() {
     setSelectedStudentIdsForBooking([]);
   };
 
-  // Functions for Edit Class Dialog
   const openEditClassDialog = (classId: string) => {
     const classToEdit = bookedClasses.find(c => c.id === classId);
     if (classToEdit) {
@@ -264,7 +264,7 @@ export default function AgendaPage() {
   };
 
   const handleSaveChangesToClass = () => {
-    if (!classBeingEdited || editedClassStudentIds.length === 0) {
+    if (!classBeingEdited || editedClassStudentIds.length === 0 || !editedClassTitle || !editedClassLocation) {
       toast({
         title: "Erro ao Salvar",
         description: "Informações incompletas. Título, local e ao menos um aluno são necessários.",
@@ -292,7 +292,6 @@ export default function AgendaPage() {
   const handleDeleteClass = () => {
     if (!classBeingEdited) return;
 
-    // Basic confirmation, could be replaced with AlertDialog for better UX
     if (window.confirm(`Tem certeza que deseja excluir a aula "${classBeingEdited.title}" de ${format(parseISO(classBeingEdited.date), 'dd/MM/yyyy')} às ${classBeingEdited.time}?`)) {
         setBookedClasses(prevClasses => prevClasses.filter(c => c.id !== classBeingEdited.id));
         toast({
@@ -416,7 +415,6 @@ export default function AgendaPage() {
         </Card>
       </div>
 
-      {/* Student Selection Dialog for Booking */}
       <Dialog open={isStudentSelectionDialogOpen} onOpenChange={setIsStudentSelectionDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -457,7 +455,6 @@ export default function AgendaPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Class Dialog */}
       <Dialog open={isEditClassDialogOpen} onOpenChange={setIsEditClassDialogOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
@@ -479,12 +476,20 @@ export default function AgendaPage() {
               </div>
               <div>
                 <Label htmlFor="editClassLocation" className="mb-1 block">Local da Aula</Label>
-                <Input 
-                  id="editClassLocation" 
-                  value={editedClassLocation} 
-                  onChange={(e) => setEditedClassLocation(e.target.value)} 
-                  placeholder="Ex: Praia Central"
-                />
+                <Select
+                  value={editedClassLocation}
+                  onValueChange={setEditedClassLocation}
+                >
+                  <SelectTrigger id="editClassLocation">
+                    <SelectValue placeholder="Selecione o local" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="A definir">A definir</SelectItem>
+                    {activeLocations.map(loc => (
+                      <SelectItem key={loc.id} value={loc.name}>{loc.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label className="mb-2 block">Alunos Inscritos</Label>
