@@ -1,44 +1,164 @@
+
 'use client'
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Users, Edit } from "lucide-react";
-import { format, addMonths, subMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, addDays } from 'date-fns';
+import { ChevronLeft, ChevronRight, Users, Edit, PlusCircle, Clock } from "lucide-react";
+import { 
+  format, 
+  addMonths, 
+  subMonths, 
+  isSameMonth, 
+  isSameDay, 
+  getDay,
+  set,
+  addMinutes,
+  isBefore,
+  isAfter,
+  isEqual,
+  parseISO
+} from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import type { BookedClass, CoachAvailability, DailyAvailability, TimeRange } from '@/types';
+import { MOCK_BOOKED_CLASSES, MOCK_COACH_AVAILABILITY } from '@/types';
+import { useToast } from '@/hooks/use-toast';
 
-// Mock data for classes on specific dates
-const mockScheduledClasses = [
-  { date: '2024-07-29', time: '18:00', title: 'Futevôlei Iniciante', location: 'Praia Central', students: ['Ana S.', 'Bruno C.'] },
-  { date: '2024-07-29', time: '19:00', title: 'Futevôlei Intermediário', location: 'Praia Central', students: ['Carlos D.', 'Daniela R.', 'Eduardo L.'] },
-  { date: '2024-07-30', time: '07:00', title: 'Futevôlei Avançado', location: 'Quadra Coberta A', students: ['Fernanda M.', 'Gabriel P.'] },
-  { date: '2024-08-01', time: '18:30', title: 'Técnica e Tática', location: 'Praia do Tombo', students: ['Heloisa V.', 'Igor B.'] },
-];
+interface TimeSlot {
+  time: string; // "HH:MM"
+  isBooked: boolean;
+  bookedClassDetails?: {
+    title: string;
+    location: string;
+    studentsCount: number;
+  };
+  isBreak?: boolean; // Not currently used to display breaks, but available for future
+}
 
 
 export default function AgendaPage() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+  const { toast } = useToast();
 
   const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
   const prevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
 
-  const daysInMonth = eachDayOfInterval({
-    start: startOfWeek(startOfMonth(currentMonth), { locale: ptBR }),
-    end: endOfWeek(endOfMonth(currentMonth), { locale: ptBR }),
-  });
+  // This is used to mark days on the calendar that have any events
+  const daysWithEvents = useMemo(() => {
+    return MOCK_BOOKED_CLASSES.map(c => parseISO(c.date));
+  }, []);
 
-  const classesForSelectedDate = mockScheduledClasses.filter(c => 
-    selectedDate && isSameDay(new Date(c.date), selectedDate)
-  );
+  const availableTimeSlots = useMemo(() : TimeSlot[] => {
+    if (!selectedDate) return [];
+
+    const slots: TimeSlot[] = [];
+    const numericDayOfWeek = getDay(selectedDate); // 0 for Sunday, 1 for Monday, etc.
+    
+    const dailySchedule: DailyAvailability = MOCK_COACH_AVAILABILITY[numericDayOfWeek] || MOCK_COACH_AVAILABILITY.defaultDaily;
+
+    if (!dailySchedule || dailySchedule.workRanges.length === 0) {
+      return [];
+    }
+
+    const slotDurationMinutes = 60; // Assuming 1-hour slots
+
+    dailySchedule.workRanges.forEach(workRange => {
+      let currentSlotStartDateTime = set(selectedDate, {
+        hours: parseInt(workRange.start.split(':')[0]),
+        minutes: parseInt(workRange.start.split(':')[1]),
+        seconds: 0,
+        milliseconds: 0,
+      });
+
+      const workRangeEndDateTime = set(selectedDate, {
+        hours: parseInt(workRange.end.split(':')[0]),
+        minutes: parseInt(workRange.end.split(':')[1]),
+        seconds: 0,
+        milliseconds: 0,
+      });
+
+      while (isBefore(currentSlotStartDateTime, workRangeEndDateTime)) {
+        const currentSlotEndDateTime = addMinutes(currentSlotStartDateTime, slotDurationMinutes);
+        const slotTimeFormatted = format(currentSlotStartDateTime, 'HH:mm');
+
+        let isWithinBreak = false;
+        for (const breakRange of dailySchedule.breaks) {
+          const breakStartDateTime = set(selectedDate, {
+            hours: parseInt(breakRange.start.split(':')[0]),
+            minutes: parseInt(breakRange.start.split(':')[1]),
+            seconds: 0,
+            milliseconds: 0,
+          });
+          const breakEndDateTime = set(selectedDate, {
+            hours: parseInt(breakRange.end.split(':')[0]),
+            minutes: parseInt(breakRange.end.split(':')[1]),
+            seconds: 0,
+            milliseconds: 0,
+          });
+
+          // Check if the current slot overlaps with the break range
+          // A slot [currentSlotStart, currentSlotEnd) overlaps with break [breakStart, breakEnd) if:
+          // currentSlotStart < breakEnd AND currentSlotEnd > breakStart
+          if (isBefore(currentSlotStartDateTime, breakEndDateTime) && isAfter(currentSlotEndDateTime, breakStartDateTime)) {
+            isWithinBreak = true;
+            break;
+          }
+        }
+
+        if (isWithinBreak) {
+          currentSlotStartDateTime = addMinutes(currentSlotStartDateTime, slotDurationMinutes);
+          continue; // Skip this slot as it's part of a break
+        }
+
+        // Check if this slot is booked
+        const bookedClass = MOCK_BOOKED_CLASSES.find(c => {
+          const classDate = parseISO(c.date);
+          const classStartDateTime = set(classDate, {
+            hours: parseInt(c.time.split(':')[0]),
+            minutes: parseInt(c.time.split(':')[1]),
+            seconds: 0,
+            milliseconds: 0,
+          });
+          return isSameDay(selectedDate, classDate) && isEqual(currentSlotStartDateTime, classStartDateTime);
+        });
+
+        if (bookedClass) {
+          slots.push({
+            time: slotTimeFormatted,
+            isBooked: true,
+            bookedClassDetails: {
+              title: bookedClass.title,
+              location: bookedClass.location,
+              studentsCount: bookedClass.studentIds.length,
+            },
+          });
+        } else {
+          slots.push({ time: slotTimeFormatted, isBooked: false });
+        }
+        currentSlotStartDateTime = addMinutes(currentSlotStartDateTime, slotDurationMinutes);
+      }
+    });
+    // Sort to ensure chronological order, especially if multiple workRanges exist
+    return slots.sort((a, b) => a.time.localeCompare(b.time));
+  }, [selectedDate]);
+
+  const handleBookSlot = (time: string) => {
+    // Placeholder for booking logic
+    toast({
+      title: "Agendamento (em breve)",
+      description: `Funcionalidade para agendar aula às ${time} no dia ${selectedDate ? format(selectedDate, 'dd/MM/yyyy') : ''} será implementada.`,
+    });
+  };
+
 
   return (
     <div className="container mx-auto py-8">
       <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
         <div>
           <h1 className="text-3xl font-headline font-bold text-foreground">Agenda de Aulas</h1>
-          <p className="text-muted-foreground">Visualize e gerencie suas aulas agendadas.</p>
+          <p className="text-muted-foreground">Visualize sua disponibilidade e aulas agendadas.</p>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="icon" onClick={prevMonth} aria-label="Mês anterior">
@@ -68,9 +188,11 @@ export default function AgendaPage() {
                 day_selected: "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
                 day_today: "bg-accent text-accent-foreground",
               }}
+              modifiers={{ booked: daysWithEvents }}
+              modifiersClassNames={{ booked: "font-bold text-primary" }}
               components={{
                 DayContent: ({ date, displayMonth }) => {
-                  const dayHasEvent = mockScheduledClasses.some(c => isSameDay(new Date(c.date), date));
+                  const dayHasEvent = daysWithEvents.some(eventDate => isSameDay(eventDate, date));
                   return (
                     <div className="relative w-full h-full flex items-center justify-center">
                       {format(date, 'd')}
@@ -88,33 +210,54 @@ export default function AgendaPage() {
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="font-headline text-xl">
-              Aulas para {selectedDate ? format(selectedDate, 'dd/MM/yyyy', { locale: ptBR }) : 'Data não selecionada'}
+              Horários para {selectedDate ? format(selectedDate, 'dd/MM/yyyy', { locale: ptBR }) : 'Data não selecionada'}
             </CardTitle>
-            <CardDescription>Detalhes das aulas do dia selecionado.</CardDescription>
+            <CardDescription>Disponibilidade e aulas do dia.</CardDescription>
           </CardHeader>
           <CardContent>
-            {classesForSelectedDate.length > 0 ? (
-              <div className="space-y-4">
-                {classesForSelectedDate.map((c, index) => (
-                  <div key={index} className="p-4 border rounded-lg bg-background hover:border-primary transition-colors">
-                    <h4 className="font-semibold text-primary">{c.time} - {c.title}</h4>
-                    <p className="text-sm text-muted-foreground">{c.location}</p>
-                    <div className="mt-2 flex items-center text-sm text-muted-foreground">
-                      <Users className="h-4 w-4 mr-1" /> {c.students.length} alunos
+            {selectedDate ? (
+              availableTimeSlots.length > 0 ? (
+                <div className="space-y-3">
+                  {availableTimeSlots.map((slot, index) => (
+                    <div 
+                      key={index} 
+                      className={`p-3 border rounded-lg transition-colors text-sm
+                        ${slot.isBooked ? 'bg-muted/70 border-muted-foreground/30' : 'bg-background hover:border-primary'}`}
+                    >
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center">
+                           <Clock className={`h-4 w-4 mr-2 ${slot.isBooked ? 'text-muted-foreground' : 'text-primary'}`} />
+                           <span className={`font-semibold ${slot.isBooked ? 'text-muted-foreground' : 'text-primary'}`}>{slot.time}</span>
+                        </div>
+                        {!slot.isBooked && (
+                           <Button variant="outline" size="sm" onClick={() => handleBookSlot(slot.time)}>
+                             <PlusCircle className="h-3.5 w-3.5 mr-1.5"/> Agendar
+                           </Button>
+                        )}
+                      </div>
+                      {slot.isBooked && slot.bookedClassDetails && (
+                        <div className="mt-2 pl-6">
+                          <p className="font-medium text-foreground">{slot.bookedClassDetails.title}</p>
+                          <p className="text-xs text-muted-foreground">{slot.bookedClassDetails.location}</p>
+                          <div className="mt-1 flex items-center text-xs text-muted-foreground">
+                            <Users className="h-3 w-3 mr-1" /> {slot.bookedClassDetails.studentsCount} aluno(s)
+                          </div>
+                           <Button variant="link" size="sm" className="mt-1 px-0 h-auto text-xs">
+                             <Edit className="h-3 w-3 mr-1"/> Gerenciar Aula
+                           </Button>
+                        </div>
+                      )}
                     </div>
-                    <ul className="text-xs list-disc list-inside pl-1 text-muted-foreground mt-1">
-                        {c.students.slice(0,3).map(s => <li key={s}>{s}</li>)}
-                        {c.students.length > 3 && <li>e mais {c.students.length - 3}...</li>}
-                    </ul>
-                    <Button variant="outline" size="sm" className="mt-3 w-full">
-                      <Edit className="h-3 w-3 mr-1.5"/> Gerenciar Aula
-                    </Button>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted-foreground text-center py-8">
+                  Nenhum horário de trabalho configurado para este dia ou todos os horários são pausas.
+                </p>
+              )
             ) : (
               <p className="text-muted-foreground text-center py-8">
-                {selectedDate ? 'Nenhuma aula agendada para este dia.' : 'Selecione uma data no calendário.'}
+                Selecione uma data no calendário para ver os horários.
               </p>
             )}
           </CardContent>
