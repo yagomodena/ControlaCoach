@@ -3,10 +3,11 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Edit3, Save, CalendarDays, DollarSign, ShieldCheck, ShieldOff, User, Phone, BarChart, Users, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { ArrowLeft, Edit3, Save, CalendarDays, DollarSign, ShieldCheck, ShieldOff, User, Phone, BarChart, Users, CheckCircle, XCircle, Clock, Goal } from 'lucide-react'; // Added Goal icon
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea'; // Added Textarea
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -16,7 +17,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import type { Student } from '@/types';
-import { MOCK_STUDENTS } from '@/types'; // Using mock data
+import { MOCK_STUDENTS } from '@/types'; 
 import { useToast } from '@/hooks/use-toast';
 
 const studentSchema = z.object({
@@ -25,6 +26,7 @@ const studentSchema = z.object({
   plan: z.enum(['Mensal', 'Trimestral', 'Avulso'], { required_error: 'Selecione um plano.' }),
   technicalLevel: z.enum(['Iniciante', 'Intermediário', 'Avançado'], { required_error: 'Selecione o nível técnico.' }),
   status: z.enum(['active', 'inactive'], { required_error: 'Selecione o status.' }),
+  objective: z.string().optional(), // Added objective
   paymentStatus: z.enum(['pago', 'pendente', 'vencido']).optional(),
   dueDate: z.string().optional(),
   amountDue: z.number().optional(),
@@ -49,12 +51,11 @@ export default function AlunoDetailPage() {
   });
 
   useEffect(() => {
-    // Simulate fetching student data
     setIsLoading(true);
     const foundStudent = MOCK_STUDENTS.find(s => s.id === studentId);
     if (foundStudent) {
       setStudent(foundStudent);
-      reset(foundStudent as StudentFormData); // Pre-fill form with student data
+      reset(foundStudent as StudentFormData); 
     } else {
       toast({ title: "Erro", description: "Aluno não encontrado.", variant: "destructive" });
       router.push('/alunos');
@@ -67,18 +68,23 @@ export default function AlunoDetailPage() {
   }, [searchParams]);
 
   const onSubmit = async (data: StudentFormData) => {
-    // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 1000));
     console.log('Updated student data:', data);
     
-    // In a real app, you would update the student in your data store
-    setStudent(prev => prev ? { ...prev, ...data } as Student : null);
+    const updatedStudent = { ...student, ...data } as Student;
+    setStudent(updatedStudent);
+    // In a real app, update MOCK_STUDENTS or your data store
+    const studentIndex = MOCK_STUDENTS.findIndex(s => s.id === studentId);
+    if (studentIndex !== -1) {
+        MOCK_STUDENTS[studentIndex] = updatedStudent;
+    }
+
     toast({
       title: "Aluno Atualizado!",
       description: `${data.name} foi atualizado com sucesso.`,
     });
     setIsEditMode(false);
-    router.replace(`/alunos/${studentId}`); // Remove query param
+    router.replace(`/alunos/${studentId}`); 
   };
 
   if (isLoading) {
@@ -89,12 +95,16 @@ export default function AlunoDetailPage() {
     return <div className="container mx-auto py-8 text-center text-destructive">Aluno não encontrado.</div>;
   }
 
-  const InfoItem = ({ icon: Icon, label, value }: { icon: React.ElementType, label: string, value?: string | number | null }) => (
+  const InfoItem = ({ icon: Icon, label, value, isLongText = false }: { icon: React.ElementType, label: string, value?: string | number | null, isLongText?: boolean }) => (
     <div className="flex items-start space-x-3">
-      <Icon className="h-5 w-5 text-primary mt-1" />
+      <Icon className="h-5 w-5 text-primary mt-1 flex-shrink-0" />
       <div>
         <p className="text-sm text-muted-foreground">{label}</p>
-        <p className="font-medium text-foreground">{value || 'N/A'}</p>
+        {isLongText && value ? (
+            <p className="font-medium text-foreground whitespace-pre-wrap">{value}</p>
+        ) : (
+            <p className="font-medium text-foreground">{value || 'N/A'}</p>
+        )}
       </div>
     </div>
   );
@@ -138,7 +148,6 @@ export default function AlunoDetailPage() {
               <CardTitle>Editar Informações</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Form fields similar to NovoAlunoPage, pre-filled */}
               <div className="space-y-2">
                 <Label htmlFor="name">Nome Completo</Label>
                 <Controller name="name" control={control} render={({ field }) => <Input id="name" {...field} />} />
@@ -181,6 +190,11 @@ export default function AlunoDetailPage() {
                 )} />
                 {errors.status && <p className="text-sm text-destructive">{errors.status.message}</p>}
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="objective">Objetivo</Label>
+                <Controller name="objective" control={control} render={({ field }) => <Textarea id="objective" placeholder="Descreva o objetivo do aluno..." {...field} />} />
+                {errors.objective && <p className="text-sm text-destructive">{errors.objective.message}</p>}
+              </div>
             </CardContent>
             <CardFooter className="flex justify-end gap-2">
               <Button variant="outline" type="button" onClick={() => { setIsEditMode(false); router.replace(`/alunos/${studentId}`); reset(student as StudentFormData); }}>Cancelar</Button>
@@ -210,7 +224,7 @@ export default function AlunoDetailPage() {
                   : <Badge className="bg-red-500/20 text-red-700 border-red-500/30 py-1 px-3 text-sm"><ShieldOff className="inline mr-1 h-4 w-4"/>Inativo</Badge>
                 }
               </CardHeader>
-              <CardContent className="grid md:grid-cols-2 gap-6 pt-6">
+              <CardContent className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 pt-6">
                 <InfoItem icon={User} label="Nome Completo" value={student.name} />
                 <InfoItem icon={Phone} label="Telefone" value={student.phone} />
                 <InfoItem icon={Users} label="Plano" value={student.plan} />
@@ -218,6 +232,11 @@ export default function AlunoDetailPage() {
                 <InfoItem icon={CalendarDays} label="Data de Cadastro" value={new Date(student.registrationDate).toLocaleDateString('pt-BR')} />
                 <InfoItem icon={student.status === 'active' ? ShieldCheck : ShieldOff} label="Status" value={student.status === 'active' ? 'Ativo' : 'Inativo'} />
               </CardContent>
+              {student.objective && (
+                <CardContent className="pt-0"> {/* Use new CardContent for objective to ensure proper spacing */}
+                     <InfoItem icon={Goal} label="Objetivo" value={student.objective} isLongText={true} />
+                </CardContent>
+              )}
             </Card>
           </TabsContent>
 

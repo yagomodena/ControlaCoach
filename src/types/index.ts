@@ -6,6 +6,7 @@ export interface Student {
   technicalLevel: 'Iniciante' | 'Intermediário' | 'Avançado';
   status: 'active' | 'inactive';
   registrationDate: string; // ISO date string
+  objective?: string; // Added objective field
   attendanceHistory?: { date: string; classId: string; status: 'present' | 'absent' | 'rescheduled' }[];
   
   // Financial fields - can be part of a separate Payment type if needed
@@ -61,6 +62,7 @@ export const MOCK_STUDENTS: Student[] = [
     technicalLevel: 'Iniciante',
     status: 'active',
     registrationDate: '2023-01-15',
+    objective: 'Melhorar o condicionamento físico e aprender os fundamentos do futevôlei.',
     paymentStatus: 'pago',
     dueDate: '2024-08-05',
     amountDue: 150,
@@ -79,6 +81,7 @@ export const MOCK_STUDENTS: Student[] = [
     technicalLevel: 'Intermediário',
     status: 'active',
     registrationDate: '2022-11-20',
+    objective: 'Aprimorar técnicas de ataque e defesa, participar de torneios amadores.',
     paymentStatus: 'pendente',
     dueDate: '2024-07-20',
     amountDue: 400,
@@ -96,6 +99,7 @@ export const MOCK_STUDENTS: Student[] = [
     technicalLevel: 'Avançado',
     status: 'inactive',
     registrationDate: '2023-05-10',
+    objective: 'Manter a forma física e jogar em alto nível.',
     paymentStatus: 'vencido',
     dueDate: '2024-06-10',
     amountDue: 150,
@@ -110,6 +114,7 @@ export const MOCK_STUDENTS: Student[] = [
     technicalLevel: 'Intermediário',
     status: 'active',
     registrationDate: '2023-08-01',
+    objective: 'Aprender o saque tubarão e melhorar o posicionamento em quadra.',
     paymentStatus: 'pago',
     dueDate: '2024-08-10',
     amountDue: 150,
@@ -128,6 +133,7 @@ export const MOCK_STUDENTS: Student[] = [
     technicalLevel: 'Iniciante',
     status: 'active',
     registrationDate: '2024-06-15',
+    objective: 'Experimentar o futevôlei e decidir se matricula em plano fixo.',
     paymentStatus: 'pendente',
     dueDate: '2024-07-25',
     amountDue: 50,

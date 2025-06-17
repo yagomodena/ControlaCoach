@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea'; // Added Textarea
 import {
   Select,
   SelectContent,
@@ -18,9 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import type { Student } from '@/types';
 import { useToast } from '@/hooks/use-toast';
-
 
 const studentSchema = z.object({
   name: z.string().min(3, { message: 'Nome deve ter pelo menos 3 caracteres.' }),
@@ -28,6 +27,7 @@ const studentSchema = z.object({
   plan: z.enum(['Mensal', 'Trimestral', 'Avulso'], { required_error: 'Selecione um plano.'}),
   technicalLevel: z.enum(['Iniciante', 'Intermediário', 'Avançado'], { required_error: 'Selecione o nível técnico.'}),
   status: z.enum(['active', 'inactive'], { required_error: 'Selecione o status.'}),
+  objective: z.string().optional(), // Added objective
 });
 
 type StudentFormData = z.infer<typeof studentSchema>;
@@ -40,23 +40,21 @@ export default function NovoAlunoPage() {
     defaultValues: {
       name: '',
       phone: '',
-      plan: undefined, // Set to undefined to show placeholder
+      plan: undefined, 
       technicalLevel: undefined,
       status: 'active',
+      objective: '', // Added default for objective
     },
   });
 
   const onSubmit = async (data: StudentFormData) => {
-    // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 1000));
     console.log('New student data:', data);
     
-    // In a real app, you would add the student to your data store (e.g., Firebase)
-    // For now, we'll just show a success toast and redirect
     toast({
       title: "Aluno Adicionado!",
       description: `${data.name} foi cadastrado com sucesso.`,
-      variant: "default", // 'default' is greenish in some themes, or use a custom success variant
+      variant: "default", 
     });
     router.push('/alunos'); 
   };
@@ -109,7 +107,7 @@ export default function NovoAlunoPage() {
                   name="plan"
                   control={control}
                   render={({ field }) => (
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
                       <SelectTrigger id="plan">
                         <SelectValue placeholder="Selecione o plano" />
                       </SelectTrigger>
@@ -130,7 +128,7 @@ export default function NovoAlunoPage() {
                   name="technicalLevel"
                   control={control}
                   render={({ field }) => (
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
                       <SelectTrigger id="technicalLevel">
                         <SelectValue placeholder="Selecione o nível" />
                       </SelectTrigger>
@@ -152,7 +150,7 @@ export default function NovoAlunoPage() {
                   name="status"
                   control={control}
                   render={({ field }) => (
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
                       <SelectTrigger id="status">
                         <SelectValue placeholder="Selecione o status" />
                       </SelectTrigger>
@@ -165,6 +163,17 @@ export default function NovoAlunoPage() {
                 />
               {errors.status && <p className="text-sm text-destructive">{errors.status.message}</p>}
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="objective">Objetivo</Label>
+              <Controller
+                name="objective"
+                control={control}
+                render={({ field }) => <Textarea id="objective" placeholder="Descreva o objetivo do aluno..." {...field} />}
+              />
+              {errors.objective && <p className="text-sm text-destructive">{errors.objective.message}</p>}
+            </div>
+
           </CardContent>
           <CardFooter className="flex justify-end gap-2">
              <Button variant="outline" type="button" onClick={() => router.back()}>
