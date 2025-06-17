@@ -19,7 +19,7 @@ export default function ConfiguracoesPage() {
   
   // Mock settings state - in a real app, this would come from a data store
   const mockSettings = {
-    coachName: "Bossolan",
+    coachName: "ControlaCoach",
     notificationsEnabled: true,
     defaultPaymentReminderDays: 3,
   };
@@ -34,7 +34,7 @@ export default function ConfiguracoesPage() {
     <div className="container mx-auto py-8">
       <div className="mb-8">
         <h1 className="text-3xl font-headline font-bold text-foreground">Configurações</h1>
-        <p className="text-muted-foreground">Ajuste as preferências do sistema Bossolan Futevôlei.</p>
+        <p className="text-muted-foreground">Ajuste as preferências do sistema ControlaCoach.</p>
       </div>
 
       <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">

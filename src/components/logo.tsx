@@ -23,11 +23,11 @@ const FootvolleyBallIcon = () => (
 
 export function Logo({ collapsed = false }: { collapsed?: boolean }) {
   return (
-    <Link href="/dashboard" className="flex items-center gap-2 group" aria-label="Bossolan Futevôlei Home">
+    <Link href="/dashboard" className="flex items-center gap-2 group" aria-label="ControlaCoach Home">
       <FootvolleyBallIcon />
       {!collapsed && (
         <span className="font-headline text-xl font-bold text-primary group-hover:text-accent transition-colors duration-200">
-          Bossolan Futevôlei
+          ControlaCoach
         </span>
       )}
     </Link>

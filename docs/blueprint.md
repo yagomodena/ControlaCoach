@@ -1,4 +1,4 @@
-# **App Name**: Bossolan Futevôlei Manager
+# **App Name**: ControlaCoach
 
 ## Core Features:
 
