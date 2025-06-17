@@ -1,18 +1,34 @@
+'use client';
+
+import React from 'react';
+import { useTheme } from 'next-themes';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Save, Palette, Bell, Shield } from "lucide-react";
+import { Save, Palette, Bell, Shield } from "lucide-react"; // Corrected ShieldLock to Shield
 
 export default function ConfiguracoesPage() {
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = React.useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+  
   // Mock settings state - in a real app, this would come from a data store
   const mockSettings = {
     coachName: "Bossolan",
     notificationsEnabled: true,
     defaultPaymentReminderDays: 3,
-    theme: "light", // or 'dark'
   };
+
+  if (!mounted) {
+    // Avoid rendering UI that depends on theme until client is mounted
+    // to prevent hydration mismatch.
+    return null; 
+  }
 
   return (
     <div className="container mx-auto py-8">
@@ -87,11 +103,14 @@ export default function ConfiguracoesPage() {
                   Alternar para o tema escuro.
                 </span>
               </Label>
-              {/* This is a placeholder. Real dark mode toggle requires theme context. */}
-              <Switch id="darkMode" defaultChecked={mockSettings.theme === 'dark'} disabled /> 
+              <Switch 
+                id="darkMode" 
+                checked={theme === 'dark'}
+                onCheckedChange={(checked) => setTheme(checked ? 'dark' : 'light')}
+              /> 
             </div>
             <p className="text-sm text-muted-foreground">
-              Mais opções de personalização de tema estarão disponíveis em breve.
+              O sistema também respeitará sua preferência de tema do sistema operacional.
             </p>
           </CardContent>
         </Card>

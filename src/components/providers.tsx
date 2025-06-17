@@ -1,23 +1,22 @@
 'use client';
 
 import React from 'react';
-
-// Import other providers here as needed, e.g., AuthProvider, ThemeProvider
+import { ThemeProvider as NextThemesProvider } from 'next-themes';
+import type { ThemeProviderProps } from 'next-themes/dist/types';
 
 interface ProvidersProps {
   children: React.ReactNode;
 }
 
 export function Providers({ children }: ProvidersProps) {
-  // Wrap children with all necessary providers
-  // For now, it's just a pass-through, but can be extended.
-  // Example:
-  // return (
-  //   <AuthProvider>
-  //     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-  //       {children}
-  //     </ThemeProvider>
-  //   </AuthProvider>
-  // );
-  return <>{children}</>;
+  return (
+    <NextThemesProvider
+      attribute="class"
+      defaultTheme="system"
+      enableSystem
+      disableTransitionOnChange
+    >
+      {children}
+    </NextThemesProvider>
+  );
 }
