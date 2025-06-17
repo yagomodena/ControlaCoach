@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ChevronLeft, ChevronRight, Users, Edit, PlusCircle, Clock } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { ChevronLeft, ChevronRight, Users, Edit, PlusCircle, Clock, Trash2 } from "lucide-react";
 import { 
   Dialog,
   DialogContent,
@@ -33,7 +34,7 @@ import {
   parseISO
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import type { BookedClass, CoachAvailability, DailyAvailability, Student } from '@/types';
+import type { BookedClass, DailyAvailability, Student } from '@/types';
 import { INITIAL_MOCK_BOOKED_CLASSES, MOCK_COACH_AVAILABILITY, MOCK_STUDENTS } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 
@@ -41,6 +42,7 @@ interface TimeSlot {
   time: string; // "HH:MM"
   isBooked: boolean;
   bookedClassDetails?: {
+    id: string; // Added ID for easy retrieval
     title: string;
     location: string;
     studentsCount: number;
@@ -54,9 +56,18 @@ export default function AgendaPage() {
   const [bookedClasses, setBookedClasses] = useState<BookedClass[]>(INITIAL_MOCK_BOOKED_CLASSES);
   const { toast } = useToast();
 
+  // State for booking dialog
   const [isStudentSelectionDialogOpen, setIsStudentSelectionDialogOpen] = useState(false);
   const [slotBeingBooked, setSlotBeingBooked] = useState<string | null>(null);
-  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+  const [selectedStudentIdsForBooking, setSelectedStudentIdsForBooking] = useState<string[]>([]);
+  
+  // State for editing dialog
+  const [isEditClassDialogOpen, setIsEditClassDialogOpen] = useState(false);
+  const [classBeingEdited, setClassBeingEdited] = useState<BookedClass | null>(null);
+  const [editedClassTitle, setEditedClassTitle] = useState('');
+  const [editedClassLocation, setEditedClassLocation] = useState('');
+  const [editedClassStudentIds, setEditedClassStudentIds] = useState<string[]>([]);
+
   const [studentsList, setStudentsList] = useState<Student[]>([]);
 
   useEffect(() => {
@@ -145,6 +156,7 @@ export default function AgendaPage() {
             time: slotTimeFormatted,
             isBooked: true,
             bookedClassDetails: {
+              id: bookedClass.id, // Store ID here
               title: bookedClass.title,
               location: bookedClass.location,
               studentsCount: bookedClass.studentIds.length,
@@ -169,12 +181,12 @@ export default function AgendaPage() {
       return;
     }
     setSlotBeingBooked(time);
-    setSelectedStudentIds([]); 
+    setSelectedStudentIdsForBooking([]); 
     setIsStudentSelectionDialogOpen(true);
   };
 
-  const handleStudentSelectionChange = (studentId: string, checked: boolean) => {
-    setSelectedStudentIds(prevSelectedIds => {
+  const handleStudentSelectionChangeForBooking = (studentId: string, checked: boolean) => {
+    setSelectedStudentIdsForBooking(prevSelectedIds => {
       if (checked) {
         return [...prevSelectedIds, studentId];
       } else {
@@ -184,7 +196,7 @@ export default function AgendaPage() {
   };
 
   const handleConfirmBooking = () => {
-    if (!selectedDate || !slotBeingBooked || selectedStudentIds.length === 0) {
+    if (!selectedDate || !slotBeingBooked || selectedStudentIdsForBooking.length === 0) {
       toast({
         title: "Erro ao Agendar",
         description: "Informações incompletas. Selecione data, horário e pelo menos um aluno.",
@@ -194,10 +206,10 @@ export default function AgendaPage() {
     }
 
     let classTitle = "Aula em Grupo";
-    let toastDescription = `Aula em grupo às ${slotBeingBooked} no dia ${format(selectedDate, 'dd/MM/yyyy')} foi agendada com ${selectedStudentIds.length} aluno(s).`;
+    let toastDescription = `Aula em grupo às ${slotBeingBooked} no dia ${format(selectedDate, 'dd/MM/yyyy')} foi agendada com ${selectedStudentIdsForBooking.length} aluno(s).`;
 
-    if (selectedStudentIds.length === 1) {
-      const student = MOCK_STUDENTS.find(s => s.id === selectedStudentIds[0]);
+    if (selectedStudentIdsForBooking.length === 1) {
+      const student = MOCK_STUDENTS.find(s => s.id === selectedStudentIdsForBooking[0]);
       if (student) {
         classTitle = `Aula Particular - ${student.name}`;
         toastDescription = `Aula com ${student.name} às ${slotBeingBooked} no dia ${format(selectedDate, 'dd/MM/yyyy')} foi agendada.`;
@@ -206,14 +218,13 @@ export default function AgendaPage() {
       }
     }
 
-
     const newBookedClass: BookedClass = {
       id: crypto.randomUUID(),
       date: format(selectedDate, 'yyyy-MM-dd'),
       time: slotBeingBooked,
       title: classTitle, 
       location: 'A definir', 
-      studentIds: selectedStudentIds,
+      studentIds: selectedStudentIdsForBooking,
       durationMinutes: 60,
     };
 
@@ -225,7 +236,72 @@ export default function AgendaPage() {
     });
     setIsStudentSelectionDialogOpen(false);
     setSlotBeingBooked(null);
-    setSelectedStudentIds([]);
+    setSelectedStudentIdsForBooking([]);
+  };
+
+  // Functions for Edit Class Dialog
+  const openEditClassDialog = (classId: string) => {
+    const classToEdit = bookedClasses.find(c => c.id === classId);
+    if (classToEdit) {
+      setClassBeingEdited(classToEdit);
+      setEditedClassTitle(classToEdit.title);
+      setEditedClassLocation(classToEdit.location);
+      setEditedClassStudentIds([...classToEdit.studentIds]);
+      setIsEditClassDialogOpen(true);
+    } else {
+      toast({ title: "Erro", description: "Aula não encontrada para edição.", variant: "destructive" });
+    }
+  };
+
+  const handleStudentSelectionChangeForEdit = (studentId: string, checked: boolean) => {
+    setEditedClassStudentIds(prevSelectedIds => {
+      if (checked) {
+        return [...prevSelectedIds, studentId];
+      } else {
+        return prevSelectedIds.filter(id => id !== studentId);
+      }
+    });
+  };
+
+  const handleSaveChangesToClass = () => {
+    if (!classBeingEdited || editedClassStudentIds.length === 0) {
+      toast({
+        title: "Erro ao Salvar",
+        description: "Informações incompletas. Título, local e ao menos um aluno são necessários.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setBookedClasses(prevClasses => 
+      prevClasses.map(c => 
+        c.id === classBeingEdited.id 
+          ? { ...c, title: editedClassTitle, location: editedClassLocation, studentIds: editedClassStudentIds } 
+          : c
+      )
+    );
+
+    toast({
+      title: "Aula Atualizada!",
+      description: `A aula às ${classBeingEdited.time} foi atualizada.`,
+    });
+    setIsEditClassDialogOpen(false);
+    setClassBeingEdited(null);
+  };
+
+  const handleDeleteClass = () => {
+    if (!classBeingEdited) return;
+
+    // Basic confirmation, could be replaced with AlertDialog for better UX
+    if (window.confirm(`Tem certeza que deseja excluir a aula "${classBeingEdited.title}" de ${format(parseISO(classBeingEdited.date), 'dd/MM/yyyy')} às ${classBeingEdited.time}?`)) {
+        setBookedClasses(prevClasses => prevClasses.filter(c => c.id !== classBeingEdited.id));
+        toast({
+            title: "Aula Excluída!",
+            description: `A aula "${classBeingEdited.title}" foi excluída.`,
+        });
+        setIsEditClassDialogOpen(false);
+        setClassBeingEdited(null);
+    }
   };
 
 
@@ -318,7 +394,7 @@ export default function AgendaPage() {
                           <div className="mt-1 flex items-center text-xs text-muted-foreground">
                             <Users className="h-3 w-3 mr-1" /> {slot.bookedClassDetails.studentsCount} aluno(s)
                           </div>
-                           <Button variant="link" size="sm" className="mt-1 px-0 h-auto text-xs">
+                           <Button variant="link" size="sm" className="mt-1 px-0 h-auto text-xs" onClick={() => openEditClassDialog(slot.bookedClassDetails!.id)}>
                              <Edit className="h-3 w-3 mr-1"/> Gerenciar Aula
                            </Button>
                         </div>
@@ -340,6 +416,7 @@ export default function AgendaPage() {
         </Card>
       </div>
 
+      {/* Student Selection Dialog for Booking */}
       <Dialog open={isStudentSelectionDialogOpen} onOpenChange={setIsStudentSelectionDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -355,11 +432,11 @@ export default function AgendaPage() {
                 studentsList.map(student => (
                   <div key={student.id} className="flex items-center space-x-2 mb-2">
                     <Checkbox
-                      id={`student-${student.id}`}
-                      checked={selectedStudentIds.includes(student.id)}
-                      onCheckedChange={(checked) => handleStudentSelectionChange(student.id, !!checked)}
+                      id={`book-student-${student.id}`}
+                      checked={selectedStudentIdsForBooking.includes(student.id)}
+                      onCheckedChange={(checked) => handleStudentSelectionChangeForBooking(student.id, !!checked)}
                     />
-                    <Label htmlFor={`student-${student.id}`} className="font-normal">
+                    <Label htmlFor={`book-student-${student.id}`} className="font-normal">
                       {student.name}
                     </Label>
                   </div>
@@ -373,9 +450,77 @@ export default function AgendaPage() {
             <DialogClose asChild>
               <Button type="button" variant="outline">Cancelar</Button>
             </DialogClose>
-            <Button type="button" onClick={handleConfirmBooking} disabled={selectedStudentIds.length === 0}>
+            <Button type="button" onClick={handleConfirmBooking} disabled={selectedStudentIdsForBooking.length === 0}>
               Confirmar Agendamento
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Class Dialog */}
+      <Dialog open={isEditClassDialogOpen} onOpenChange={setIsEditClassDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Gerenciar Aula - {classBeingEdited?.time}</DialogTitle>
+            <DialogDescription>
+              Edite os detalhes da aula de {classBeingEdited?.time} em {classBeingEdited ? format(parseISO(classBeingEdited.date), 'dd/MM/yyyy', { locale: ptBR }) : ''}.
+            </DialogDescription>
+          </DialogHeader>
+          {classBeingEdited && (
+            <div className="py-4 space-y-4">
+              <div>
+                <Label htmlFor="editClassTitle" className="mb-1 block">Título da Aula</Label>
+                <Input 
+                  id="editClassTitle" 
+                  value={editedClassTitle} 
+                  onChange={(e) => setEditedClassTitle(e.target.value)} 
+                  placeholder="Ex: Aula Particular - João"
+                />
+              </div>
+              <div>
+                <Label htmlFor="editClassLocation" className="mb-1 block">Local da Aula</Label>
+                <Input 
+                  id="editClassLocation" 
+                  value={editedClassLocation} 
+                  onChange={(e) => setEditedClassLocation(e.target.value)} 
+                  placeholder="Ex: Praia Central"
+                />
+              </div>
+              <div>
+                <Label className="mb-2 block">Alunos Inscritos</Label>
+                <ScrollArea className="h-[180px] w-full rounded-md border p-4">
+                  {studentsList.length > 0 ? (
+                    studentsList.map(student => (
+                      <div key={student.id} className="flex items-center space-x-2 mb-2">
+                        <Checkbox
+                          id={`edit-student-${student.id}`}
+                          checked={editedClassStudentIds.includes(student.id)}
+                          onCheckedChange={(checked) => handleStudentSelectionChangeForEdit(student.id, !!checked)}
+                        />
+                        <Label htmlFor={`edit-student-${student.id}`} className="font-normal">
+                          {student.name}
+                        </Label>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Nenhum aluno ativo encontrado.</p>
+                  )}
+                </ScrollArea>
+              </div>
+            </div>
+          )}
+          <DialogFooter className="sm:justify-between">
+            <Button type="button" variant="destructive" onClick={handleDeleteClass} className="sm:mr-auto">
+              <Trash2 className="mr-2 h-4 w-4" /> Excluir Aula
+            </Button>
+            <div className="flex gap-2 mt-2 sm:mt-0">
+                <DialogClose asChild>
+                <Button type="button" variant="outline">Cancelar</Button>
+                </DialogClose>
+                <Button type="button" onClick={handleSaveChangesToClass} disabled={editedClassStudentIds.length === 0 || !editedClassTitle || !editedClassLocation}>
+                Salvar Alterações
+                </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -383,4 +528,3 @@ export default function AgendaPage() {
     </div>
   );
 }
-
