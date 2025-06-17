@@ -1,11 +1,28 @@
 
 'use client'
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Users, Edit, PlusCircle, Clock } from "lucide-react";
+import { 
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { 
   format, 
   addMonths, 
@@ -21,8 +38,8 @@ import {
   parseISO
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import type { BookedClass, CoachAvailability, DailyAvailability } from '@/types';
-import { INITIAL_MOCK_BOOKED_CLASSES, MOCK_COACH_AVAILABILITY } from '@/types';
+import type { BookedClass, CoachAvailability, DailyAvailability, Student } from '@/types';
+import { INITIAL_MOCK_BOOKED_CLASSES, MOCK_COACH_AVAILABILITY, MOCK_STUDENTS } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 
 interface TimeSlot {
@@ -41,6 +58,16 @@ export default function AgendaPage() {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [bookedClasses, setBookedClasses] = useState<BookedClass[]>(INITIAL_MOCK_BOOKED_CLASSES);
   const { toast } = useToast();
+
+  const [isStudentSelectionDialogOpen, setIsStudentSelectionDialogOpen] = useState(false);
+  const [slotBeingBooked, setSlotBeingBooked] = useState<string | null>(null);
+  const [studentToBookId, setStudentToBookId] = useState<string | null>(null);
+  const [studentsList, setStudentsList] = useState<Student[]>([]);
+
+  useEffect(() => {
+    // Load students once, or if they might change, add dependencies to re-fetch
+    setStudentsList(MOCK_STUDENTS.filter(s => s.status === 'active'));
+  }, []);
 
   const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
   const prevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
@@ -138,23 +165,43 @@ export default function AgendaPage() {
     return slots.sort((a, b) => a.time.localeCompare(b.time));
   }, [selectedDate, bookedClasses]);
 
-  const handleBookSlot = (time: string) => {
+  const openStudentSelectionDialog = (time: string) => {
     if (!selectedDate) {
       toast({
-        title: "Erro ao Agendar",
+        title: "Erro",
         description: "Por favor, selecione uma data primeiro.",
         variant: "destructive",
       });
+      return;
+    }
+    setSlotBeingBooked(time);
+    setStudentToBookId(null); // Reset previous selection
+    setIsStudentSelectionDialogOpen(true);
+  };
+
+  const handleConfirmBooking = () => {
+    if (!selectedDate || !slotBeingBooked || !studentToBookId) {
+      toast({
+        title: "Erro ao Agendar",
+        description: "Informações incompletas. Selecione data, horário e aluno.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const student = MOCK_STUDENTS.find(s => s.id === studentToBookId);
+    if (!student) {
+      toast({ title: "Erro", description: "Aluno não encontrado.", variant: "destructive" });
       return;
     }
 
     const newBookedClass: BookedClass = {
       id: crypto.randomUUID(),
       date: format(selectedDate, 'yyyy-MM-dd'),
-      time: time,
-      title: `Aula Agendada ${time}`, 
+      time: slotBeingBooked,
+      title: `Aula - ${student.name}`, 
       location: 'A definir', 
-      studentIds: [],
+      studentIds: [studentToBookId],
       durationMinutes: 60,
     };
 
@@ -162,8 +209,11 @@ export default function AgendaPage() {
 
     toast({
       title: "Aula Agendada!",
-      description: `Aula às ${time} no dia ${format(selectedDate, 'dd/MM/yyyy')} foi agendada com sucesso.`,
+      description: `Aula com ${student.name} às ${slotBeingBooked} no dia ${format(selectedDate, 'dd/MM/yyyy')} foi agendada.`,
     });
+    setIsStudentSelectionDialogOpen(false);
+    setSlotBeingBooked(null);
+    setStudentToBookId(null);
   };
 
 
@@ -244,7 +294,7 @@ export default function AgendaPage() {
                            <span className={`font-semibold ${slot.isBooked ? 'text-muted-foreground' : 'text-primary'}`}>{slot.time}</span>
                         </div>
                         {!slot.isBooked && (
-                           <Button variant="outline" size="sm" onClick={() => handleBookSlot(slot.time)}>
+                           <Button variant="outline" size="sm" onClick={() => openStudentSelectionDialog(slot.time)}>
                              <PlusCircle className="h-3.5 w-3.5 mr-1.5"/> Agendar
                            </Button>
                         )}
@@ -277,6 +327,49 @@ export default function AgendaPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={isStudentSelectionDialogOpen} onOpenChange={setIsStudentSelectionDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Agendar Aula para {slotBeingBooked}</DialogTitle>
+            <DialogDescription>
+              Selecione o aluno para o horário de {slotBeingBooked} em {selectedDate ? format(selectedDate, 'dd/MM/yyyy', { locale: ptBR }) : ''}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="student" className="text-right">
+                Aluno
+              </Label>
+              <Select onValueChange={setStudentToBookId} value={studentToBookId || undefined}>
+                <SelectTrigger id="student" className="col-span-3">
+                  <SelectValue placeholder="Selecione um aluno" />
+                </SelectTrigger>
+                <SelectContent>
+                  {studentsList.length > 0 ? (
+                    studentsList.map(student => (
+                      <SelectItem key={student.id} value={student.id}>
+                        {student.name}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="no-students" disabled>Nenhum aluno ativo encontrado</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">Cancelar</Button>
+            </DialogClose>
+            <Button type="button" onClick={handleConfirmBooking} disabled={!studentToBookId}>
+              Confirmar Agendamento
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }
