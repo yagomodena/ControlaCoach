@@ -27,20 +27,19 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import type { Student, Payment } from '@/types';
 import { MOCK_STUDENTS } from '@/types'; 
-import { format, parse } from 'date-fns'; // Import parse and format
+import { format, parse } from 'date-fns';
 
 interface PaymentEntry extends Payment {
   studentName: string;
 }
 
-// Enhance mock students with more varied payment data for demonstration
 const mockPayments: PaymentEntry[] = MOCK_STUDENTS.map(student => ({
   id: `p-${student.id}`,
   studentId: student.id,
   studentName: student.name,
-  amount: student.amountDue || 150, // Default amount if not set
+  amount: student.amountDue || 150,
   paymentDate: student.lastPaymentDate || (student.paymentStatus === 'pago' ? student.dueDate || new Date().toISOString() : ''),
-  dueDate: student.dueDate || new Date(new Date().setDate(new Date().getDate() + 5)).toISOString(), // Default due date
+  dueDate: student.dueDate || new Date(new Date().setDate(new Date().getDate() + 5)).toISOString(),
   status: student.paymentStatus || 'pendente',
   method: student.paymentMethod || 'PIX',
   referenceMonth: student.dueDate ? new Date(student.dueDate).toISOString().substring(0,7) : new Date().toISOString().substring(0,7)
@@ -89,7 +88,7 @@ export default function FinanceiroPage() {
     totalRecebidoMes: mockPayments.filter(p => p.status === 'pago').reduce((sum, p) => sum + p.amount, 0),
     totalPendente: mockPayments.filter(p => p.status === 'pendente').reduce((sum, p) => sum + p.amount, 0),
     totalVencido: mockPayments.filter(p => p.status === 'vencido').reduce((sum, p) => sum + p.amount, 0),
-  }), [mockPayments]); // mockPayments is stable, but good practice if it could change
+  }), []);
 
 
   return (
@@ -174,50 +173,65 @@ export default function FinanceiroPage() {
             </DropdownMenu>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-2 sm:px-6">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Aluno</TableHead>
-                <TableHead className="hidden lg:table-cell">Valor</TableHead>
-                <TableHead>Vencimento</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="hidden md:table-cell">Método</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
+                <TableHead className="px-2 py-3 sm:px-4">Aluno</TableHead>
+                <TableHead className="hidden lg:table-cell px-2 py-3 sm:px-4">Valor</TableHead>
+                <TableHead className="px-2 py-3 sm:px-4">Vencimento</TableHead>
+                <TableHead className="px-2 py-3 sm:px-4">Status</TableHead>
+                <TableHead className="hidden md:table-cell px-2 py-3 sm:px-4">Método</TableHead>
+                <TableHead className="text-right px-2 py-3 sm:px-4">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredPayments.length > 0 ? (
                 filteredPayments.map((payment) => (
                   <TableRow key={payment.id}>
-                    <TableCell className="font-medium">{payment.studentName}</TableCell>
-                    <TableCell className="hidden lg:table-cell">R$ {payment.amount.toFixed(2)}</TableCell>
-                    <TableCell>
+                    <TableCell className="font-medium p-2 sm:p-4 truncate max-w-[100px] xxs:max-w-[120px] xs:max-w-[150px] sm:max-w-xs">
+                        {payment.studentName}
+                    </TableCell>
+                    <TableCell className="hidden lg:table-cell p-2 sm:p-4">R$ {payment.amount.toFixed(2)}</TableCell>
+                    <TableCell className="p-2 sm:p-4">
                       {clientRendered ? (
                         payment.dueDate.includes('T') ? format(parse(payment.dueDate, "yyyy-MM-dd'T'HH:mm:ss.SSSX", new Date()), 'dd/MM/yyyy') : format(parse(payment.dueDate, 'yyyy-MM-dd', new Date()), 'dd/MM/yyyy')
                       ) : (
                         payment.dueDate.split('T')[0] // SSR fallback
                       )}
                     </TableCell>
-                    <TableCell>{getPaymentStatusBadge(payment.status)}</TableCell>
-                    <TableCell className="hidden md:table-cell">{payment.method}</TableCell>
-                    <TableCell className="text-right">
-                       <Button variant="ghost" size="sm" asChild>
-                         <Link href={`/alunos/${payment.studentId}`}>
-                           <Users className="mr-1 h-3 w-3"/> Ver Aluno
-                         </Link>
-                       </Button>
-                       <Button variant="ghost" size="sm" asChild className="ml-2">
-                        <Link href={`/financeiro/lembrete/${payment.studentId}`}>
-                          <DollarSign className="mr-1 h-3 w-3"/> Lembrete
-                        </Link>
-                       </Button>
+                    <TableCell className="p-2 sm:p-4">{getPaymentStatusBadge(payment.status)}</TableCell>
+                    <TableCell className="hidden md:table-cell p-2 sm:p-4">{payment.method}</TableCell>
+                    <TableCell className="text-right p-2 sm:p-4">
+                       <div className="flex items-center justify-end space-x-0.5">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 sm:hidden" asChild>
+                          <Link href={`/alunos/${payment.studentId}`} title="Ver Aluno">
+                            <Users className="h-4 w-4" />
+                          </Link>
+                        </Button>
+                        <Button variant="ghost" size="sm" className="hidden sm:inline-flex items-center" asChild>
+                          <Link href={`/alunos/${payment.studentId}`} title="Ver Aluno">
+                            <Users className="h-4 w-4 mr-1" /> Ver Aluno
+                          </Link>
+                        </Button>
+
+                        <Button variant="ghost" size="icon" className="h-8 w-8 sm:hidden" asChild>
+                          <Link href={`/financeiro/lembrete/${payment.studentId}`} title="Gerar Lembrete">
+                            <DollarSign className="h-4 w-4" />
+                          </Link>
+                        </Button>
+                        <Button variant="ghost" size="sm" className="hidden sm:inline-flex items-center" asChild>
+                          <Link href={`/financeiro/lembrete/${payment.studentId}`} title="Gerar Lembrete">
+                            <DollarSign className="h-4 w-4 mr-1" /> Lembrete
+                          </Link>
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))
               ) : (
                  <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={4} className="text-center text-muted-foreground py-8 p-2 sm:p-4">
                     Nenhum pagamento encontrado com os filtros atuais.
                   </TableCell>
                 </TableRow>
@@ -229,4 +243,3 @@ export default function FinanceiroPage() {
     </div>
   );
 }
-
