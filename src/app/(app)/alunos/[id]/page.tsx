@@ -4,7 +4,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Edit3, Save, CalendarDays, DollarSign, ShieldCheck, ShieldOff, User, Phone, BarChart, Users, CheckCircle, XCircle, Clock, Goal, PlusCircle, Search } from 'lucide-react';
+import { ArrowLeft, Edit3, Save, CalendarDays, DollarSign, ShieldCheck, ShieldOff, User, Phone, BarChart, Users, CheckCircle, XCircle, Clock, Goal, PlusCircle, Search, MapPinIcon, ClockIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,11 +14,13 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Separator } from '@/components/ui/separator';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import type { Student, Plan } from '@/types';
-import { MOCK_STUDENTS, MOCK_PLANS } from '@/types';
+import type { Student, Plan, Location, DayOfWeek } from '@/types';
+import { MOCK_STUDENTS, MOCK_PLANS, MOCK_LOCATIONS, DAYS_OF_WEEK } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { AddPlanDialog } from '@/components/dialogs/add-plan-dialog';
 import { ManagePlansDialog } from '@/components/dialogs/manage-plans-dialog';
@@ -34,6 +36,9 @@ const studentSchema = z.object({
   dueDate: z.string().optional(),
   amountDue: z.number().optional(),
   paymentMethod: z.enum(['PIX', 'Dinheiro', 'Cartão']).optional(),
+  recurringClassTime: z.string().optional().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Formato de hora inválido (HH:MM)." }),
+  recurringClassDays: z.array(z.enum(DAYS_OF_WEEK)).optional(),
+  recurringClassLocation: z.string().optional(),
 });
 
 type StudentFormData = z.infer<typeof studentSchema>;
@@ -49,6 +54,7 @@ export default function AlunoDetailPage() {
   const [isEditMode, setIsEditMode] = useState(searchParams.get('edit') === 'true');
   const [isLoading, setIsLoading] = useState(true);
   const [activePlans, setActivePlans] = useState<Plan[]>([]);
+  const [activeLocations, setActiveLocations] = useState<Location[]>([]);
   const [isAddPlanDialogOpen, setIsAddPlanDialogOpen] = useState(false);
   const [isManagePlansDialogOpen, setIsManagePlansDialogOpen] = useState(false);
 
@@ -56,8 +62,13 @@ export default function AlunoDetailPage() {
     setActivePlans(MOCK_PLANS.filter(p => p.status === 'active'));
   };
 
+  const refreshActiveLocations = () => {
+    setActiveLocations(MOCK_LOCATIONS.filter(loc => loc.status === 'active'));
+  };
+
   useEffect(() => {
     refreshActivePlans();
+    refreshActiveLocations();
   }, []);
 
   const { control, handleSubmit, reset, formState: { errors, isSubmitting }, watch, setValue } = useForm<StudentFormData>({
@@ -69,7 +80,12 @@ export default function AlunoDetailPage() {
     const foundStudent = MOCK_STUDENTS.find(s => s.id === studentId);
     if (foundStudent) {
       setStudent(foundStudent);
-      reset(foundStudent as StudentFormData);
+      reset({
+        ...foundStudent,
+        recurringClassTime: foundStudent.recurringClassTime || '',
+        recurringClassDays: foundStudent.recurringClassDays || [],
+        recurringClassLocation: foundStudent.recurringClassLocation || '',
+      } as StudentFormData);
     } else {
       toast({ title: "Erro", description: "Aluno não encontrado.", variant: "destructive" });
       router.push('/alunos');
@@ -84,7 +100,14 @@ export default function AlunoDetailPage() {
   const onSubmit = async (data: StudentFormData) => {
     await new Promise(resolve => setTimeout(resolve, 1000));
     
-    const updatedStudentData = { ...student, ...data } as Student;
+    const updatedStudentData = { 
+      ...student, 
+      ...data,
+      objective: data.objective || undefined,
+      recurringClassTime: data.recurringClassTime || undefined,
+      recurringClassDays: data.recurringClassDays?.length ? data.recurringClassDays : undefined,
+      recurringClassLocation: data.recurringClassLocation || undefined,
+    } as Student;
     setStudent(updatedStudentData);
     
     const studentIndex = MOCK_STUDENTS.findIndex(s => s.id === studentId);
@@ -103,14 +126,11 @@ export default function AlunoDetailPage() {
   const handlePlansManaged = () => {
     const currentPlanValue = watch('plan');
     refreshActivePlans();
-    // Check if the current plan selection is still valid
     const currentPlanExistsAndIsActive = MOCK_PLANS.some(p => p.name === currentPlanValue && p.status === 'active');
     if (!currentPlanExistsAndIsActive && MOCK_PLANS.filter(p => p.status === 'active').length > 0) {
-       // If current plan is no longer valid, but there are other active plans, clear selection or pick first
-       // For simplicity, let's not auto-change it, user can re-select if needed.
-       // setValue('plan', ''); // or a default active plan
+       // setValue('plan', ''); 
     } else if (!currentPlanExistsAndIsActive) {
-       setValue('plan', ''); // No active plans left, clear selection
+       setValue('plan', ''); 
     }
   };
 
@@ -122,15 +142,17 @@ export default function AlunoDetailPage() {
     return <div className="container mx-auto py-8 text-center text-destructive">Aluno não encontrado.</div>;
   }
 
-  const InfoItem = ({ icon: Icon, label, value, isLongText = false }: { icon: React.ElementType, label: string, value?: string | number | null, isLongText?: boolean }) => (
+  const InfoItem = ({ icon: Icon, label, value, isLongText = false }: { icon: React.ElementType, label: string, value?: string | number | null | DayOfWeek[], isLongText?: boolean }) => (
     <div className="flex items-start space-x-3">
       <Icon className="h-5 w-5 text-primary mt-1 flex-shrink-0" />
       <div>
         <p className="text-sm text-muted-foreground">{label}</p>
-        {isLongText && value ? (
-            <p className="font-medium text-foreground whitespace-pre-wrap">{value}</p>
+        {Array.isArray(value) ? (
+          <p className="font-medium text-foreground">{value.join(', ') || 'N/A'}</p>
+        ) : isLongText && value ? (
+            <p className="font-medium text-foreground whitespace-pre-wrap">{String(value)}</p>
         ) : (
-            <p className="font-medium text-foreground">{value || 'N/A'}</p>
+            <p className="font-medium text-foreground">{value != null ? String(value) : 'N/A'}</p>
         )}
       </div>
     </div>
@@ -244,8 +266,83 @@ export default function AlunoDetailPage() {
                   {errors.objective && <p className="text-sm text-destructive">{errors.objective.message}</p>}
                 </div>
               </CardContent>
-              <CardFooter className="flex justify-end gap-2">
-                <Button variant="outline" type="button" onClick={() => { setIsEditMode(false); router.replace(`/alunos/${studentId}`); reset(student as StudentFormData); }}>Cancelar</Button>
+
+              <Separator className="my-6" />
+
+              <CardHeader className="pt-0">
+                <CardTitle className="flex items-center"><CalendarDays className="mr-2 h-5 w-5 text-primary"/>Horários e Dias de Aula Recorrentes</CardTitle>
+                <CardDescription>Defina o horário e os dias fixos para as aulas deste aluno. (Opcional)</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="recurringClassTime" className="flex items-center"><ClockIcon className="mr-1 h-4 w-4"/>Horário da Aula</Label>
+                    <Controller
+                      name="recurringClassTime"
+                      control={control}
+                      render={({ field }) => <Input id="recurringClassTime" type="time" {...field} />}
+                    />
+                    {errors.recurringClassTime && <p className="text-sm text-destructive">{errors.recurringClassTime.message}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="recurringClassLocation" className="flex items-center"><MapPinIcon className="mr-1 h-4 w-4"/>Local da Aula</Label>
+                    <Controller
+                      name="recurringClassLocation"
+                      control={control}
+                      render={({ field }) => (
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <SelectTrigger id="recurringClassLocation">
+                            <SelectValue placeholder="Selecione o local" />
+                          </SelectTrigger>
+                          <SelectContent>
+                             <SelectItem value="">Nenhum local específico</SelectItem>
+                            {activeLocations.map(loc => (
+                              <SelectItem key={loc.id} value={loc.name}>{loc.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                    {errors.recurringClassLocation && <p className="text-sm text-destructive">{errors.recurringClassLocation.message}</p>}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Dias da Semana para Aula Recorrente</Label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 pt-2">
+                    {DAYS_OF_WEEK.map((day) => (
+                      <Controller
+                        key={day}
+                        name="recurringClassDays"
+                        control={control}
+                        render={({ field }) => {
+                          const currentDays = field.value || [];
+                          return (
+                            <div className="flex items-center space-x-2">
+                              <Checkbox
+                                id={`day-edit-${day}`}
+                                checked={currentDays.includes(day)}
+                                onCheckedChange={(checked) => {
+                                  const newDays = checked
+                                    ? [...currentDays, day]
+                                    : currentDays.filter((d) => d !== day);
+                                  field.onChange(newDays);
+                                }}
+                              />
+                              <Label htmlFor={`day-edit-${day}`} className="font-normal">
+                                {day}
+                              </Label>
+                            </div>
+                          );
+                        }}
+                      />
+                    ))}
+                  </div>
+                  {errors.recurringClassDays && <p className="text-sm text-destructive">{errors.recurringClassDays.message}</p>}
+                </div>
+              </CardContent>
+
+              <CardFooter className="flex justify-end gap-2 pt-6">
+                <Button variant="outline" type="button" onClick={() => { setIsEditMode(false); router.replace(`/alunos/${studentId}`); reset({...student, recurringClassTime: student.recurringClassTime || '', recurringClassDays: student.recurringClassDays || [], recurringClassLocation: student.recurringClassLocation || ''} as StudentFormData); }}>Cancelar</Button>
                 <Button type="submit" disabled={isSubmitting} className="bg-primary hover:bg-primary/90 text-primary-foreground">
                   <Save className="mr-2 h-4 w-4" />{isSubmitting ? 'Salvando...' : 'Salvar Alterações'}
                 </Button>
@@ -254,10 +351,11 @@ export default function AlunoDetailPage() {
           </Card>
         ) : (
           <Tabs defaultValue="overview" className="w-full">
-            <TabsList className="grid w-full grid-cols-3 mb-6 max-w-md mx-auto">
+            <TabsList className="grid w-full grid-cols-3 mb-6 max-w-lg mx-auto"> {/* Increased max-w for 3 tabs */}
               <TabsTrigger value="overview">Visão Geral</TabsTrigger>
-              <TabsTrigger value="attendance">Presença</TabsTrigger>
+              <TabsTrigger value="schedule">Aulas Recorrentes</TabsTrigger>
               <TabsTrigger value="payments">Pagamentos</TabsTrigger>
+              {/* <TabsTrigger value="attendance">Presença</TabsTrigger> Removed for now, can be added back if needed */}
             </TabsList>
 
             <TabsContent value="overview">
@@ -285,37 +383,48 @@ export default function AlunoDetailPage() {
                     <InfoItem icon={Goal} label="Objetivo" value={student.objective} isLongText={true} />
                   </CardContent>
                 )}
+                 <CardContent className="pt-2"> {/* Histórico de presença */}
+                   <Label className="text-sm text-muted-foreground">Histórico de Presença</Label>
+                    {student.attendanceHistory && student.attendanceHistory.length > 0 ? (
+                      <Table className="mt-2">
+                        <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Aula ID</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                        <TableBody>
+                          {student.attendanceHistory.slice(0, 5).map((att, index) => ( // Show recent 5
+                            <TableRow key={index}>
+                              <TableCell>{new Date(att.date).toLocaleDateString('pt-BR')}</TableCell>
+                              <TableCell>{att.classId}</TableCell>
+                              <TableCell>
+                                {att.status === 'present' && <Badge className="bg-green-500/20 text-green-700 border-green-500/30"><CheckCircle className="inline mr-1 h-3 w-3" /> Presente</Badge>}
+                                {att.status === 'absent' && <Badge className="bg-red-500/20 text-red-700 border-red-500/30"><XCircle className="inline mr-1 h-3 w-3" /> Ausente</Badge>}
+                                {att.status === 'rescheduled' && <Badge className="bg-blue-500/20 text-blue-700 border-blue-500/30"><Clock className="inline mr-1 h-3 w-3" /> Remarcado</Badge>}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    ) : (
+                      <p className="text-muted-foreground text-sm mt-1">Nenhum histórico de presença registrado.</p>
+                    )}
+                </CardContent>
               </Card>
             </TabsContent>
 
-            <TabsContent value="attendance">
+            <TabsContent value="schedule">
               <Card className="shadow-lg">
                 <CardHeader>
-                  <CardTitle>Histórico de Presença</CardTitle>
-                  <CardDescription>Registro de aulas frequentadas e ausências.</CardDescription>
+                  <CardTitle>Aulas Recorrentes Programadas</CardTitle>
+                  <CardDescription>Horários e dias fixos de treino para {student.name}.</CardDescription>
                 </CardHeader>
-                <CardContent>
-                  {student.attendanceHistory && student.attendanceHistory.length > 0 ? (
-                    <Table>
-                      <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Aula ID</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-                      <TableBody>
-                        {student.attendanceHistory.map((att, index) => (
-                          <TableRow key={index}>
-                            <TableCell>{new Date(att.date).toLocaleDateString('pt-BR')}</TableCell>
-                            <TableCell>{att.classId}</TableCell>
-                            <TableCell>
-                              {att.status === 'present' && <Badge className="bg-green-500/20 text-green-700 border-green-500/30"><CheckCircle className="inline mr-1 h-3 w-3" /> Presente</Badge>}
-                              {att.status === 'absent' && <Badge className="bg-red-500/20 text-red-700 border-red-500/30"><XCircle className="inline mr-1 h-3 w-3" /> Ausente</Badge>}
-                              {att.status === 'rescheduled' && <Badge className="bg-blue-500/20 text-blue-700 border-blue-500/30"><Clock className="inline mr-1 h-3 w-3" /> Remarcado</Badge>}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  ) : (
-                    <p className="text-muted-foreground">Nenhum histórico de presença registrado.</p>
-                  )}
+                <CardContent className="grid md:grid-cols-2 gap-6 pt-6">
+                  <InfoItem icon={ClockIcon} label="Horário Recorrente" value={student.recurringClassTime} />
+                  <InfoItem icon={MapPinIcon} label="Local Recorrente" value={student.recurringClassLocation} />
+                  <InfoItem icon={CalendarDays} label="Dias Recorrentes" value={student.recurringClassDays && student.recurringClassDays.length > 0 ? student.recurringClassDays : "Nenhum dia definido"} />
                 </CardContent>
+                {!student.recurringClassTime && (!student.recurringClassDays || student.recurringClassDays.length === 0) && (
+                    <CardContent>
+                        <p className="text-muted-foreground text-center py-4">Nenhuma aula recorrente configurada para este aluno.</p>
+                    </CardContent>
+                )}
               </Card>
             </TabsContent>
 
@@ -353,9 +462,7 @@ export default function AlunoDetailPage() {
       <AddPlanDialog
         open={isAddPlanDialogOpen}
         onOpenChange={setIsAddPlanDialogOpen}
-        onPlanAdded={() => {
-          refreshActivePlans();
-        }}
+        onPlanAdded={handlePlansManaged}
       />
       <ManagePlansDialog
         open={isManagePlansDialogOpen}

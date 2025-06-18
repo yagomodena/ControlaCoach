@@ -1,36 +1,44 @@
 
 
+export type DayOfWeek = 'Segunda' | 'Terça' | 'Quarta' | 'Quinta' | 'Sexta' | 'Sábado' | 'Domingo';
+export const DAYS_OF_WEEK: DayOfWeek[] = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
+
 export interface Student {
   id: string;
   name: string;
   phone: string;
-  plan: string; // Stores plan name
+  plan: string; 
   technicalLevel: 'Iniciante' | 'Intermediário' | 'Avançado';
   status: 'active' | 'inactive';
-  registrationDate: string; // ISO date string
+  registrationDate: string; 
   objective?: string;
   attendanceHistory?: { date: string; classId: string; status: 'present' | 'absent' | 'rescheduled' }[];
   
   paymentStatus?: 'pago' | 'pendente' | 'vencido';
-  dueDate?: string; // ISO date string
+  dueDate?: string; 
   amountDue?: number;
   paymentMethod?: 'PIX' | 'Dinheiro' | 'Cartão';
-  lastPaymentDate?: string; // ISO date string
+  lastPaymentDate?: string; 
+
+  // New fields for recurring classes
+  recurringClassTime?: string; // e.g., "10:00"
+  recurringClassDays?: DayOfWeek[]; // e.g., ['Segunda', 'Quarta']
+  recurringClassLocation?: string; // Name of the location
 }
 
 export interface Plan {
   id: string;
   name: string;
   price: number;
-  durationDays: number; // e.g., 30 for monthly, 90 for quarterly, 1 for single class
+  durationDays: number; 
   status: 'active' | 'inactive';
 }
 
 export interface ClassSession {
   id: string;
-  dayOfWeek: 'Segunda' | 'Terça' | 'Quarta' | 'Quinta' | 'Sexta' | 'Sábado' | 'Domingo';
-  time: string; // e.g., "18:00"
-  location: string; // Location name string
+  dayOfWeek: DayOfWeek;
+  time: string; 
+  location: string; 
   maxStudents: number;
   enrolledStudentIds: string[];
 }
@@ -42,7 +50,7 @@ export interface BookedClass {
   date: string; 
   time: string; 
   durationMinutes?: number; 
-  location: string; // Location name string
+  location: string; 
   studentIds: string[]; 
 }
 
@@ -51,11 +59,11 @@ export interface Payment {
   id: string;
   studentId: string;
   amount: number;
-  paymentDate: string; // ISO date string
-  dueDate: string; // ISO date string
+  paymentDate: string; 
+  dueDate: string; 
   status: 'pago' | 'pendente' | 'vencido';
   method: 'PIX' | 'Dinheiro' | 'Cartão';
-  referenceMonth?: string; // e.g., "2024-07"
+  referenceMonth?: string; 
   receiptUrl?: string;
 }
 
@@ -76,7 +84,7 @@ export interface DailyAvailability {
 }
 
 export type CoachAvailability = {
-  [dayOfWeek: number]: DailyAvailability;
+  [dayOfWeek: number]: DailyAvailability; 
   defaultDaily: DailyAvailability; 
 };
 
@@ -86,13 +94,13 @@ export interface Location {
   status: 'active' | 'inactive';
 }
 
-// Mock data for students
+
 export const MOCK_STUDENTS: Student[] = [
   {
     id: '1',
     name: 'Ana Silva',
     phone: '(11) 98765-4321',
-    plan: 'Mensal', // Matches MOCK_PLANS name
+    plan: 'Mensal', 
     technicalLevel: 'Iniciante',
     status: 'active',
     registrationDate: '2023-01-15',
@@ -106,12 +114,15 @@ export const MOCK_STUDENTS: Student[] = [
       { date: '2024-07-03', classId: 'c1', status: 'present' },
     ],
     lastPaymentDate: '2024-07-05',
+    recurringClassTime: '09:00',
+    recurringClassDays: ['Segunda', 'Quarta'],
+    recurringClassLocation: 'Praia Central',
   },
   {
     id: '2',
     name: 'Bruno Costa',
     phone: '(21) 91234-5678',
-    plan: 'Trimestral', // Matches MOCK_PLANS name
+    plan: 'Trimestral', 
     technicalLevel: 'Intermediário',
     status: 'active',
     registrationDate: '2022-11-20',
@@ -129,7 +140,7 @@ export const MOCK_STUDENTS: Student[] = [
     id: '3',
     name: 'Carlos Dias',
     phone: '(31) 99999-8888',
-    plan: 'Mensal', // Matches MOCK_PLANS name
+    plan: 'Mensal', 
     technicalLevel: 'Avançado',
     status: 'inactive',
     registrationDate: '2023-05-10',
@@ -139,12 +150,15 @@ export const MOCK_STUDENTS: Student[] = [
     amountDue: 150,
     paymentMethod: 'Dinheiro',
     attendanceHistory: [],
+    recurringClassTime: '10:00',
+    recurringClassDays: ['Sexta'],
+    recurringClassLocation: 'Quadra Coberta A',
   },
    {
     id: '4',
     name: 'Daniela Rocha',
     phone: '(41) 98888-7777',
-    plan: 'Mensal', // Matches MOCK_PLANS name
+    plan: 'Mensal', 
     technicalLevel: 'Intermediário',
     status: 'active',
     registrationDate: '2023-08-01',
@@ -163,7 +177,7 @@ export const MOCK_STUDENTS: Student[] = [
     id: '5',
     name: 'Eduardo Lima',
     phone: '(51) 97777-6666',
-    plan: 'Avulso', // Matches MOCK_PLANS name
+    plan: 'Avulso', 
     technicalLevel: 'Iniciante',
     status: 'active',
     registrationDate: '2024-06-15',
@@ -186,24 +200,23 @@ export let MOCK_CLASS_SESSIONS: ClassSession[] = [
   { id: 'c5', dayOfWeek: 'Quinta', time: '07:00', location: 'Quadra Coberta B', maxStudents: 12, enrolledStudentIds: ['s33', 's34', 's35', 's36', 's37', 's38', 's39', 's40', 's41', 's42', 's43'] },
 ];
 
-export const DAYS_OF_WEEK: ClassSession['dayOfWeek'][] = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
 
 export let INITIAL_MOCK_BOOKED_CLASSES: BookedClass[] = [
-  { id: 'bc1', date: '2024-07-29', time: '18:00', title: 'Futevôlei Iniciante', location: 'Praia Central', studentIds: ['1'], durationMinutes: 60 },
+  // { id: 'bc1', date: '2024-07-29', time: '18:00', title: 'Futevôlei Iniciante', location: 'Praia Central', studentIds: ['1'], durationMinutes: 60 }, // Example of conflict with Ana Silva's recurring
   { id: 'bc2', date: '2024-07-29', time: '19:00', title: 'Futevôlei Intermediário', location: 'Praia Central', studentIds: ['2', '4'], durationMinutes: 60 },
   { id: 'bc3', date: '2024-07-30', time: '07:00', title: 'Futevôlei Avançado', location: 'Quadra Coberta A', studentIds: ['3'], durationMinutes: 60 },
   { id: 'bc4', date: '2024-08-01', time: '18:30', title: 'Técnica e Tática', location: 'Praia do Tombo', studentIds: ['s28', 's29'], durationMinutes: 90 },
-  { id: 'bc5', date: '2024-08-05', time: '09:00', title: 'Aula Particular - Ana S.', location: 'Praia Central', studentIds:['1'], durationMinutes: 60},
+  // { id: 'bc5', date: '2024-08-05', time: '09:00', title: 'Aula Particular - Ana S.', location: 'Praia Central', studentIds:['1'], durationMinutes: 60}, // This would match Ana's recurring
 ];
 
 export const MOCK_COACH_AVAILABILITY: CoachAvailability = {
-  1: { workRanges: [{ start: '08:00', end: '18:00' }], breaks: [{ start: '12:00', end: '13:30' }] },
-  2: { workRanges: [{ start: '08:00', end: '18:00' }], breaks: [{ start: '12:00', end: '13:30' }] },
-  3: { workRanges: [{ start: '08:00', end: '18:00' }], breaks: [{ start: '12:00', end: '13:30' }] },
-  4: { workRanges: [{ start: '08:00', end: '18:00' }], breaks: [{ start: '12:00', end: '13:30' }] },
-  5: { workRanges: [{ start: '08:00', end: '18:00' }], breaks: [{ start: '12:00', end: '13:30' }] },
-  6: { workRanges: [{ start: '08:00', end: '12:00' }], breaks: [] },
-  0: { workRanges: [{ start: '08:00', end: '12:00' }], breaks: [] },
+  1: { workRanges: [{ start: '08:00', end: '20:00' }], breaks: [{ start: '12:00', end: '13:30' }] }, // Mon
+  2: { workRanges: [{ start: '08:00', end: '20:00' }], breaks: [{ start: '12:00', end: '13:30' }] }, // Tue
+  3: { workRanges: [{ start: '08:00', end: '20:00' }], breaks: [{ start: '12:00', end: '13:30' }] }, // Wed
+  4: { workRanges: [{ start: '08:00', end: '20:00' }], breaks: [{ start: '12:00', end: '13:30' }] }, // Thu
+  5: { workRanges: [{ start: '08:00', end: '20:00' }], breaks: [{ start: '12:00', end: '13:30' }] }, // Fri
+  6: { workRanges: [{ start: '08:00', end: '14:00' }], breaks: [] }, // Sat
+  0: { workRanges: [{ start: '08:00', end: '12:00' }], breaks: [] }, // Sun
   defaultDaily: { workRanges: [], breaks: [] } 
 };
 
@@ -222,3 +235,17 @@ export let MOCK_PLANS: Plan[] = [
   { id: 'plan4', name: 'Anual VIP', price: 1500, durationDays: 365, status: 'active' },
   { id: 'plan5', name: 'Experimental (Inativo)', price: 0, durationDays: 7, status: 'inactive' },
 ];
+
+// Helper to map getDay() (Sun=0) to DayOfWeek names
+export const getDayOfWeekName = (dayNumber: number): DayOfWeek | undefined => {
+  const map: Record<number, DayOfWeek> = {
+    0: 'Domingo',
+    1: 'Segunda',
+    2: 'Terça',
+    3: 'Quarta',
+    4: 'Quinta',
+    5: 'Sexta',
+    6: 'Sábado',
+  };
+  return map[dayNumber];
+};

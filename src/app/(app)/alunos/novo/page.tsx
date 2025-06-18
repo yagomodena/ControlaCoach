@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Save, PlusCircle, Search } from 'lucide-react';
+import { ArrowLeft, Save, PlusCircle, Search, CalendarClock, MapPinIcon, ClockIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,11 +17,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
-import { useForm, Controller } from 'react-hook-form';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Separator } from '@/components/ui/separator';
+import { useForm, Controller, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
-import { MOCK_PLANS, type Plan } from '@/types';
+import { MOCK_PLANS, MOCK_LOCATIONS, MOCK_STUDENTS, type Plan, type Location, type DayOfWeek, DAYS_OF_WEEK } from '@/types';
 import { AddPlanDialog } from '@/components/dialogs/add-plan-dialog';
 import { ManagePlansDialog } from '@/components/dialogs/manage-plans-dialog';
 
@@ -32,6 +34,9 @@ const studentSchema = z.object({
   technicalLevel: z.enum(['Iniciante', 'Intermediário', 'Avançado'], { required_error: 'Selecione o nível técnico.' }),
   status: z.enum(['active', 'inactive'], { required_error: 'Selecione o status.' }),
   objective: z.string().optional(),
+  recurringClassTime: z.string().optional().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Formato de hora inválido (HH:MM)." }),
+  recurringClassDays: z.array(z.enum(DAYS_OF_WEEK)).optional(),
+  recurringClassLocation: z.string().optional(),
 });
 
 type StudentFormData = z.infer<typeof studentSchema>;
@@ -40,18 +45,24 @@ export default function NovoAlunoPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [activePlans, setActivePlans] = useState<Plan[]>([]);
+  const [activeLocations, setActiveLocations] = useState<Location[]>([]);
   const [isAddPlanDialogOpen, setIsAddPlanDialogOpen] = useState(false);
   const [isManagePlansDialogOpen, setIsManagePlansDialogOpen] = useState(false);
 
   const refreshActivePlans = () => {
     setActivePlans(MOCK_PLANS.filter(p => p.status === 'active'));
   };
+  
+  const refreshActiveLocations = () => {
+    setActiveLocations(MOCK_LOCATIONS.filter(loc => loc.status === 'active'));
+  };
 
   useEffect(() => {
     refreshActivePlans();
+    refreshActiveLocations();
   }, []);
 
-  const { control, handleSubmit, formState: { errors, isSubmitting }, setValue } = useForm<StudentFormData>({
+  const { control, handleSubmit, formState: { errors, isSubmitting }, setValue, watch } = useForm<StudentFormData>({
     resolver: zodResolver(studentSchema),
     defaultValues: {
       name: '',
@@ -60,12 +71,26 @@ export default function NovoAlunoPage() {
       technicalLevel: undefined,
       status: 'active',
       objective: '',
+      recurringClassTime: '',
+      recurringClassDays: [],
+      recurringClassLocation: undefined,
     },
   });
 
   const onSubmit = async (data: StudentFormData) => {
     await new Promise(resolve => setTimeout(resolve, 1000));
-    console.log('New student data:', data);
+    
+    const newStudent = {
+      id: crypto.randomUUID(),
+      registrationDate: new Date().toISOString(),
+      ...data,
+      // Ensure optional fields that are empty strings are undefined
+      objective: data.objective || undefined,
+      recurringClassTime: data.recurringClassTime || undefined,
+      recurringClassDays: data.recurringClassDays?.length ? data.recurringClassDays : undefined,
+      recurringClassLocation: data.recurringClassLocation || undefined,
+    };
+    MOCK_STUDENTS.push(newStudent);
     
     toast({
       title: "Aluno Adicionado!",
@@ -76,8 +101,6 @@ export default function NovoAlunoPage() {
 
   const handlePlansManaged = () => {
     refreshActivePlans();
-    // Potentially re-select the student's current plan if it still exists and is active
-    // For now, just refreshing the list is fine.
   };
 
   return (
@@ -95,11 +118,11 @@ export default function NovoAlunoPage() {
           </div>
         </div>
 
-        <Card className="max-w-2xl mx-auto shadow-lg">
+        <Card className="max-w-3xl mx-auto shadow-lg">
           <form onSubmit={handleSubmit(onSubmit)}>
             <CardHeader>
               <CardTitle>Informações do Aluno</CardTitle>
-              <CardDescription>Insira os detalhes abaixo.</CardDescription>
+              <CardDescription>Insira os detalhes básicos.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
@@ -211,9 +234,83 @@ export default function NovoAlunoPage() {
                 />
                 {errors.objective && <p className="text-sm text-destructive">{errors.objective.message}</p>}
               </div>
-
             </CardContent>
-            <CardFooter className="flex justify-end gap-2">
+
+            <Separator className="my-6" />
+
+            <CardHeader className="pt-0">
+              <CardTitle className="flex items-center"><CalendarClock className="mr-2 h-5 w-5 text-primary"/>Horários e Dias de Aula Recorrentes</CardTitle>
+              <CardDescription>Defina o horário e os dias fixos para as aulas deste aluno. (Opcional)</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="recurringClassTime" className="flex items-center"><ClockIcon className="mr-1 h-4 w-4"/>Horário da Aula</Label>
+                  <Controller
+                    name="recurringClassTime"
+                    control={control}
+                    render={({ field }) => <Input id="recurringClassTime" type="time" {...field} />}
+                  />
+                  {errors.recurringClassTime && <p className="text-sm text-destructive">{errors.recurringClassTime.message}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="recurringClassLocation" className="flex items-center"><MapPinIcon className="mr-1 h-4 w-4"/>Local da Aula</Label>
+                  <Controller
+                    name="recurringClassLocation"
+                    control={control}
+                    render={({ field }) => (
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <SelectTrigger id="recurringClassLocation">
+                          <SelectValue placeholder="Selecione o local" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">Nenhum local específico</SelectItem>
+                          {activeLocations.map(loc => (
+                            <SelectItem key={loc.id} value={loc.name}>{loc.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                  {errors.recurringClassLocation && <p className="text-sm text-destructive">{errors.recurringClassLocation.message}</p>}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Dias da Semana para Aula Recorrente</Label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 pt-2">
+                  {DAYS_OF_WEEK.map((day) => (
+                    <Controller
+                      key={day}
+                      name="recurringClassDays"
+                      control={control}
+                      render={({ field }) => {
+                        const currentDays = field.value || [];
+                        return (
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`day-${day}`}
+                              checked={currentDays.includes(day)}
+                              onCheckedChange={(checked) => {
+                                const newDays = checked
+                                  ? [...currentDays, day]
+                                  : currentDays.filter((d) => d !== day);
+                                field.onChange(newDays);
+                              }}
+                            />
+                            <Label htmlFor={`day-${day}`} className="font-normal">
+                              {day}
+                            </Label>
+                          </div>
+                        );
+                      }}
+                    />
+                  ))}
+                </div>
+                {errors.recurringClassDays && <p className="text-sm text-destructive">{errors.recurringClassDays.message}</p>}
+              </div>
+            </CardContent>
+
+            <CardFooter className="flex justify-end gap-2 pt-6">
               <Button variant="outline" type="button" onClick={() => router.back()}>
                 Cancelar
               </Button>
@@ -229,13 +326,7 @@ export default function NovoAlunoPage() {
       <AddPlanDialog
         open={isAddPlanDialogOpen}
         onOpenChange={setIsAddPlanDialogOpen}
-        onPlanAdded={() => {
-          refreshActivePlans();
-          // Optional: auto-select the newly added plan if needed
-          // For instance, if the dialog returned the new plan's name:
-          // const newPlanName = ...;
-          // setValue('plan', newPlanName); 
-        }}
+        onPlanAdded={handlePlansManaged}
       />
       <ManagePlansDialog
         open={isManagePlansDialogOpen}

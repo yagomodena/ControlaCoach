@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
-import { ChevronLeft, ChevronRight, Users, Edit, PlusCircle, Clock, Trash2, Search } from "lucide-react"; // Added Search
-import Link from 'next/link'; // Added Link
+import { ChevronLeft, ChevronRight, Users, Edit, PlusCircle, Clock, Trash2, Search, UserCircle } from "lucide-react";
+import Link from 'next/link';
 import { 
   Dialog,
   DialogContent,
@@ -36,18 +36,23 @@ import {
   parseISO
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import type { BookedClass, DailyAvailability, Student, Location } from '@/types';
-import { INITIAL_MOCK_BOOKED_CLASSES, MOCK_COACH_AVAILABILITY, MOCK_STUDENTS, MOCK_LOCATIONS } from '@/types';
+import type { BookedClass, DailyAvailability, Student, Location, DayOfWeek } from '@/types';
+import { INITIAL_MOCK_BOOKED_CLASSES, MOCK_COACH_AVAILABILITY, MOCK_STUDENTS, MOCK_LOCATIONS, getDayOfWeekName, DAYS_OF_WEEK } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 
 interface TimeSlot {
   time: string; 
   isBooked: boolean;
-  bookedClassDetails?: {
+  bookingType?: 'one-off' | 'recurring-student';
+  bookedClassDetails?: { // For 'one-off' BookedClass
     id: string; 
     title: string;
     location: string;
     studentsCount: number;
+  };
+  recurringStudentDetails?: { // For student's recurring class
+    studentName: string;
+    location?: string;
   };
 }
 
@@ -80,14 +85,38 @@ export default function AgendaPage() {
   const prevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
 
   const daysWithEvents = useMemo(() => {
-    return bookedClasses.map(c => parseISO(c.date));
-  }, [bookedClasses]);
+    const eventDates = new Set<string>();
+    bookedClasses.forEach(c => eventDates.add(format(parseISO(c.date), 'yyyy-MM-dd')));
+
+    if(selectedDate) { // Also check recurring student classes for the *current month*
+        const year = selectedDate.getFullYear();
+        const month = selectedDate.getMonth();
+
+        MOCK_STUDENTS.forEach(student => {
+            if (student.recurringClassTime && student.recurringClassDays && student.recurringClassDays.length > 0) {
+                for (let day = 1; day <= 31; day++) {
+                    try {
+                        const dateInMonth = new Date(year, month, day);
+                        if (dateInMonth.getMonth() !== month) continue; // Ensure it's the current month
+                        
+                        const dayOfWeekName = getDayOfWeekName(getDay(dateInMonth));
+                        if (dayOfWeekName && student.recurringClassDays.includes(dayOfWeekName)) {
+                             eventDates.add(format(dateInMonth, 'yyyy-MM-dd'));
+                        }
+                    } catch (e) { /* ignore invalid dates like Feb 30 */ }
+                }
+            }
+        });
+    }
+    return Array.from(eventDates).map(dateStr => parseISO(dateStr));
+  }, [bookedClasses, MOCK_STUDENTS, currentMonth, selectedDate]);
 
   const availableTimeSlots = useMemo((): TimeSlot[] => {
     if (!selectedDate) return [];
 
     const slots: TimeSlot[] = [];
     const numericDayOfWeek = getDay(selectedDate);
+    const dayOfWeekName = getDayOfWeekName(numericDayOfWeek);
     
     const dailySchedule: DailyAvailability = MOCK_COACH_AVAILABILITY[numericDayOfWeek] || MOCK_COACH_AVAILABILITY.defaultDaily;
 
@@ -121,16 +150,11 @@ export default function AgendaPage() {
           const breakStartDateTime = set(selectedDate, {
             hours: parseInt(breakRange.start.split(':')[0]),
             minutes: parseInt(breakRange.start.split(':')[1]),
-            seconds: 0,
-            milliseconds: 0,
           });
           const breakEndDateTime = set(selectedDate, {
             hours: parseInt(breakRange.end.split(':')[0]),
             minutes: parseInt(breakRange.end.split(':')[1]),
-            seconds: 0,
-            milliseconds: 0,
           });
-
           if (isBefore(currentSlotStartDateTime, breakEndDateTime) && isAfter(currentSlotEndDateTime, breakStartDateTime)) {
             isWithinBreak = true;
             break;
@@ -142,13 +166,12 @@ export default function AgendaPage() {
           continue;
         }
 
+        // 1. Check one-off booked classes
         const bookedClass = bookedClasses.find(c => {
           const classDate = parseISO(c.date);
           const classStartDateTime = set(classDate, {
             hours: parseInt(c.time.split(':')[0]),
             minutes: parseInt(c.time.split(':')[1]),
-            seconds: 0,
-            milliseconds: 0,
           });
           return isSameDay(selectedDate, classDate) && isEqual(currentSlotStartDateTime, classStartDateTime);
         });
@@ -157,6 +180,7 @@ export default function AgendaPage() {
           slots.push({
             time: slotTimeFormatted,
             isBooked: true,
+            bookingType: 'one-off',
             bookedClassDetails: {
               id: bookedClass.id, 
               title: bookedClass.title,
@@ -164,6 +188,35 @@ export default function AgendaPage() {
               studentsCount: bookedClass.studentIds.length,
             },
           });
+          currentSlotStartDateTime = addMinutes(currentSlotStartDateTime, slotDurationMinutes);
+          continue; 
+        }
+
+        // 2. Check student recurring classes
+        let recurringStudentBookedThisSlot: Student | undefined = undefined;
+        if (dayOfWeekName) {
+            for (const student of MOCK_STUDENTS) {
+                if (
+                    student.status === 'active' &&
+                    student.recurringClassTime === slotTimeFormatted &&
+                    student.recurringClassDays?.includes(dayOfWeekName)
+                ) {
+                    recurringStudentBookedThisSlot = student;
+                    break; 
+                }
+            }
+        }
+
+        if (recurringStudentBookedThisSlot) {
+            slots.push({
+                time: slotTimeFormatted,
+                isBooked: true,
+                bookingType: 'recurring-student',
+                recurringStudentDetails: {
+                    studentName: recurringStudentBookedThisSlot.name,
+                    location: recurringStudentBookedThisSlot.recurringClassLocation || 'A definir',
+                },
+            });
         } else {
           slots.push({ time: slotTimeFormatted, isBooked: false });
         }
@@ -171,7 +224,7 @@ export default function AgendaPage() {
       }
     });
     return slots.sort((a, b) => a.time.localeCompare(b.time));
-  }, [selectedDate, bookedClasses]);
+  }, [selectedDate, bookedClasses, MOCK_STUDENTS]);
 
   const openStudentSelectionDialog = (time: string) => {
     if (!selectedDate) {
@@ -387,7 +440,7 @@ export default function AgendaPage() {
                            </Button>
                         )}
                       </div>
-                      {slot.isBooked && slot.bookedClassDetails && (
+                      {slot.isBooked && slot.bookedClassDetails && slot.bookingType === 'one-off' && (
                         <div className="mt-2 pl-6">
                           <p className="font-medium text-foreground">{slot.bookedClassDetails.title}</p>
                           <p className="text-xs text-muted-foreground">{slot.bookedClassDetails.location}</p>
@@ -397,6 +450,16 @@ export default function AgendaPage() {
                            <Button variant="link" size="sm" className="mt-1 px-0 h-auto text-xs" onClick={() => openEditClassDialog(slot.bookedClassDetails!.id)}>
                              <Edit className="h-3 w-3 mr-1"/> Gerenciar Aula
                            </Button>
+                        </div>
+                      )}
+                      {slot.isBooked && slot.recurringStudentDetails && slot.bookingType === 'recurring-student' && (
+                        <div className="mt-2 pl-6">
+                           <p className="font-medium text-foreground">Aula Recorrente</p>
+                           <p className="text-sm text-foreground/90">{slot.recurringStudentDetails.studentName}</p>
+                           <p className="text-xs text-muted-foreground">{slot.recurringStudentDetails.location}</p>
+                           <div className="mt-1 flex items-center text-xs text-muted-foreground">
+                             <UserCircle className="h-3 w-3 mr-1" /> Aluno Fixo
+                           </div>
                         </div>
                       )}
                     </div>
@@ -548,4 +611,3 @@ export default function AgendaPage() {
     </div>
   );
 }
-
