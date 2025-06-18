@@ -41,7 +41,7 @@ const navItems = [
 
 export function SidebarNav() {
   const pathname = usePathname();
-  const { state: sidebarState } = useSidebar();
+  const { state: sidebarState, isMobile, setOpenMobile } = useSidebar();
   const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => {
@@ -55,6 +55,12 @@ export function SidebarNav() {
     // Placeholder for logout logic
     // For now, redirect to login
     window.location.href = '/login';
+  };
+
+  const handleLinkClick = () => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
   };
 
   return (
@@ -73,7 +79,7 @@ export function SidebarNav() {
                 tooltip={{ children: item.label, className: 'bg-primary text-primary-foreground' }}
                 className="justify-start"
               >
-                <Link href={item.href}>
+                <Link href={item.href} onClick={handleLinkClick}>
                   <item.icon className="mr-2 h-5 w-5 flex-shrink-0" />
                   <span className={isCollapsed ? 'sr-only' : ''}>{item.label}</span>
                 </Link>
@@ -102,3 +108,4 @@ export function SidebarNav() {
     </Sidebar>
   );
 }
+
