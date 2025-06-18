@@ -3,7 +3,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
-import { DollarSign, Search, Filter, FileText, Users, AlertTriangle, CheckCircle, Clock, Printer } from 'lucide-react';
+import { DollarSign, Search, Filter, FileText, Users, AlertTriangle, CheckCircle, Clock, Printer, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -36,7 +36,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { Student, Payment, Plan } from '@/types';
 import { MOCK_STUDENTS, MOCK_PLANS } from '@/types'; 
-import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval, getMonth, getYear } from 'date-fns';
+import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval, getMonth, getYear, addMonths, subMonths, setDate } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 
@@ -64,6 +64,8 @@ export default function FinanceiroPage() {
   const { toast } = useToast();
   const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
   const [reportData, setReportData] = useState<MonthlyReportData | null>(null);
+  const [selectedMonthDate, setSelectedMonthDate] = useState(new Date());
+
 
   const loadAndSetPayments = () => {
     const derivedPayments: PaymentEntry[] = MOCK_STUDENTS.map(student => {
@@ -71,14 +73,14 @@ export default function FinanceiroPage() {
       let effectiveDueDate = student.dueDate;
       if (!effectiveDueDate) {
           const today = new Date();
-          if (student.paymentStatus === 'pendente' || student.paymentStatus === 'vencido') {
-              effectiveDueDate = new Date(today.getFullYear(), today.getMonth(), 5).toISOString(); // Default due to 5th of current month for pending/overdue
-          } else if (student.paymentStatus === 'pago') {
-               effectiveDueDate = student.lastPaymentDate ? new Date(student.lastPaymentDate).toISOString() : new Date(today.getFullYear(), today.getMonth(), 5).toISOString();
-          } else {
-              effectiveDueDate = new Date(today.getFullYear(), today.getMonth(), 5).toISOString();
+          let baseDateForDefault = student.lastPaymentDate ? parseISO(student.lastPaymentDate) : today;
+          if (student.paymentStatus === 'pago' && student.lastPaymentDate) {
+             // If paid, next due date is based on last payment + plan duration approx.
+             baseDateForDefault = addMonths(parseISO(student.lastPaymentDate), 1); // Simplified: assume next month
           }
+          effectiveDueDate = setDate(baseDateForDefault, MOCK_PLANS.find(p => p.name === student.plan)?.durationDays === 1 ? getDay(baseDateForDefault) : 5).toISOString();
       }
+
 
       return {
         id: `pay-${student.id}-${new Date(effectiveDueDate).toISOString().substring(0,7)}`,
@@ -106,14 +108,17 @@ export default function FinanceiroPage() {
     if (studentIndex !== -1) {
       const studentName = MOCK_STUDENTS[studentIndex].name;
       MOCK_STUDENTS[studentIndex].paymentStatus = 'pago';
-      MOCK_STUDENTS[studentIndex].lastPaymentDate = new Date().toISOString();
+      const paymentDate = new Date();
+      MOCK_STUDENTS[studentIndex].lastPaymentDate = paymentDate.toISOString();
       
       const planDetails = MOCK_PLANS.find(p => p.name === MOCK_STUDENTS[studentIndex].plan);
       MOCK_STUDENTS[studentIndex].amountDue = planDetails?.price || 0;
 
-      // Update due date for next cycle (e.g., next month 5th)
-      const currentDueDate = MOCK_STUDENTS[studentIndex].dueDate ? parseISO(MOCK_STUDENTS[studentIndex].dueDate!) : new Date();
-      const nextDueDate = new Date(getYear(currentDueDate), getMonth(currentDueDate) + 1, 5);
+      const currentDueDate = MOCK_STUDENTS[studentIndex].dueDate ? parseISO(MOCK_STUDENTS[studentIndex].dueDate!) : paymentDate;
+      // Set next due date to the 5th of the month following the current due date's month, or payment month if no due date
+      const nextMonthForDueDate = addMonths(currentDueDate, 1);
+      const nextDueDate = setDate(nextMonthForDueDate, 5); // Default to 5th of next month
+      
       MOCK_STUDENTS[studentIndex].dueDate = nextDueDate.toISOString();
       
       loadAndSetPayments(); 
@@ -126,12 +131,21 @@ export default function FinanceiroPage() {
   };
 
   const filteredPayments = useMemo(() => {
+    const targetYear = getYear(selectedMonthDate);
+    const targetMonth = getMonth(selectedMonthDate);
+
     return payments.filter(payment => {
       const nameMatch = payment.studentName.toLowerCase().includes(searchTerm.toLowerCase());
       const statusMatch = statusFilters.size === 0 || statusFilters.has(payment.status);
-      return nameMatch && statusMatch;
+      
+      let monthMatch = false;
+      if (payment.dueDate) {
+        const dueDateObj = parseISO(payment.dueDate);
+        monthMatch = getYear(dueDateObj) === targetYear && getMonth(dueDateObj) === targetMonth;
+      }
+      return nameMatch && statusMatch && monthMatch;
     });
-  }, [payments, searchTerm, statusFilters]);
+  }, [payments, searchTerm, statusFilters, selectedMonthDate]);
 
   const toggleStatusFilter = (status: Payment['status']) => {
     setStatusFilters(prev => {
@@ -155,32 +169,37 @@ export default function FinanceiroPage() {
   };
 
   const summaryStats = useMemo(() => {
-    const currentMonth = new Date().getMonth();
-    const currentYear = new Date().getFullYear();
+    const targetYear = getYear(selectedMonthDate);
+    const targetMonth = getMonth(selectedMonthDate);
+
     return {
       totalRecebidoMes: payments
-        .filter(p => p.status === 'pago' && p.paymentDate && parseISO(p.paymentDate).getMonth() === currentMonth && parseISO(p.paymentDate).getFullYear() === currentYear)
+        .filter(p => p.status === 'pago' && p.paymentDate && getYear(parseISO(p.paymentDate)) === targetYear && getMonth(parseISO(p.paymentDate)) === targetMonth)
         .reduce((sum, p) => sum + p.amount, 0),
-      totalPendente: payments.filter(p => p.status === 'pendente').reduce((sum, p) => sum + p.amount, 0),
-      totalVencido: payments.filter(p => p.status === 'vencido').reduce((sum, p) => sum + p.amount, 0),
+      totalPendente: payments
+        .filter(p => p.status === 'pendente' && p.dueDate && getYear(parseISO(p.dueDate)) === targetYear && getMonth(parseISO(p.dueDate)) === targetMonth)
+        .reduce((sum, p) => sum + p.amount, 0),
+      totalVencido: payments
+        .filter(p => p.status === 'vencido' && p.dueDate && getYear(parseISO(p.dueDate)) === targetYear && getMonth(parseISO(p.dueDate)) === targetMonth)
+        .reduce((sum, p) => sum + p.amount, 0),
     }
-  }, [payments]);
+  }, [payments, selectedMonthDate]);
 
   const handleGenerateReport = () => {
-    const today = new Date();
-    const currentMonthStart = startOfMonth(today);
-    const currentMonthEnd = endOfMonth(today);
+    const reportMonthStart = startOfMonth(selectedMonthDate);
+    const reportMonthEnd = endOfMonth(selectedMonthDate);
 
     const paidInMonth = payments.filter(p => 
       p.status === 'pago' && 
       p.paymentDate && 
-      isWithinInterval(parseISO(p.paymentDate), { start: currentMonthStart, end: currentMonthEnd })
+      isWithinInterval(parseISO(p.paymentDate), { start: reportMonthStart, end: reportMonthEnd })
     );
 
     const outstandingInMonth = payments.filter(p => 
       (p.status === 'pendente' || p.status === 'vencido') &&
       p.dueDate &&
-      parseISO(p.dueDate) <= currentMonthEnd // Consider all pending/overdue up to end of current month
+      getYear(parseISO(p.dueDate)) === getYear(selectedMonthDate) &&
+      getMonth(parseISO(p.dueDate)) === getMonth(selectedMonthDate)
     );
     
     const totalReceived = paidInMonth.reduce((sum, p) => sum + p.amount, 0);
@@ -188,7 +207,7 @@ export default function FinanceiroPage() {
     const totalOverdue = outstandingInMonth.filter(p=> p.status === 'vencido').reduce((sum, p) => sum + p.amount, 0);
 
     setReportData({
-      monthYear: format(today, 'MMMM yyyy', { locale: ptBR }),
+      monthYear: format(selectedMonthDate, 'MMMM yyyy', { locale: ptBR }),
       totalReceived,
       totalPending,
       totalOverdue,
@@ -203,7 +222,6 @@ export default function FinanceiroPage() {
     if (printableContent) {
       const printWindow = window.open('', '_blank');
       printWindow?.document.write('<html><head><title>Relatório Financeiro Mensal</title>');
-      // Optional: Add some basic styling for printing
       printWindow?.document.write(`
         <style>
           body { font-family: sans-serif; margin: 20px; }
@@ -225,6 +243,13 @@ export default function FinanceiroPage() {
     }
   };
 
+  const handlePrevMonth = () => {
+    setSelectedMonthDate(prev => subMonths(prev, 1));
+  };
+
+  const handleNextMonth = () => {
+    setSelectedMonthDate(prev => addMonths(prev, 1));
+  };
 
   return (
     <>
@@ -232,18 +257,31 @@ export default function FinanceiroPage() {
         <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
           <div>
             <h1 className="text-3xl font-headline font-bold text-foreground">Controle Financeiro</h1>
-            <p className="text-muted-foreground">Gerencie mensalidades e pagamentos dos alunos.</p>
+            <p className="text-muted-foreground">
+              Gerencie mensalidades e pagamentos para {clientRendered ? format(selectedMonthDate, 'MMMM yyyy', { locale: ptBR }) : 'o mês atual'}.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="icon" onClick={handlePrevMonth} aria-label="Mês anterior">
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-lg font-semibold text-foreground tabular-nums w-36 text-center">
+              {clientRendered ? format(selectedMonthDate, 'MMMM yyyy', { locale: ptBR }) : 'Carregando...'}
+            </span>
+            <Button variant="outline" size="icon" onClick={handleNextMonth} aria-label="Próximo mês">
+              <ChevronRight className="h-4 w-4" />
+            </Button>
           </div>
           <Button onClick={handleGenerateReport} className="bg-primary hover:bg-primary/90 text-primary-foreground">
             <FileText className="mr-2 h-5 w-5" />
-            Gerar Relatório Mensal
+            Relatório de {clientRendered ? format(selectedMonthDate, 'MMMM', { locale: ptBR }) : ''}
           </Button>
         </div>
 
         <div className="grid gap-6 md:grid-cols-3 mb-8">
           <Card className="shadow-md">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Recebido este Mês</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Recebido em {clientRendered ? format(selectedMonthDate, 'MMMM', { locale: ptBR }) : '...'}</CardTitle>
               <CheckCircle className="h-5 w-5 text-green-500" />
             </CardHeader>
             <CardContent>
@@ -252,7 +290,7 @@ export default function FinanceiroPage() {
           </Card>
           <Card className="shadow-md">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Pendente</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Pendente em {clientRendered ? format(selectedMonthDate, 'MMMM', { locale: ptBR }) : '...'}</CardTitle>
               <Clock className="h-5 w-5 text-yellow-500" />
             </CardHeader>
             <CardContent>
@@ -261,7 +299,7 @@ export default function FinanceiroPage() {
           </Card>
           <Card className="shadow-md">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Vencido</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Vencido em {clientRendered ? format(selectedMonthDate, 'MMMM', { locale: ptBR }) : '...'}</CardTitle>
               <AlertTriangle className="h-5 w-5 text-red-500" />
             </CardHeader>
             <CardContent>
@@ -273,8 +311,8 @@ export default function FinanceiroPage() {
 
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle>Lista de Pagamentos</CardTitle>
-            <CardDescription>Acompanhe o status das mensalidades.</CardDescription>
+            <CardTitle>Pagamentos com Vencimento em {clientRendered ? format(selectedMonthDate, 'MMMM yyyy', { locale: ptBR }) : '...'}</CardTitle>
+            <CardDescription>Acompanhe o status das mensalidades do mês selecionado.</CardDescription>
             <div className="mt-4 flex flex-col sm:flex-row items-center gap-4">
               <div className="relative w-full sm:w-auto flex-grow">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -378,7 +416,7 @@ export default function FinanceiroPage() {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center text-muted-foreground py-8 p-2 sm:p-4">
-                      Nenhum pagamento encontrado com os filtros atuais.
+                      Nenhum pagamento encontrado com os filtros atuais para o mês de {clientRendered ? format(selectedMonthDate, 'MMMM yyyy', { locale: ptBR }) : '...'}.
                     </TableCell>
                   </TableRow>
                 )}
@@ -423,7 +461,7 @@ export default function FinanceiroPage() {
 
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-lg">Pagamentos Recebidos no Mês</CardTitle>
+                      <CardTitle className="text-lg">Pagamentos Recebidos em {reportData?.monthYear}</CardTitle>
                     </CardHeader>
                     <CardContent>
                       {reportData.paidInMonth.length > 0 ? (
@@ -448,14 +486,14 @@ export default function FinanceiroPage() {
                           </TableBody>
                         </Table>
                       ) : (
-                        <p className="text-muted-foreground">Nenhum pagamento recebido neste mês.</p>
+                        <p className="text-muted-foreground">Nenhum pagamento recebido em {reportData?.monthYear}.</p>
                       )}
                     </CardContent>
                   </Card>
 
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-lg">Pagamentos Pendentes/Vencidos (Venc. no Mês)</CardTitle>
+                      <CardTitle className="text-lg">Pagamentos Pendentes/Vencidos (Venc. em {reportData?.monthYear})</CardTitle>
                     </CardHeader>
                     <CardContent>
                       {reportData.outstandingInMonth.length > 0 ? (
@@ -480,7 +518,7 @@ export default function FinanceiroPage() {
                           </TableBody>
                         </Table>
                       ) : (
-                        <p className="text-muted-foreground">Nenhum pagamento pendente ou vencido com vencimento neste mês.</p>
+                        <p className="text-muted-foreground">Nenhum pagamento pendente ou vencido com vencimento em {reportData?.monthYear}.</p>
                       )}
                     </CardContent>
                   </Card>
