@@ -34,7 +34,10 @@ const studentSchema = z.object({
   technicalLevel: z.enum(['Iniciante', 'Intermediário', 'Avançado'], { required_error: 'Selecione o nível técnico.' }),
   status: z.enum(['active', 'inactive'], { required_error: 'Selecione o status.' }),
   objective: z.string().optional(),
-  recurringClassTime: z.string().optional().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Formato de hora inválido (HH:MM)." }),
+  recurringClassTime: z.string()
+    .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Formato de hora inválido (HH:MM)." })
+    .optional()
+    .or(z.literal('')), // Allow empty string for optional time
   recurringClassDays: z.array(z.enum(DAYS_OF_WEEK)).optional(),
   recurringClassLocation: z.string().optional(),
 });
@@ -84,7 +87,6 @@ export default function NovoAlunoPage() {
       id: crypto.randomUUID(),
       registrationDate: new Date().toISOString(),
       ...data,
-      // Ensure optional fields that are empty strings are undefined
       objective: data.objective || undefined,
       recurringClassTime: data.recurringClassTime || undefined,
       recurringClassDays: data.recurringClassDays?.length ? data.recurringClassDays : undefined,
@@ -100,8 +102,17 @@ export default function NovoAlunoPage() {
   };
 
   const handlePlansManaged = () => {
+    const currentPlanValue = watch('plan');
     refreshActivePlans();
+    // Check if current plan is still valid, if not, potentially clear it or set to a default
+    const currentPlanExistsAndIsActive = MOCK_PLANS.some(p => p.name === currentPlanValue && p.status === 'active');
+    if (!currentPlanExistsAndIsActive && activePlans.length > 0) {
+      // setValue('plan', activePlans[0].id); // Or clear it: setValue('plan', '');
+    } else if (!currentPlanExistsAndIsActive) {
+      setValue('plan', ''); // Clear if no active plans or current one removed
+    }
   };
+
 
   return (
     <>

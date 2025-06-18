@@ -36,7 +36,10 @@ const studentSchema = z.object({
   dueDate: z.string().optional(),
   amountDue: z.number().optional(),
   paymentMethod: z.enum(['PIX', 'Dinheiro', 'Cartão']).optional(),
-  recurringClassTime: z.string().optional().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Formato de hora inválido (HH:MM)." }),
+  recurringClassTime: z.string()
+    .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Formato de hora inválido (HH:MM)." })
+    .optional()
+    .or(z.literal('')), // Allow empty string for optional time
   recurringClassDays: z.array(z.enum(DAYS_OF_WEEK)).optional(),
   recurringClassLocation: z.string().optional(),
 });
@@ -127,7 +130,7 @@ export default function AlunoDetailPage() {
     const currentPlanValue = watch('plan');
     refreshActivePlans();
     const currentPlanExistsAndIsActive = MOCK_PLANS.some(p => p.name === currentPlanValue && p.status === 'active');
-    if (!currentPlanExistsAndIsActive && MOCK_PLANS.filter(p => p.status === 'active').length > 0) {
+    if (!currentPlanExistsAndIsActive && activePlans.length > 0) {
        // setValue('plan', ''); 
     } else if (!currentPlanExistsAndIsActive) {
        setValue('plan', ''); 
