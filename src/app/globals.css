@@ -22,8 +22,8 @@
     --muted: 218 50% 90%; /* Muted blue-gray */
     --muted-foreground: 220 25% 45%; /* Slightly lighter muted text */
 
-    --accent: 49 89% 71%; /* Yellow */
-    --accent-foreground: 45 50% 20%; /* Dark brown/black for text on accent */
+    --accent: 35 100% 58%; /* Orange */
+    --accent-foreground: 0 0% 100%; /* White for text on orange */
 
     --destructive: 0 72% 51%; /* Adjusted for better contrast */
     --destructive-foreground: 0 0% 100%;
@@ -32,11 +32,11 @@
     --input: 217 40% 88%; /* Bluish input background */
     --ring: 217 89% 61%; /* Primary blue for ring */
 
-    --chart-1: 217 89% 61%;
-    --chart-2: 49 89% 71%;
-    --chart-3: 173 58% 39%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
+    --chart-1: 217 89% 61%; /* Blue */
+    --chart-2: 35 100% 58%; /* Orange (new accent) */
+    --chart-3: 173 58% 39%; /* Green */
+    --chart-4: 35 100% 70%; /* Lighter Orange */
+    --chart-5: 25 95% 60%; /* Different shade of Orange (e.g., reddish-orange) */
     --radius: 0.5rem;
 
     /* Sidebar specific colors, can inherit from above or be distinct */
@@ -69,8 +69,8 @@
     --muted: 218 30% 25%;
     --muted-foreground: 218 50% 70%;
 
-    --accent: 49 89% 71%;
-    --accent-foreground: 45 50% 15%;
+    --accent: 35 100% 58%; /* Orange */
+    --accent-foreground: 0 0% 100%; /* White for text on orange */
 
     --destructive: 0 63% 40%;
     --destructive-foreground: 0 0% 100%;
@@ -79,8 +79,9 @@
     --input: 217 30% 35%;
     --ring: 217 89% 61%;
 
-    --chart-1: 217 89% 61%;
-    --chart-2: 49 89% 71%;
+    --chart-1: 217 89% 61%; /* Blue */
+    --chart-2: 35 100% 58%; /* Orange (new accent) */
+    /* chart-3, chart-4, chart-5 will inherit from :root unless specified for dark mode */
 
     --sidebar-background: 220 25% 8%;
     --sidebar-foreground: 218 93% 95%;
