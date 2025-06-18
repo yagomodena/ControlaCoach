@@ -1,13 +1,14 @@
+
 'use client';
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Edit3, Save, CalendarDays, DollarSign, ShieldCheck, ShieldOff, User, Phone, BarChart, Users, CheckCircle, XCircle, Clock, Goal } from 'lucide-react'; // Added Goal icon
+import { ArrowLeft, Edit3, Save, CalendarDays, DollarSign, ShieldCheck, ShieldOff, User, Phone, BarChart, Users, CheckCircle, XCircle, Clock, Goal, PlusCircle, Search } from 'lucide-react'; // Added PlusCircle, Search
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea'; // Added Textarea
+import { Textarea } from '@/components/ui/textarea'; 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -16,17 +17,17 @@ import { Badge } from '@/components/ui/badge';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import type { Student } from '@/types';
-import { MOCK_STUDENTS } from '@/types'; 
+import type { Student, Plan } from '@/types'; // Added Plan
+import { MOCK_STUDENTS, MOCK_PLANS } from '@/types';  // Added MOCK_PLANS
 import { useToast } from '@/hooks/use-toast';
 
 const studentSchema = z.object({
   name: z.string().min(3, { message: 'Nome deve ter pelo menos 3 caracteres.' }),
   phone: z.string().min(10, { message: 'Telefone inválido.' }),
-  plan: z.enum(['Mensal', 'Trimestral', 'Avulso'], { required_error: 'Selecione um plano.' }),
+  plan: z.string().min(1, { message: 'Selecione um plano.' }), // Changed from enum
   technicalLevel: z.enum(['Iniciante', 'Intermediário', 'Avançado'], { required_error: 'Selecione o nível técnico.' }),
   status: z.enum(['active', 'inactive'], { required_error: 'Selecione o status.' }),
-  objective: z.string().optional(), // Added objective
+  objective: z.string().optional(), 
   paymentStatus: z.enum(['pago', 'pendente', 'vencido']).optional(),
   dueDate: z.string().optional(),
   amountDue: z.number().optional(),
@@ -45,6 +46,11 @@ export default function AlunoDetailPage() {
   const [student, setStudent] = useState<Student | null>(null);
   const [isEditMode, setIsEditMode] = useState(searchParams.get('edit') === 'true');
   const [isLoading, setIsLoading] = useState(true);
+  const [activePlans, setActivePlans] = useState<Plan[]>([]);
+
+  useEffect(() => {
+    setActivePlans(MOCK_PLANS.filter(p => p.status === 'active'));
+  }, []);
 
   const { control, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<StudentFormData>({
     resolver: zodResolver(studentSchema),
@@ -73,7 +79,7 @@ export default function AlunoDetailPage() {
     
     const updatedStudent = { ...student, ...data } as Student;
     setStudent(updatedStudent);
-    // In a real app, update MOCK_STUDENTS or your data store
+    
     const studentIndex = MOCK_STUDENTS.findIndex(s => s.id === studentId);
     if (studentIndex !== -1) {
         MOCK_STUDENTS[studentIndex] = updatedStudent;
@@ -161,12 +167,36 @@ export default function AlunoDetailPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label htmlFor="plan">Plano</Label>
-                  <Controller name="plan" control={control} render={({ field }) => (
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <SelectTrigger id="plan"><SelectValue /></SelectTrigger>
-                      <SelectContent><SelectItem value="Mensal">Mensal</SelectItem><SelectItem value="Trimestral">Trimestral</SelectItem><SelectItem value="Avulso">Avulso</SelectItem></SelectContent>
-                    </Select>
-                  )} />
+                    <div className="flex items-center gap-2">
+                        <div className="flex-grow">
+                            <Controller name="plan" control={control} render={({ field }) => (
+                                <Select onValueChange={field.onChange} value={field.value}>
+                                <SelectTrigger id="plan"><SelectValue placeholder="Selecione o plano"/></SelectTrigger>
+                                <SelectContent>
+                                    {activePlans.length > 0 ? (
+                                    activePlans.map(p => (
+                                        <SelectItem key={p.id} value={p.name}>{p.name} - R$ {p.price.toFixed(2)}</SelectItem>
+                                    ))
+                                    ) : (
+                                    <SelectItem value="no-plans" disabled>Nenhum plano ativo</SelectItem>
+                                    )}
+                                </SelectContent>
+                                </Select>
+                            )} />
+                        </div>
+                        <Button variant="outline" size="icon" asChild>
+                            <Link href="/planos/novo" target="_blank" rel="noopener noreferrer">
+                            <PlusCircle className="h-4 w-4" />
+                            <span className="sr-only">Adicionar Novo Plano</span>
+                            </Link>
+                        </Button>
+                        <Button variant="outline" size="icon" asChild>
+                            <Link href="/planos" target="_blank" rel="noopener noreferrer">
+                            <Search className="h-4 w-4" />
+                            <span className="sr-only">Consultar Planos</span>
+                            </Link>
+                        </Button>
+                    </div>
                   {errors.plan && <p className="text-sm text-destructive">{errors.plan.message}</p>}
                 </div>
                 <div className="space-y-2">
@@ -233,7 +263,7 @@ export default function AlunoDetailPage() {
                 <InfoItem icon={student.status === 'active' ? ShieldCheck : ShieldOff} label="Status" value={student.status === 'active' ? 'Ativo' : 'Inativo'} />
               </CardContent>
               {student.objective && (
-                <CardContent className="pt-0"> {/* Use new CardContent for objective to ensure proper spacing */}
+                <CardContent className="pt-0"> 
                      <InfoItem icon={Goal} label="Objetivo" value={student.objective} isLongText={true} />
                 </CardContent>
               )}

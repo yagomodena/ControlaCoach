@@ -1,13 +1,14 @@
+
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react'; // Added useEffect and useState
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Save } from 'lucide-react';
+import { ArrowLeft, Save, PlusCircle, Search } from 'lucide-react'; // Added PlusCircle, Search
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea'; // Added Textarea
+import { Textarea } from '@/components/ui/textarea'; 
 import {
   Select,
   SelectContent,
@@ -20,14 +21,15 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
+import { MOCK_PLANS, type Plan } from '@/types'; // Import MOCK_PLANS and Plan type
 
 const studentSchema = z.object({
   name: z.string().min(3, { message: 'Nome deve ter pelo menos 3 caracteres.' }),
-  phone: z.string().min(10, { message: 'Telefone inválido.' }), // Basic validation
-  plan: z.enum(['Mensal', 'Trimestral', 'Avulso'], { required_error: 'Selecione um plano.'}),
+  phone: z.string().min(10, { message: 'Telefone inválido.' }), 
+  plan: z.string().min(1, { message: 'Selecione um plano.'}), // Changed from enum to string
   technicalLevel: z.enum(['Iniciante', 'Intermediário', 'Avançado'], { required_error: 'Selecione o nível técnico.'}),
   status: z.enum(['active', 'inactive'], { required_error: 'Selecione o status.'}),
-  objective: z.string().optional(), // Added objective
+  objective: z.string().optional(), 
 });
 
 type StudentFormData = z.infer<typeof studentSchema>;
@@ -35,6 +37,12 @@ type StudentFormData = z.infer<typeof studentSchema>;
 export default function NovoAlunoPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const [activePlans, setActivePlans] = useState<Plan[]>([]);
+
+  useEffect(() => {
+    setActivePlans(MOCK_PLANS.filter(p => p.status === 'active'));
+  }, []);
+  
   const { control, handleSubmit, formState: { errors, isSubmitting } } = useForm<StudentFormData>({
     resolver: zodResolver(studentSchema),
     defaultValues: {
@@ -43,7 +51,7 @@ export default function NovoAlunoPage() {
       plan: undefined, 
       technicalLevel: undefined,
       status: 'active',
-      objective: '', // Added default for objective
+      objective: '', 
     },
   });
 
@@ -103,22 +111,42 @@ export default function NovoAlunoPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label htmlFor="plan">Plano</Label>
-                <Controller
-                  name="plan"
-                  control={control}
-                  render={({ field }) => (
-                    <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
-                      <SelectTrigger id="plan">
-                        <SelectValue placeholder="Selecione o plano" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Mensal">Mensal</SelectItem>
-                        <SelectItem value="Trimestral">Trimestral</SelectItem>
-                        <SelectItem value="Avulso">Avulso</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
+                <div className="flex items-center gap-2">
+                  <div className="flex-grow">
+                    <Controller
+                      name="plan"
+                      control={control}
+                      render={({ field }) => (
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <SelectTrigger id="plan">
+                            <SelectValue placeholder="Selecione o plano" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {activePlans.length > 0 ? (
+                              activePlans.map(p => (
+                                <SelectItem key={p.id} value={p.name}>{p.name} - R$ {p.price.toFixed(2)}</SelectItem>
+                              ))
+                            ) : (
+                              <SelectItem value="no-plans" disabled>Nenhum plano ativo</SelectItem>
+                            )}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                  </div>
+                  <Button variant="outline" size="icon" asChild>
+                    <Link href="/planos/novo" target="_blank" rel="noopener noreferrer">
+                      <PlusCircle className="h-4 w-4" />
+                      <span className="sr-only">Adicionar Novo Plano</span>
+                    </Link>
+                  </Button>
+                  <Button variant="outline" size="icon" asChild>
+                    <Link href="/planos" target="_blank" rel="noopener noreferrer">
+                      <Search className="h-4 w-4" />
+                      <span className="sr-only">Consultar Planos</span>
+                    </Link>
+                  </Button>
+                </div>
                 {errors.plan && <p className="text-sm text-destructive">{errors.plan.message}</p>}
               </div>
 

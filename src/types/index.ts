@@ -4,7 +4,7 @@ export interface Student {
   id: string;
   name: string;
   phone: string;
-  plan: 'Mensal' | 'Trimestral' | 'Avulso';
+  plan: string; // Changed from enum to string to store plan name
   technicalLevel: 'Iniciante' | 'Intermediário' | 'Avançado';
   status: 'active' | 'inactive';
   registrationDate: string; // ISO date string
@@ -16,6 +16,14 @@ export interface Student {
   amountDue?: number;
   paymentMethod?: 'PIX' | 'Dinheiro' | 'Cartão';
   lastPaymentDate?: string; // ISO date string
+}
+
+export interface Plan {
+  id: string;
+  name: string;
+  price: number;
+  durationDays: number; // e.g., 30 for monthly, 90 for quarterly, 1 for single class
+  status: 'active' | 'inactive';
 }
 
 export interface ClassSession {
@@ -84,7 +92,7 @@ export const MOCK_STUDENTS: Student[] = [
     id: '1',
     name: 'Ana Silva',
     phone: '(11) 98765-4321',
-    plan: 'Mensal',
+    plan: 'Mensal', // Matches MOCK_PLANS name
     technicalLevel: 'Iniciante',
     status: 'active',
     registrationDate: '2023-01-15',
@@ -103,7 +111,7 @@ export const MOCK_STUDENTS: Student[] = [
     id: '2',
     name: 'Bruno Costa',
     phone: '(21) 91234-5678',
-    plan: 'Trimestral',
+    plan: 'Trimestral', // Matches MOCK_PLANS name
     technicalLevel: 'Intermediário',
     status: 'active',
     registrationDate: '2022-11-20',
@@ -121,7 +129,7 @@ export const MOCK_STUDENTS: Student[] = [
     id: '3',
     name: 'Carlos Dias',
     phone: '(31) 99999-8888',
-    plan: 'Mensal',
+    plan: 'Mensal', // Matches MOCK_PLANS name
     technicalLevel: 'Avançado',
     status: 'inactive',
     registrationDate: '2023-05-10',
@@ -136,7 +144,7 @@ export const MOCK_STUDENTS: Student[] = [
     id: '4',
     name: 'Daniela Rocha',
     phone: '(41) 98888-7777',
-    plan: 'Mensal',
+    plan: 'Mensal', // Matches MOCK_PLANS name
     technicalLevel: 'Intermediário',
     status: 'active',
     registrationDate: '2023-08-01',
@@ -155,7 +163,7 @@ export const MOCK_STUDENTS: Student[] = [
     id: '5',
     name: 'Eduardo Lima',
     phone: '(51) 97777-6666',
-    plan: 'Avulso',
+    plan: 'Avulso', // Matches MOCK_PLANS name
     technicalLevel: 'Iniciante',
     status: 'active',
     registrationDate: '2024-06-15',
@@ -206,3 +214,12 @@ export let MOCK_LOCATIONS: Location[] = [
     { id: 'loc4', name: 'Academia FitX', status: 'active' },
     { id: 'loc5', name: 'Parque da Cidade', status: 'inactive' },
 ];
+
+export let MOCK_PLANS: Plan[] = [
+  { id: 'plan1', name: 'Mensal', price: 150, durationDays: 30, status: 'active' },
+  { id: 'plan2', name: 'Trimestral', price: 400, durationDays: 90, status: 'active' },
+  { id: 'plan3', name: 'Avulso', price: 50, durationDays: 1, status: 'active' },
+  { id: 'plan4', name: 'Anual VIP', price: 1500, durationDays: 365, status: 'active' },
+  { id: 'plan5', name: 'Experimental (Inativo)', price: 0, durationDays: 7, status: 'inactive' },
+];
+

@@ -10,7 +10,8 @@ import {
   DollarSign,
   Settings,
   LogOut,
-  MapPin, // Added MapPin
+  MapPin, 
+  ListChecks, // Added ListChecks for Planos
 } from 'lucide-react';
 import {
   Sidebar,
@@ -32,7 +33,8 @@ const navItems = [
   { href: '/alunos', label: 'Alunos', icon: Users },
   { href: '/aulas', label: 'Aulas', icon: BookOpenCheck },
   { href: '/agenda', label: 'Agenda', icon: CalendarDays },
-  { href: '/locais', label: 'Locais', icon: MapPin }, // Added Locais
+  { href: '/locais', label: 'Locais', icon: MapPin },
+  { href: '/planos', label: 'Planos', icon: ListChecks }, // Added Planos
   { href: '/financeiro', label: 'Financeiro', icon: DollarSign },
   { href: '/configuracoes', label: 'Configurações', icon: Settings },
 ];
@@ -84,6 +86,7 @@ export function SidebarNav() {
               <SidebarMenuSkeleton showIcon />
               <SidebarMenuSkeleton showIcon />
               <SidebarMenuSkeleton showIcon />
+              <SidebarMenuSkeleton showIcon /> 
               <SidebarMenuSkeleton showIcon /> 
             </>
           )}
