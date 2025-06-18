@@ -27,6 +27,8 @@ import { MOCK_PLANS, MOCK_LOCATIONS, MOCK_STUDENTS, type Plan, type Location, ty
 import { AddPlanDialog } from '@/components/dialogs/add-plan-dialog';
 import { ManagePlansDialog } from '@/components/dialogs/manage-plans-dialog';
 
+const NO_LOCATION_VALUE = "__NO_LOCATION__";
+
 const studentSchema = z.object({
   name: z.string().min(3, { message: 'Nome deve ter pelo menos 3 caracteres.' }),
   phone: z.string().min(10, { message: 'Telefone inválido.' }),
@@ -37,7 +39,7 @@ const studentSchema = z.object({
   recurringClassTime: z.string()
     .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Formato de hora inválido (HH:MM)." })
     .optional()
-    .or(z.literal('')), // Allow empty string for optional time
+    .or(z.literal('')), 
   recurringClassDays: z.array(z.enum(DAYS_OF_WEEK)).optional(),
   recurringClassLocation: z.string().optional(),
 });
@@ -83,6 +85,11 @@ export default function NovoAlunoPage() {
   const onSubmit = async (data: StudentFormData) => {
     await new Promise(resolve => setTimeout(resolve, 1000));
     
+    let finalRecurringClassLocation = data.recurringClassLocation;
+    if (data.recurringClassLocation === NO_LOCATION_VALUE) {
+      finalRecurringClassLocation = undefined;
+    }
+
     const newStudent = {
       id: crypto.randomUUID(),
       registrationDate: new Date().toISOString(),
@@ -90,7 +97,7 @@ export default function NovoAlunoPage() {
       objective: data.objective || undefined,
       recurringClassTime: data.recurringClassTime || undefined,
       recurringClassDays: data.recurringClassDays?.length ? data.recurringClassDays : undefined,
-      recurringClassLocation: data.recurringClassLocation || undefined,
+      recurringClassLocation: finalRecurringClassLocation,
     };
     MOCK_STUDENTS.push(newStudent);
     
@@ -104,12 +111,10 @@ export default function NovoAlunoPage() {
   const handlePlansManaged = () => {
     const currentPlanValue = watch('plan');
     refreshActivePlans();
-    // Check if current plan is still valid, if not, potentially clear it or set to a default
     const currentPlanExistsAndIsActive = MOCK_PLANS.some(p => p.name === currentPlanValue && p.status === 'active');
     if (!currentPlanExistsAndIsActive && activePlans.length > 0) {
-      // setValue('plan', activePlans[0].id); // Or clear it: setValue('plan', '');
     } else if (!currentPlanExistsAndIsActive) {
-      setValue('plan', ''); // Clear if no active plans or current one removed
+      setValue('plan', ''); 
     }
   };
 
@@ -275,7 +280,7 @@ export default function NovoAlunoPage() {
                           <SelectValue placeholder="Selecione o local" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">Nenhum local específico</SelectItem>
+                          <SelectItem value={NO_LOCATION_VALUE}>Nenhum local específico</SelectItem>
                           {activeLocations.map(loc => (
                             <SelectItem key={loc.id} value={loc.name}>{loc.name}</SelectItem>
                           ))}

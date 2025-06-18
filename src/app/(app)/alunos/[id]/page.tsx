@@ -25,6 +25,8 @@ import { useToast } from '@/hooks/use-toast';
 import { AddPlanDialog } from '@/components/dialogs/add-plan-dialog';
 import { ManagePlansDialog } from '@/components/dialogs/manage-plans-dialog';
 
+const NO_LOCATION_VALUE = "__NO_LOCATION__";
+
 const studentSchema = z.object({
   name: z.string().min(3, { message: 'Nome deve ter pelo menos 3 caracteres.' }),
   phone: z.string().min(10, { message: 'Telefone inválido.' }),
@@ -39,7 +41,7 @@ const studentSchema = z.object({
   recurringClassTime: z.string()
     .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Formato de hora inválido (HH:MM)." })
     .optional()
-    .or(z.literal('')), // Allow empty string for optional time
+    .or(z.literal('')), 
   recurringClassDays: z.array(z.enum(DAYS_OF_WEEK)).optional(),
   recurringClassLocation: z.string().optional(),
 });
@@ -103,13 +105,18 @@ export default function AlunoDetailPage() {
   const onSubmit = async (data: StudentFormData) => {
     await new Promise(resolve => setTimeout(resolve, 1000));
     
+    let finalRecurringClassLocation = data.recurringClassLocation;
+    if (data.recurringClassLocation === NO_LOCATION_VALUE) {
+      finalRecurringClassLocation = undefined;
+    }
+
     const updatedStudentData = { 
       ...student, 
       ...data,
       objective: data.objective || undefined,
       recurringClassTime: data.recurringClassTime || undefined,
       recurringClassDays: data.recurringClassDays?.length ? data.recurringClassDays : undefined,
-      recurringClassLocation: data.recurringClassLocation || undefined,
+      recurringClassLocation: finalRecurringClassLocation,
     } as Student;
     setStudent(updatedStudentData);
     
@@ -131,7 +138,6 @@ export default function AlunoDetailPage() {
     refreshActivePlans();
     const currentPlanExistsAndIsActive = MOCK_PLANS.some(p => p.name === currentPlanValue && p.status === 'active');
     if (!currentPlanExistsAndIsActive && activePlans.length > 0) {
-       // setValue('plan', ''); 
     } else if (!currentPlanExistsAndIsActive) {
        setValue('plan', ''); 
     }
@@ -298,7 +304,7 @@ export default function AlunoDetailPage() {
                             <SelectValue placeholder="Selecione o local" />
                           </SelectTrigger>
                           <SelectContent>
-                             <SelectItem value="">Nenhum local específico</SelectItem>
+                             <SelectItem value={NO_LOCATION_VALUE}>Nenhum local específico</SelectItem>
                             {activeLocations.map(loc => (
                               <SelectItem key={loc.id} value={loc.name}>{loc.name}</SelectItem>
                             ))}
@@ -345,7 +351,7 @@ export default function AlunoDetailPage() {
               </CardContent>
 
               <CardFooter className="flex justify-end gap-2 pt-6">
-                <Button variant="outline" type="button" onClick={() => { setIsEditMode(false); router.replace(`/alunos/${studentId}`); reset({...student, recurringClassTime: student.recurringClassTime || '', recurringClassDays: student.recurringClassDays || [], recurringClassLocation: student.recurringClassLocation || ''} as StudentFormData); }}>Cancelar</Button>
+                <Button variant="outline" type="button" onClick={() => { setIsEditMode(false); router.replace(`/alunos/${studentId}`); reset({...student, recurringClassTime: student?.recurringClassTime || '', recurringClassDays: student?.recurringClassDays || [], recurringClassLocation: student?.recurringClassLocation || ''} as StudentFormData); }}>Cancelar</Button>
                 <Button type="submit" disabled={isSubmitting} className="bg-primary hover:bg-primary/90 text-primary-foreground">
                   <Save className="mr-2 h-4 w-4" />{isSubmitting ? 'Salvando...' : 'Salvar Alterações'}
                 </Button>
@@ -354,11 +360,10 @@ export default function AlunoDetailPage() {
           </Card>
         ) : (
           <Tabs defaultValue="overview" className="w-full">
-            <TabsList className="grid w-full grid-cols-3 mb-6 max-w-lg mx-auto"> {/* Increased max-w for 3 tabs */}
+            <TabsList className="grid w-full grid-cols-3 mb-6 max-w-lg mx-auto"> 
               <TabsTrigger value="overview">Visão Geral</TabsTrigger>
               <TabsTrigger value="schedule">Aulas Recorrentes</TabsTrigger>
               <TabsTrigger value="payments">Pagamentos</TabsTrigger>
-              {/* <TabsTrigger value="attendance">Presença</TabsTrigger> Removed for now, can be added back if needed */}
             </TabsList>
 
             <TabsContent value="overview">
@@ -386,13 +391,13 @@ export default function AlunoDetailPage() {
                     <InfoItem icon={Goal} label="Objetivo" value={student.objective} isLongText={true} />
                   </CardContent>
                 )}
-                 <CardContent className="pt-2"> {/* Histórico de presença */}
+                 <CardContent className="pt-2"> 
                    <Label className="text-sm text-muted-foreground">Histórico de Presença</Label>
                     {student.attendanceHistory && student.attendanceHistory.length > 0 ? (
                       <Table className="mt-2">
                         <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Aula ID</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
                         <TableBody>
-                          {student.attendanceHistory.slice(0, 5).map((att, index) => ( // Show recent 5
+                          {student.attendanceHistory.slice(0, 5).map((att, index) => ( 
                             <TableRow key={index}>
                               <TableCell>{new Date(att.date).toLocaleDateString('pt-BR')}</TableCell>
                               <TableCell>{att.classId}</TableCell>
