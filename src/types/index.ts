@@ -12,7 +12,7 @@ export interface Student {
   status: 'active' | 'inactive';
   registrationDate: string; 
   objective?: string;
-  attendanceHistory?: { date: string; classId: string; status: 'present' | 'absent' | 'rescheduled' }[];
+  attendanceHistory?: { date: string; classId: string; bookedClassId: string; status: 'present' | 'absent' | 'rescheduled' | 'pending' }[];
   
   paymentStatus?: 'pago' | 'pendente' | 'vencido';
   dueDate?: string; 
@@ -20,10 +20,9 @@ export interface Student {
   paymentMethod?: 'PIX' | 'Dinheiro' | 'Cartão';
   lastPaymentDate?: string; 
 
-  // New fields for recurring classes
-  recurringClassTime?: string; // e.g., "10:00"
-  recurringClassDays?: DayOfWeek[]; // e.g., ['Segunda', 'Quarta']
-  recurringClassLocation?: string; // Name of the location
+  recurringClassTime?: string; 
+  recurringClassDays?: DayOfWeek[]; 
+  recurringClassLocation?: string; 
 }
 
 export interface Plan {
@@ -37,10 +36,11 @@ export interface Plan {
 export interface ClassSession {
   id: string;
   dayOfWeek: DayOfWeek;
-  time: string; 
+  startTime: string; 
+  endTime: string;   
   location: string; 
   maxStudents: number;
-  enrolledStudentIds: string[];
+  enrolledStudentIds: string[]; 
 }
 
 export interface BookedClass {
@@ -48,10 +48,11 @@ export interface BookedClass {
   classSessionId?: string; 
   title: string; 
   date: string; 
-  time: string; 
+  time: string; // This is the start time of the booked class instance
   durationMinutes?: number; 
   location: string; 
   studentIds: string[]; 
+  attendance?: Record<string, Student['attendanceHistory'][0]['status']>;
 }
 
 
@@ -110,8 +111,8 @@ export const MOCK_STUDENTS: Student[] = [
     amountDue: 150,
     paymentMethod: 'PIX',
     attendanceHistory: [
-      { date: '2024-07-01', classId: 'c1', status: 'present' },
-      { date: '2024-07-03', classId: 'c1', status: 'present' },
+      { date: '2024-07-01', classId: 'c1', bookedClassId: 'bc1', status: 'present' },
+      { date: '2024-07-03', classId: 'c1', bookedClassId: 'bc1', status: 'present' },
     ],
     lastPaymentDate: '2024-07-05',
     recurringClassTime: '09:00',
@@ -132,8 +133,8 @@ export const MOCK_STUDENTS: Student[] = [
     amountDue: 400,
     paymentMethod: 'Cartão',
     attendanceHistory: [
-      { date: '2024-07-02', classId: 'c2', status: 'present' },
-      { date: '2024-07-04', classId: 'c2', status: 'absent' },
+      { date: '2024-07-02', classId: 'c2', bookedClassId: 'bc2', status: 'present' },
+      { date: '2024-07-04', classId: 'c2', bookedClassId: 'bc2', status: 'absent' },
     ],
   },
   {
@@ -168,8 +169,8 @@ export const MOCK_STUDENTS: Student[] = [
     amountDue: 150,
     paymentMethod: 'PIX',
     attendanceHistory: [
-        { date: '2024-07-01', classId: 'c1', status: 'present' },
-        { date: '2024-07-08', classId: 'c1', status: 'present' },
+        { date: '2024-07-01', classId: 'c1', bookedClassId: 'bc_daniela1', status: 'present' },
+        { date: '2024-07-08', classId: 'c1', bookedClassId: 'bc_daniela2', status: 'present' },
     ],
     lastPaymentDate: '2024-07-10',
   },
@@ -187,26 +188,50 @@ export const MOCK_STUDENTS: Student[] = [
     amountDue: 50,
     paymentMethod: 'PIX',
     attendanceHistory: [
-        { date: '2024-07-15', classId: 'c3', status: 'present' },
+        { date: '2024-07-15', classId: 'c3', bookedClassId: 'bc_eduardo1', status: 'present' },
     ],
   }
 ];
 
 export let MOCK_CLASS_SESSIONS: ClassSession[] = [
-  { id: 'c1', dayOfWeek: 'Segunda', time: '18:00', location: 'Praia Central', maxStudents: 10, enrolledStudentIds: ['1', '2', 's3', 's4', 's5', 's6', 's7', 's8'] },
-  { id: 'c2', dayOfWeek: 'Segunda', time: '19:00', location: 'Praia Central', maxStudents: 10, enrolledStudentIds: ['s9', 's10', 's11', 's12', 's13', 's14', 's15', 's16', 's17', 's18'] },
-  { id: 'c3', dayOfWeek: 'Terça', time: '07:00', location: 'Quadra Coberta A', maxStudents: 12, enrolledStudentIds: ['s19', 's20', 's21', 's22', 's23', 's24', 's25', 's26', 's27'] },
-  { id: 'c4', dayOfWeek: 'Quarta', time: '18:30', location: 'Praia do Tombo', maxStudents: 8, enrolledStudentIds: ['s28', 's29', 's30', 's31', 's32'] },
-  { id: 'c5', dayOfWeek: 'Quinta', time: '07:00', location: 'Quadra Coberta B', maxStudents: 12, enrolledStudentIds: ['s33', 's34', 's35', 's36', 's37', 's38', 's39', 's40', 's41', 's42', 's43'] },
+  { id: 'c1', dayOfWeek: 'Segunda', startTime: '18:00', endTime: '19:00', location: 'Praia Central', maxStudents: 10, enrolledStudentIds: ['1', '2', '4'] },
+  { id: 'c2', dayOfWeek: 'Segunda', startTime: '19:00', endTime: '20:00', location: 'Praia Central', maxStudents: 10, enrolledStudentIds: ['2'] },
+  { id: 'c3', dayOfWeek: 'Terça', startTime: '07:00', endTime: '08:30', location: 'Quadra Coberta A', maxStudents: 12, enrolledStudentIds: [] },
+  { id: 'c4', dayOfWeek: 'Quarta', startTime: '18:30', endTime: '20:00', location: 'Praia do Tombo', maxStudents: 8, enrolledStudentIds: ['1', '4', '5'] },
+  { id: 'c5', dayOfWeek: 'Quinta', startTime: '07:00', endTime: '08:00', location: 'Quadra Coberta B', maxStudents: 12, enrolledStudentIds: [] },
 ];
 
 
 export let INITIAL_MOCK_BOOKED_CLASSES: BookedClass[] = [
-  // { id: 'bc1', date: '2024-07-29', time: '18:00', title: 'Futevôlei Iniciante', location: 'Praia Central', studentIds: ['1'], durationMinutes: 60 }, // Example of conflict with Ana Silva's recurring
-  { id: 'bc2', date: '2024-07-29', time: '19:00', title: 'Futevôlei Intermediário', location: 'Praia Central', studentIds: ['2', '4'], durationMinutes: 60 },
-  { id: 'bc3', date: '2024-07-30', time: '07:00', title: 'Futevôlei Avançado', location: 'Quadra Coberta A', studentIds: ['3'], durationMinutes: 60 },
-  { id: 'bc4', date: '2024-08-01', time: '18:30', title: 'Técnica e Tática', location: 'Praia do Tombo', studentIds: ['s28', 's29'], durationMinutes: 90 },
-  // { id: 'bc5', date: '2024-08-05', time: '09:00', title: 'Aula Particular - Ana S.', location: 'Praia Central', studentIds:['1'], durationMinutes: 60}, // This would match Ana's recurring
+  { 
+    id: 'bc2', 
+    date: '2024-07-29', 
+    time: '19:00', 
+    title: 'Futevôlei Intermediário', 
+    location: 'Praia Central', 
+    studentIds: ['2', '4'], 
+    durationMinutes: 60,
+    attendance: { '2': 'present', '4': 'pending' }
+  },
+  { 
+    id: 'bc3', 
+    date: '2024-07-30', 
+    time: '07:00', 
+    title: 'Futevôlei Avançado', 
+    location: 'Quadra Coberta A', 
+    studentIds: ['3'], 
+    durationMinutes: 60,
+    attendance: { '3': 'absent'}
+  },
+  { 
+    id: 'bc4', 
+    date: '2024-08-01', 
+    time: '18:30', 
+    title: 'Técnica e Tática', 
+    location: 'Praia do Tombo', 
+    studentIds: ['s28', 's29'], 
+    durationMinutes: 90 
+  },
 ];
 
 export const MOCK_COACH_AVAILABILITY: CoachAvailability = {
@@ -236,7 +261,6 @@ export let MOCK_PLANS: Plan[] = [
   { id: 'plan5', name: 'Experimental (Inativo)', price: 0, durationDays: 7, status: 'inactive' },
 ];
 
-// Helper to map getDay() (Sun=0) to DayOfWeek names
 export const getDayOfWeekName = (dayNumber: number): DayOfWeek | undefined => {
   const map: Record<number, DayOfWeek> = {
     0: 'Domingo',

@@ -4,12 +4,11 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PlusCircle, Settings2, Users } from "lucide-react";
+import { PlusCircle, Settings2, Users, Clock } from "lucide-react";
 import Link from "next/link";
 import { MOCK_CLASS_SESSIONS, type ClassSession } from '@/types';
 
 export default function AulasPage() {
-  // In a real app, this would come from a data store (e.g., Firebase)
   const [classSessions, setClassSessions] = React.useState<ClassSession[]>(MOCK_CLASS_SESSIONS);
 
   return (
@@ -32,7 +31,10 @@ export default function AulasPage() {
           {classSessions.map((session) => (
             <Card key={session.id} className="shadow-lg hover:shadow-xl transition-shadow">
               <CardHeader>
-                <CardTitle className="font-headline text-xl">{session.dayOfWeek} - {session.time}</CardTitle>
+                <CardTitle className="font-headline text-xl">{session.dayOfWeek}</CardTitle>
+                <CardDescription className="flex items-center">
+                    <Clock className="h-4 w-4 mr-1.5 text-muted-foreground"/> {session.startTime} - {session.endTime}
+                </CardDescription>
                 <CardDescription>{session.location}</CardDescription>
               </CardHeader>
               <CardContent>
@@ -43,11 +45,11 @@ export default function AulasPage() {
                 <div className="w-full bg-muted rounded-full h-2.5 mb-3">
                   <div 
                     className="bg-primary h-2.5 rounded-full" 
-                    style={{ width: `${(session.enrolledStudentIds.length / session.maxStudents) * 100}%` }}
+                    style={{ width: `${session.maxStudents > 0 ? (session.enrolledStudentIds.length / session.maxStudents) * 100 : 0}%` }}
                   ></div>
                 </div>
                  <div className="flex items-center text-xs text-muted-foreground mb-4">
-                    <Users className="h-3.5 w-3.5 mr-1.5"/> {session.enrolledStudentIds.length} aluno(s) inscrito(s)
+                    <Users className="h-3.5 w-3.5 mr-1.5"/> {session.enrolledStudentIds.length} aluno(s) inscrito(s) nesta configuração
                 </div>
                 <Button variant="outline" size="sm" className="w-full" asChild>
                   <Link href={`/aulas/${session.id}`}>
