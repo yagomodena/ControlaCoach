@@ -4,7 +4,7 @@ export interface Student {
   id: string;
   name: string;
   phone: string;
-  plan: string; // Changed from enum to string to store plan name
+  plan: string; // Stores plan name
   technicalLevel: 'Iniciante' | 'Intermediário' | 'Avançado';
   status: 'active' | 'inactive';
   registrationDate: string; // ISO date string
@@ -222,4 +222,3 @@ export let MOCK_PLANS: Plan[] = [
   { id: 'plan4', name: 'Anual VIP', price: 1500, durationDays: 365, status: 'active' },
   { id: 'plan5', name: 'Experimental (Inativo)', price: 0, durationDays: 7, status: 'inactive' },
 ];
-
