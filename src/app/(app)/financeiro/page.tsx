@@ -179,10 +179,10 @@ export default function FinanceiroPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Aluno</TableHead>
-                <TableHead className="hidden md:table-cell">Valor</TableHead>
+                <TableHead className="hidden lg:table-cell">Valor</TableHead>
                 <TableHead>Vencimento</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="hidden sm:table-cell">Método</TableHead>
+                <TableHead className="hidden md:table-cell">Método</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -191,7 +191,7 @@ export default function FinanceiroPage() {
                 filteredPayments.map((payment) => (
                   <TableRow key={payment.id}>
                     <TableCell className="font-medium">{payment.studentName}</TableCell>
-                    <TableCell className="hidden md:table-cell">R$ {payment.amount.toFixed(2)}</TableCell>
+                    <TableCell className="hidden lg:table-cell">R$ {payment.amount.toFixed(2)}</TableCell>
                     <TableCell>
                       {clientRendered ? (
                         payment.dueDate.includes('T') ? format(parse(payment.dueDate, "yyyy-MM-dd'T'HH:mm:ss.SSSX", new Date()), 'dd/MM/yyyy') : format(parse(payment.dueDate, 'yyyy-MM-dd', new Date()), 'dd/MM/yyyy')
@@ -200,7 +200,7 @@ export default function FinanceiroPage() {
                       )}
                     </TableCell>
                     <TableCell>{getPaymentStatusBadge(payment.status)}</TableCell>
-                    <TableCell className="hidden sm:table-cell">{payment.method}</TableCell>
+                    <TableCell className="hidden md:table-cell">{payment.method}</TableCell>
                     <TableCell className="text-right">
                        <Button variant="ghost" size="sm" asChild>
                          <Link href={`/alunos/${payment.studentId}`}>
@@ -217,7 +217,7 @@ export default function FinanceiroPage() {
                 ))
               ) : (
                  <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
                     Nenhum pagamento encontrado com os filtros atuais.
                   </TableCell>
                 </TableRow>
@@ -229,3 +229,4 @@ export default function FinanceiroPage() {
     </div>
   );
 }
+
