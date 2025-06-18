@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo } from 'react';
@@ -107,9 +108,9 @@ export default function AlunosPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Nome</TableHead>
-                <TableHead className="hidden md:table-cell">Telefone</TableHead>
-                <TableHead>Plano</TableHead>
-                <TableHead className="hidden sm:table-cell">Nível</TableHead>
+                <TableHead className="hidden lg:table-cell">Telefone</TableHead>
+                <TableHead className="hidden sm:table-cell">Plano</TableHead>
+                <TableHead className="hidden md:table-cell">Nível</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
@@ -119,9 +120,9 @@ export default function AlunosPage() {
                 filteredStudents.map((student) => (
                   <TableRow key={student.id}>
                     <TableCell className="font-medium">{student.name}</TableCell>
-                    <TableCell className="hidden md:table-cell text-muted-foreground">{student.phone}</TableCell>
-                    <TableCell>{student.plan}</TableCell>
-                    <TableCell className="hidden sm:table-cell">{student.technicalLevel}</TableCell>
+                    <TableCell className="hidden lg:table-cell text-muted-foreground">{student.phone}</TableCell>
+                    <TableCell className="hidden sm:table-cell">{student.plan}</TableCell>
+                    <TableCell className="hidden md:table-cell">{student.technicalLevel}</TableCell>
                     <TableCell>
                       <Badge variant={student.status === 'active' ? 'default' : 'secondary'}
                        className={student.status === 'active' ? 'bg-green-500/20 text-green-700 border-green-500/30' : 'bg-red-500/20 text-red-700 border-red-500/30'}
