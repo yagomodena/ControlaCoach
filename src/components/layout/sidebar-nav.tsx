@@ -12,6 +12,7 @@ import {
   LogOut,
   MapPin, 
   ListChecks, 
+  LineChart, // Added LineChart icon
 } from 'lucide-react';
 import {
   Sidebar,
@@ -39,6 +40,7 @@ const navItems = [
   { href: '/locais', label: 'Locais', icon: MapPin },
   { href: '/planos', label: 'Planos', icon: ListChecks }, 
   { href: '/financeiro', label: 'Financeiro', icon: DollarSign },
+  { href: '/relatorios', label: 'Relatórios', icon: LineChart }, // Added Relatórios
   { href: '/configuracoes', label: 'Configurações', icon: Settings },
 ];
 
@@ -110,6 +112,7 @@ export function SidebarNav() {
               <SidebarMenuSkeleton showIcon />
               <SidebarMenuSkeleton showIcon />
               <SidebarMenuSkeleton showIcon /> 
+              <SidebarMenuSkeleton showIcon />
               <SidebarMenuSkeleton showIcon /> 
             </>
           )}
