@@ -47,8 +47,11 @@ import {
   subMonths, 
   setDate, 
   addDays, 
+  subDays,
   isBefore,
+  isAfter,
   isEqual,
+  startOfDay,
   formatISO as dateFnsFormatISO 
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -96,74 +99,108 @@ export default function FinanceiroPage() {
       setAllPlans(plansData);
 
       const studentsCollectionRef = collection(db, 'students');
-      const qStudents = query(studentsCollectionRef, orderBy('name'));
+      const qStudents = query(studentsCollectionRef, orderBy('name')); // Fetch all students initially
       const unsubscribeStudents = onSnapshot(qStudents, (studentSnapshot) => {
         const studentsData = studentSnapshot.docs.map(docSnap => ({ ...docSnap.data(), id: docSnap.id } as Student));
         
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const today = startOfDay(new Date());
+        const monthStart = startOfMonth(selectedMonthDate);
+        const monthEnd = endOfMonth(selectedMonthDate);
 
-        const derivedPayments: PaymentEntry[] = studentsData.map(student => {
+        const derivedPayments: PaymentEntry[] = [];
+
+        studentsData.forEach(student => {
+            if (student.status !== 'active') return;
+
             const planDetails = plansData.find(p => p.name === student.plan);
-            let effectiveDueDate: Date;
-            let currentStatus = student.paymentStatus || 'pendente';
-            const amount = student.amountDue ?? planDetails?.price ?? 0;
-
-            if (student.dueDate) {
-                effectiveDueDate = parseISO(student.dueDate);
-            } else {
-                let baseDate = student.registrationDate ? parseISO(student.registrationDate) : today;
-                if (planDetails && planDetails.durationDays > 0) {
-                    effectiveDueDate = addDays(baseDate, planDetails.durationDays);
-                } else {
-                    effectiveDueDate = setDate(addMonths(baseDate, 1), 5); // Default to 5th of next month
-                }
+            if (!planDetails || !planDetails.durationDays || planDetails.durationDays <= 0) {
+                return;
             }
-            effectiveDueDate.setHours(0, 0, 0, 0);
 
-            if (currentStatus === 'pago' && student.lastPaymentDate) {
-                const lastPaidDate = parseISO(student.lastPaymentDate);
-                lastPaidDate.setHours(0,0,0,0);
+            let currentCycleStartDate = student.registrationDate ? startOfDay(parseISO(student.registrationDate)) : startOfDay(new Date(2000,0,1)); // Default for very old data
+            
+            // Loop to find relevant due dates for the selected month
+            // Continue as long as the cycle might overlap with the selected month or slightly after
+            while (isBefore(currentCycleStartDate, addMonths(monthEnd, 2))) { // Check a bit beyond monthEnd to catch all relevant cycles
+                const currentCycleDueDate = startOfDay(addDays(currentCycleStartDate, planDetails.durationDays));
+
+                // Optimization: if current cycle start is already way past the selected month, break
+                if (isAfter(currentCycleStartDate, addDays(monthEnd, planDetails.durationDays * 2))) {
+                     break;
+                }
                 
-                let nextExpectedDueDateAfterPayment: Date;
-                if (planDetails && planDetails.durationDays > 0) {
-                    nextExpectedDueDateAfterPayment = addDays(lastPaidDate, planDetails.durationDays);
-                } else {
-                    nextExpectedDueDateAfterPayment = setDate(addMonths(lastPaidDate, 1), 5);
-                }
-                nextExpectedDueDateAfterPayment.setHours(0,0,0,0);
+                // Only create an entry if its DUE DATE is in the selected month
+                if (isWithinInterval(currentCycleDueDate, { start: monthStart, end: monthEnd })) {
+                    let entryStatus: Payment['status'] = 'pendente';
+                    let entryPaymentDate: string | undefined = undefined;
+                    const studentOverallNextDueDate = student.dueDate ? startOfDay(parseISO(student.dueDate)) : null;
 
-                effectiveDueDate = nextExpectedDueDateAfterPayment; // This is the due date for the *next* cycle
+                    // Determine status based on student's last payment and overall status
+                    if (student.lastPaymentDate && student.paymentStatus === 'pago') {
+                        const lastPaidActualDate = startOfDay(parseISO(student.lastPaymentDate));
+                        // A payment on lastPaidActualDate covers the cycle starting on lastPaidActualDate
+                        // The *next* due date after that payment would be addDays(lastPaidActualDate, planDetails.durationDays)
+                        const nextDueDateAfterLastPayment = addDays(lastPaidActualDate, planDetails.durationDays);
 
-                if (isBefore(today, nextExpectedDueDateAfterPayment) || isEqual(today, nextExpectedDueDateAfterPayment)) {
-                    // Still within the paid period, status remains 'pago' for display logic related to *this* due date
-                } else {
-                    // Paid period has ended, next cycle is now active
-                    currentStatus = 'vencido'; // Or 'pendente' if preferred before due date passes
+                        if (isEqual(currentCycleDueDate, nextDueDateAfterLastPayment)) {
+                            // This currentCycleDueDate is the one that was effectively paid for by the last payment.
+                            entryStatus = 'pago';
+                            entryPaymentDate = student.lastPaymentDate;
+                        } else if (isBefore(currentCycleDueDate, nextDueDateAfterLastPayment) && studentOverallNextDueDate && isAfter(studentOverallNextDueDate, currentCycleDueDate)) {
+                            // This is a past cycle relative to the student's *current* next due date, and student is 'pago' overall.
+                            // Implies this past cycle was also paid.
+                             entryStatus = 'pago';
+                             // Infer payment date for this past cycle to be its start date for simplicity in report
+                             entryPaymentDate = formatISO(currentCycleStartDate, {representation:'date'});
+                        }
+                    }
+                    
+                    // If not determined as 'pago', check for 'vencido' or 'pendente'
+                    if (entryStatus !== 'pago') {
+                        if (isBefore(currentCycleDueDate, today)) {
+                            entryStatus = 'vencido';
+                        } else {
+                            entryStatus = 'pendente';
+                        }
+                    }
+                    
+                    // If the student's main record has a specific status for this exact due date, honor it.
+                    if (studentOverallNextDueDate && isEqual(currentCycleDueDate, studentOverallNextDueDate)) {
+                        if (student.paymentStatus === 'vencido') entryStatus = 'vencido';
+                        // If student.paymentStatus is 'pendente' for this currentOverallDueDate, and we haven't marked it vencido, it's pendente.
+                        else if (student.paymentStatus === 'pendente' && entryStatus !== 'vencido') entryStatus = 'pendente';
+                        // if student.paymentStatus is 'pago' for this studentOverallNextDueDate, it was handled by the 'pago' block above.
+                    }
+                    
+                    derivedPayments.push({
+                        id: `pay-${student.id}-${dateFnsFormatISO(currentCycleDueDate, { representation: 'date' })}`,
+                        studentId: student.id,
+                        studentName: student.name,
+                        studentPhone: student.phone,
+                        studentPlanName: student.plan,
+                        amount: planDetails.price, 
+                        paymentDate: entryPaymentDate,
+                        dueDate: dateFnsFormatISO(currentCycleDueDate, { representation: 'date' }),
+                        status: entryStatus,
+                        method: student.paymentMethod || 'PIX',
+                        referenceMonth: format(currentCycleDueDate, 'yyyy-MM'),
+                    });
                 }
-
-            } else if (currentStatus === 'pendente') {
-                 if (isBefore(effectiveDueDate, today)) {
-                    currentStatus = 'vencido';
-                }
+                
+                // Move to the start of the next cycle for this student
+                currentCycleStartDate = addDays(currentCycleStartDate, planDetails.durationDays);
             }
-
-
-            return {
-              id: `pay-${student.id}-${dateFnsFormatISO(effectiveDueDate, { representation: 'date' })}-${student.status}`,
-              studentId: student.id,
-              studentName: student.name,
-              studentPhone: student.phone,
-              studentPlanName: student.plan,
-              amount: amount,
-              paymentDate: student.lastPaymentDate && student.paymentStatus === 'pago' ? student.lastPaymentDate : '',
-              dueDate: dateFnsFormatISO(effectiveDueDate, { representation: 'date' }),
-              status: currentStatus,
-              method: student.paymentMethod || 'PIX',
-              referenceMonth: dateFnsFormatISO(effectiveDueDate, { representation: 'date' }).substring(0,7),
-            };
         });
-        setPayments(derivedPayments);
+        
+        const uniquePayments = Array.from(new Map(derivedPayments.map(p => [p.id, p])).values());
+
+        uniquePayments.sort((a, b) => {
+            const dateA = parseISO(a.dueDate).getTime();
+            const dateB = parseISO(b.dueDate).getTime();
+            if (dateA !== dateB) return dateA - dateB;
+            return a.studentName.localeCompare(b.studentName);
+        });
+        setPayments(uniquePayments);
         setIsLoading(false);
       }, (error) => {
         console.error("Error fetching students for Financeiro: ", error);
@@ -179,55 +216,58 @@ export default function FinanceiroPage() {
     });
 
     return () => unsubscribePlans();
-  }, [toast]);
+  }, [toast, selectedMonthDate]); // Re-run when selectedMonthDate changes
 
 
-  const handleMarkAsPaid = async (studentIdToUpdate: string) => {
-    const studentDocRef = doc(db, 'students', studentIdToUpdate);
+  const handleMarkAsPaid = async (paymentEntryToUpdate: PaymentEntry) => {
+    const studentDocRef = doc(db, 'students', paymentEntryToUpdate.studentId);
     try {
       const studentDocSnap = await getDoc(studentDocRef);
       if (!studentDocSnap.exists()) {
-        toast({ title: "Erro", description: "Aluno não encontrado para marcar como pago.", variant: "destructive" });
+        toast({ title: "Erro", description: "Aluno não encontrado.", variant: "destructive" });
         return;
       }
       const currentStudentData = studentDocSnap.data() as Student;
-      
       const planDetails = allPlans.find(p => p.name === currentStudentData.plan);
-      const paymentDate = new Date(); // Payment is made today
-      paymentDate.setHours(0,0,0,0);
 
-      let nextDueDate: Date;
-      if (planDetails && typeof planDetails.durationDays === 'number' && planDetails.durationDays > 0) {
-        nextDueDate = addDays(paymentDate, planDetails.durationDays);
-      } else {
-        // Default to 5th of next month from payment date
-        const currentMonth = getMonth(paymentDate);
-        const currentYear = getYear(paymentDate);
-        if (getDay(paymentDate) < 5) { // If paid before 5th, next due is 5th of current month if plan is monthly like
-           if (getMonth(setDate(paymentDate, 5)) === currentMonth) {
-             nextDueDate = setDate(paymentDate, 5);
-           } else {
-             nextDueDate = setDate(addMonths(paymentDate, 1), 5);
-           }
-        } else {
-           nextDueDate = setDate(addMonths(paymentDate, 1), 5);
-        }
+      if (!planDetails) {
+        toast({ title: "Erro", description: "Plano do aluno não encontrado.", variant: "destructive" });
+        return;
       }
-      nextDueDate.setHours(0,0,0,0);
+
+      // The date payment is considered made is the due date of the entry being marked.
+      const paymentMadeForDueDate = startOfDay(parseISO(paymentEntryToUpdate.dueDate));
+      
+      // The actual payment date is today (or could be a date picker in a more complex form)
+      const actualPaymentDate = startOfDay(new Date());
+
+
+      let nextOverallDueDate: Date;
+      if (planDetails.durationDays > 0) {
+         // Next due date is calculated from the due date that was just paid
+        nextOverallDueDate = addDays(paymentMadeForDueDate, planDetails.durationDays);
+      } else {
+        // Fallback: 5th of the month following the paymentMadeForDueDate date.
+        nextOverallDueDate = setDate(addMonths(paymentMadeForDueDate, 1), 5);
+      }
+      nextOverallDueDate.setHours(0,0,0,0); // Ensure start of day
 
       const updatePayload: Partial<Student> = {
         paymentStatus: 'pago',
-        lastPaymentDate: dateFnsFormatISO(paymentDate, { representation: 'date' }), 
-        dueDate: dateFnsFormatISO(nextDueDate, { representation: 'date' }), 
-        amountDue: planDetails ? planDetails.price : currentStudentData.amountDue, 
+        // lastPaymentDate is the date of this specific payment for this cycle
+        lastPaymentDate: dateFnsFormatISO(actualPaymentDate, { representation: 'date' }),
+        // dueDate on student record is their *next* upcoming due date
+        dueDate: dateFnsFormatISO(nextOverallDueDate, { representation: 'date' }),
+        amountDue: planDetails.price, 
       };
 
       await updateDoc(studentDocRef, updatePayload);
 
       toast({
         title: "Pagamento Confirmado!",
-        description: `O pagamento de ${currentStudentData.name} foi marcado como pago. Próximo vencimento: ${format(nextDueDate, 'dd/MM/yyyy', { locale: ptBR })}`,
+        description: `Pagamento de ${currentStudentData.name} (venc. ${format(paymentMadeForDueDate, 'dd/MM/yyyy')}) marcado como pago. Próximo vencimento geral do aluno: ${format(nextOverallDueDate, 'dd/MM/yyyy', { locale: ptBR })}`,
       });
+      // The onSnapshot listener will automatically refresh the payments list.
     } catch (error) {
       console.error("Error marking as paid: ", error);
       toast({ title: "Erro ao Marcar como Pago", variant: "destructive", description: (error as Error).message });
@@ -235,26 +275,14 @@ export default function FinanceiroPage() {
   };
 
   const filteredPayments = useMemo(() => {
-    const targetYear = getYear(selectedMonthDate);
-    const targetMonth = getMonth(selectedMonthDate);
-
+    // The `payments` state is already filtered by selectedMonthDate due to the useEffect logic.
+    // This `filteredPayments` can now just handle searchTerm and statusFilters.
     return payments.filter(payment => {
       const nameMatch = payment.studentName.toLowerCase().includes(searchTerm.toLowerCase());
       const statusMatch = statusFilters.size === 0 || statusFilters.has(payment.status);
-      
-      let monthMatch = false;
-      if (payment.dueDate) {
-        try {
-            const dueDateObj = parseISO(payment.dueDate); 
-            monthMatch = getYear(dueDateObj) === targetYear && getMonth(dueDateObj) === targetMonth;
-        } catch (e) {
-            console.warn("Invalid due date for filtering:", payment.dueDate, payment.studentName);
-            monthMatch = false; 
-        }
-      }
-      return nameMatch && statusMatch && monthMatch;
+      return nameMatch && statusMatch;
     });
-  }, [payments, searchTerm, statusFilters, selectedMonthDate]);
+  }, [payments, searchTerm, statusFilters]);
 
   const toggleStatusFilter = (status: Payment['status']) => {
     setStatusFilters(prev => {
@@ -278,69 +306,27 @@ export default function FinanceiroPage() {
   };
 
   const summaryStats = useMemo(() => {
-    const targetYear = getYear(selectedMonthDate);
-    const targetMonth = getMonth(selectedMonthDate);
-
+    // Calculate stats based on the `payments` state which is already for the selected month
     return {
       totalRecebidoMes: payments
-        .filter(p => {
-            if (p.status === 'pago' && p.paymentDate) {
-                try {
-                    const paymentDateObj = parseISO(p.paymentDate);
-                    return getYear(paymentDateObj) === targetYear && getMonth(paymentDateObj) === targetMonth;
-                } catch (e) { return false; }
-            }
-            return false;
-        })
+        .filter(p => p.status === 'pago')
         .reduce((sum, p) => sum + p.amount, 0),
       totalPendente: payments
-        .filter(p => {
-             if (p.status === 'pendente' && p.dueDate) {
-                try {
-                    const dueDateObj = parseISO(p.dueDate);
-                    return getYear(dueDateObj) === targetYear && getMonth(dueDateObj) === targetMonth;
-                } catch (e) { return false; }
-            }
-            return false;
-        })
+        .filter(p => p.status === 'pendente')
         .reduce((sum, p) => sum + p.amount, 0),
       totalVencido: payments
-        .filter(p => {
-            if (p.status === 'vencido' && p.dueDate) {
-                try {
-                    const dueDateObj = parseISO(p.dueDate);
-                    return getYear(dueDateObj) === targetYear && getMonth(dueDateObj) === targetMonth;
-                } catch (e) { return false; }
-            }
-            return false;
-        })
+        .filter(p => p.status === 'vencido')
         .reduce((sum, p) => sum + p.amount, 0),
     }
-  }, [payments, selectedMonthDate]);
+  }, [payments]);
 
   const handleGenerateReport = () => {
     const reportMonthStart = startOfMonth(selectedMonthDate);
     const reportMonthEnd = endOfMonth(selectedMonthDate);
 
-    const paidInMonth = payments.filter(p => {
-        if (p.status === 'pago' && p.paymentDate) {
-            try {
-                return isWithinInterval(parseISO(p.paymentDate), { start: reportMonthStart, end: reportMonthEnd });
-            } catch(e) { return false; }
-        }
-        return false;
-    });
-
-    const outstandingInMonth = payments.filter(p => 
-      (p.status === 'pendente' || p.status === 'vencido') &&
-      p.dueDate &&
-      ( () => {
-          try {
-            return getYear(parseISO(p.dueDate)) === getYear(selectedMonthDate) &&
-                   getMonth(parseISO(p.dueDate)) === getMonth(selectedMonthDate)
-          } catch(e) { return false; }
-      })()
-    );
+    // Use the `payments` state which is already filtered for the month and projected
+    const paidInMonth = payments.filter(p => p.status === 'pago');
+    const outstandingInMonth = payments.filter(p => p.status === 'pendente' || p.status === 'vencido');
     
     const totalReceived = paidInMonth.reduce((sum, p) => sum + p.amount, 0);
     const totalPending = outstandingInMonth.filter(p=> p.status === 'pendente').reduce((sum, p) => sum + p.amount, 0);
@@ -533,10 +519,10 @@ export default function FinanceiroPage() {
                         <div className="flex items-center justify-end space-x-0.5">
                           {(payment.status === 'pendente' || payment.status === 'vencido') && (
                             <>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-green-500 hover:text-green-600 sm:hidden" onClick={() => handleMarkAsPaid(payment.studentId)} title="Marcar como Pago">
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-green-500 hover:text-green-600 sm:hidden" onClick={() => handleMarkAsPaid(payment)} title="Marcar como Pago">
                                 <CheckCircle className="h-4 w-4" />
                               </Button>
-                              <Button variant="ghost" size="sm" className="hidden sm:inline-flex items-center text-green-500 hover:text-green-600" onClick={() => handleMarkAsPaid(payment.studentId)} title="Marcar como Pago">
+                              <Button variant="ghost" size="sm" className="hidden sm:inline-flex items-center text-green-500 hover:text-green-600" onClick={() => handleMarkAsPaid(payment)} title="Marcar como Pago">
                                 <CheckCircle className="h-4 w-4 mr-1" /> <span className="hidden xs:inline">Pago</span>
                               </Button>
                             </>
@@ -696,3 +682,4 @@ export default function FinanceiroPage() {
     </>
   );
 }
+
