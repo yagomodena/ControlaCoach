@@ -3,20 +3,50 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow read/write access to the 'users' collection for authenticated users,
-    // restricting document access to the owner.
+
+    // Allow public read access to a 'publicContent' collection
+    match /publicContent/{docId} {
+      allow read: if true;
+      allow write: if false; // No public writes
+    }
+
+    // Rules for the 'users' collection (user profiles)
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // A user can create their own profile
+      allow create: if request.auth != null && request.auth.uid == userId;
+      // A user can read, update, and delete their own profile
+      allow read, update, delete: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Allow authenticated users to read and write to the 'students' collection.
+    // Rules for the 'students' collection
     match /students/{studentId} {
+      // Authenticated users can create, read, update, and delete students
+      // (Assuming any authenticated app user is a coach managing their students)
+      allow read, write: if request.auth != null;
+      // Consider more granular rules in a multi-coach scenario, e.g.,
+      // allow write: if request.auth != null && resource.data.coachId == request.auth.uid;
+    }
+
+    // Rules for the 'classSessions' collection
+    match /classSessions/{sessionId} {
+      // Authenticated users can manage class configurations
       allow read, write: if request.auth != null;
     }
 
-    // Allow authenticated users to read and write to the 'classSessions' collection.
-    match /classSessions/{classSessionId} {
+    // Rules for the 'locations' collection
+    match /locations/{locationId} {
+      // Authenticated users can manage locations
       allow read, write: if request.auth != null;
+    }
+
+    // Example: Allow admin access to everything (use with caution)
+    // match /{document=**} {
+    //   allow read, write: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    // }
+
+    // Default: Deny all other access
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

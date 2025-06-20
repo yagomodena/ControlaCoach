@@ -1,9 +1,9 @@
 
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
-import { PlusCircle, Search, Edit3, Trash2, MoreVertical, MapPin } from 'lucide-react';
+import { PlusCircle, Search, Edit3, Trash2, MoreVertical, MapPin, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -23,13 +23,37 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import type { Location } from '@/types';
-import { MOCK_LOCATIONS } from '@/types'; 
 import { useToast } from '@/hooks/use-toast';
+import { db } from '@/firebase';
+import { collection, onSnapshot, deleteDoc, doc, query, orderBy } from 'firebase/firestore';
 
 export default function LocaisPage() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [locations, setLocations] = useState<Location[]>(MOCK_LOCATIONS);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+
+  useEffect(() => {
+    setIsLoading(true);
+    const locationsCollectionRef = collection(db, 'locations');
+    const q = query(locationsCollectionRef, orderBy('name', 'asc'));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const locationsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Location));
+      setLocations(locationsData);
+      setIsLoading(false);
+    }, (error) => {
+      console.error("Error fetching locations: ", error);
+      toast({
+        title: "Erro ao Carregar Locais",
+        description: "Não foi possível buscar os dados dos locais. Tente novamente.",
+        variant: "destructive",
+      });
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [toast]);
 
   const filteredLocations = useMemo(() => {
     return locations.filter(location =>
@@ -37,21 +61,23 @@ export default function LocaisPage() {
     );
   }, [locations, searchTerm]);
 
-  const handleDeleteLocation = (locationId: string) => {
-    if (window.confirm('Tem certeza que deseja excluir este local? Esta ação não pode ser desfeita.')) {
-      const updatedLocations = locations.filter(loc => loc.id !== locationId);
-      setLocations(updatedLocations);
-      // Update the global MOCK_LOCATIONS if it's used across pages and needs to be persistent
-      // For this example, we'll assume MOCK_LOCATIONS is mutated directly or a more robust state management is in place.
-      const index = MOCK_LOCATIONS.findIndex(loc => loc.id === locationId);
-      if (index > -1) {
-        MOCK_LOCATIONS.splice(index, 1);
+  const handleDeleteLocation = async (locationId: string, locationName: string) => {
+    if (window.confirm(`Tem certeza que deseja excluir o local "${locationName}"? Esta ação não pode ser desfeita.`)) {
+      try {
+        await deleteDoc(doc(db, 'locations', locationId));
+        toast({
+          title: 'Local Excluído!',
+          description: `O local "${locationName}" foi removido com sucesso.`,
+        });
+        // Real-time listener will update the list
+      } catch (error) {
+        console.error("Error deleting location: ", error);
+        toast({
+          title: "Erro ao Excluir",
+          description: "Não foi possível excluir o local. Tente novamente.",
+          variant: "destructive",
+        });
       }
-      toast({
-        title: 'Local Excluído!',
-        description: 'O local foi removido com sucesso.',
-        variant: 'default',
-      });
     }
   };
 
@@ -88,60 +114,67 @@ export default function LocaisPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nome do Local</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredLocations.length > 0 ? (
-                filteredLocations.map((location) => (
-                  <TableRow key={location.id}>
-                    <TableCell className="font-medium flex items-center">
-                        <MapPin className="h-4 w-4 mr-2 text-primary" />
-                        {location.name}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={location.status === 'active' ? 'default' : 'secondary'}
-                       className={location.status === 'active' ? 'bg-green-500/20 text-green-700 border-green-500/30' : 'bg-red-500/20 text-red-700 border-red-500/30'}
-                      >
-                        {location.status === 'active' ? 'Ativo' : 'Inativo'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
-                            <MoreVertical className="h-4 w-4" />
-                            <span className="sr-only">Mais ações</span>
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem asChild>
-                            <Link href={`/locais/${location.id}?edit=true`} className="flex items-center">
-                              <Edit3 className="mr-2 h-4 w-4" /> Editar
-                            </Link>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleDeleteLocation(location.id)} className="text-destructive focus:text-destructive focus:bg-destructive/10 flex items-center">
-                            <Trash2 className="mr-2 h-4 w-4" /> Excluir
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+          {isLoading ? (
+            <div className="flex justify-center items-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="ml-2 text-muted-foreground">Carregando locais...</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nome do Local</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredLocations.length > 0 ? (
+                  filteredLocations.map((location) => (
+                    <TableRow key={location.id}>
+                      <TableCell className="font-medium flex items-center">
+                          <MapPin className="h-4 w-4 mr-2 text-primary" />
+                          {location.name}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={location.status === 'active' ? 'default' : 'secondary'}
+                         className={location.status === 'active' ? 'bg-green-500/20 text-green-700 border-green-500/30' : 'bg-red-500/20 text-red-700 border-red-500/30'}
+                        >
+                          {location.status === 'active' ? 'Ativo' : 'Inativo'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <MoreVertical className="h-4 w-4" />
+                              <span className="sr-only">Mais ações</span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem asChild>
+                              <Link href={`/locais/${location.id}?edit=true`} className="flex items-center">
+                                <Edit3 className="mr-2 h-4 w-4" /> Editar
+                              </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDeleteLocation(location.id, location.name)} className="text-destructive focus:text-destructive focus:bg-destructive/10 flex items-center">
+                              <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
+                      Nenhum local encontrado.
                     </TableCell>
                   </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
-                    Nenhum local encontrado.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>

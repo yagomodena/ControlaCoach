@@ -35,7 +35,7 @@ export interface Plan {
 
 export interface ClassSession {
   id: string; // Firestore document ID
-  daysOfWeek: DayOfWeek[]; // Changed from dayOfWeek: DayOfWeek
+  daysOfWeek: DayOfWeek[]; 
   startTime: string; 
   endTime: string;   
   location: string; 
@@ -90,7 +90,7 @@ export type CoachAvailability = {
 };
 
 export interface Location {
-  id: string;
+  id: string; // Firestore document ID
   name: string;
   status: 'active' | 'inactive';
 }
@@ -139,13 +139,6 @@ export const MOCK_COACH_AVAILABILITY: CoachAvailability = {
   defaultDaily: { workRanges: [], breaks: [] } 
 };
 
-export let MOCK_LOCATIONS: Location[] = [
-    { id: 'loc1', name: 'Praia Central', status: 'active' },
-    { id: 'loc2', name: 'Quadra Coberta A', status: 'active' },
-    { id: 'loc3', name: 'Praia do Tombo', status: 'active' },
-    { id: 'loc4', name: 'Academia FitX', status: 'active' },
-    { id: 'loc5', name: 'Parque da Cidade', status: 'inactive' },
-];
 
 export let MOCK_PLANS: Plan[] = [
   { id: 'plan1', name: 'Mensal', price: 150, durationDays: 30, status: 'active' },

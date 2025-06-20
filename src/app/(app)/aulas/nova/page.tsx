@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Save, PlusCircle, Search, Users, ClockIcon, Loader2, CalendarDays } from 'lucide-react';
+import { ArrowLeft, Save, PlusCircle, Search, Users, ClockIcon, Loader2, CalendarDays, MapPin } from 'lucide-react'; // Added MapPin
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -23,7 +23,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
-import { type ClassSession, DAYS_OF_WEEK, MOCK_LOCATIONS, type Location, type Student, DayOfWeek } from '@/types';
+import { type ClassSession, DAYS_OF_WEEK, type Location, type Student, DayOfWeek } from '@/types';
 import { db } from '@/firebase';
 import { collection, addDoc, onSnapshot, query, where, orderBy } from 'firebase/firestore';
 
@@ -44,29 +44,39 @@ export default function NovaAulaConfigPage() {
   const [activeLocations, setActiveLocations] = useState<Location[]>([]);
   const [activeStudents, setActiveStudents] = useState<Student[]>([]);
   const [isLoadingStudents, setIsLoadingStudents] = useState(true);
+  const [isLoadingLocations, setIsLoadingLocations] = useState(true);
 
   useEffect(() => {
-    setActiveLocations(MOCK_LOCATIONS.filter(loc => loc.status === 'active'));
-    
+    setIsLoadingLocations(true);
+    const locationsCollectionRef = collection(db, 'locations');
+    const qLocations = query(locationsCollectionRef, where('status', '==', 'active'), orderBy('name', 'asc'));
+    const unsubscribeLocations = onSnapshot(qLocations, (snapshot) => {
+      const locationsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Location));
+      setActiveLocations(locationsData);
+      setIsLoadingLocations(false);
+    }, (error) => {
+      console.error("Error fetching active locations: ", error);
+      toast({ title: "Erro ao Carregar Locais", variant: "destructive" });
+      setIsLoadingLocations(false);
+    });
+
     setIsLoadingStudents(true);
     const studentsCollectionRef = collection(db, 'students');
-    const q = query(studentsCollectionRef, where('status', '==', 'active'), orderBy('name', 'asc'));
-
-    const unsubscribeStudents = onSnapshot(q, (snapshot) => {
+    const qStudents = query(studentsCollectionRef, where('status', '==', 'active'), orderBy('name', 'asc'));
+    const unsubscribeStudents = onSnapshot(qStudents, (snapshot) => {
       const studentsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Student));
       setActiveStudents(studentsData);
       setIsLoadingStudents(false);
     }, (error) => {
       console.error("Error fetching active students: ", error);
-      toast({
-        title: "Erro ao Carregar Alunos",
-        description: "Não foi possível buscar os dados dos alunos ativos.",
-        variant: "destructive",
-      });
+      toast({ title: "Erro ao Carregar Alunos", variant: "destructive" });
       setIsLoadingStudents(false);
     });
 
-    return () => unsubscribeStudents();
+    return () => {
+      unsubscribeLocations();
+      unsubscribeStudents();
+    };
   }, [toast]);
 
   const { control, handleSubmit, formState: { errors, isSubmitting }, watch } = useForm<ClassSessionFormData>({
@@ -81,8 +91,6 @@ export default function NovaAulaConfigPage() {
     },
   });
 
-  const enrolledStudentIds = watch('enrolledStudentIds') || [];
-
   const onSubmit = async (data: ClassSessionFormData) => {
     if (data.startTime >= data.endTime) {
       toast({
@@ -96,7 +104,7 @@ export default function NovaAulaConfigPage() {
     try {
       const classSessionData: Omit<ClassSession, 'id'> = {
         ...data,
-        daysOfWeek: data.daysOfWeek.sort((a, b) => DAYS_OF_WEEK.indexOf(a) - DAYS_OF_WEEK.indexOf(b)), // Ensure consistent order
+        daysOfWeek: data.daysOfWeek.sort((a, b) => DAYS_OF_WEEK.indexOf(a) - DAYS_OF_WEEK.indexOf(b)), 
         enrolledStudentIds: data.enrolledStudentIds || [],
       };
       await addDoc(collection(db, 'classSessions'), classSessionData);
@@ -192,16 +200,16 @@ export default function NovaAulaConfigPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="location">Local</Label>
+              <Label htmlFor="location" className="flex items-center"><MapPin className="mr-1 h-4 w-4"/>Local</Label>
               <div className="flex items-center gap-2">
                 <div className="flex-grow">
                   <Controller
                     name="location"
                     control={control}
                     render={({ field }) => (
-                        <Select onValueChange={field.onChange} value={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value} disabled={isLoadingLocations}>
                             <SelectTrigger id="location">
-                                <SelectValue placeholder="Selecione o local" />
+                                <SelectValue placeholder={isLoadingLocations ? "Carregando locais..." : "Selecione o local"} />
                             </SelectTrigger>
                             <SelectContent>
                                 {activeLocations.length > 0 ? (
@@ -295,7 +303,7 @@ export default function NovaAulaConfigPage() {
              <Button variant="outline" type="button" onClick={() => router.back()}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={isSubmitting || isLoadingStudents} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+            <Button type="submit" disabled={isSubmitting || isLoadingStudents || isLoadingLocations} className="bg-primary hover:bg-primary/90 text-primary-foreground">
               <Save className="mr-2 h-4 w-4" />
               {isSubmitting ? 'Salvando...' : 'Salvar Configuração'}
             </Button>
@@ -305,4 +313,3 @@ export default function NovaAulaConfigPage() {
     </div>
   );
 }
-

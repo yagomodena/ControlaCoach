@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
-import { ChevronLeft, ChevronRight, Users, Edit, PlusCircle, Clock, Trash2, Search, UserCircle, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Users, Edit, PlusCircle, Clock, Trash2, Search, UserCircle, Loader2, MapPin } from "lucide-react"; // Added MapPin
 import Link from 'next/link';
 import { 
   Dialog,
@@ -37,10 +37,10 @@ import {
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { BookedClass, DailyAvailability, Student, Location, DayOfWeek } from '@/types';
-import { INITIAL_MOCK_BOOKED_CLASSES, MOCK_COACH_AVAILABILITY, MOCK_LOCATIONS, getDayOfWeekName, DAYS_OF_WEEK } from '@/types';
+import { INITIAL_MOCK_BOOKED_CLASSES, MOCK_COACH_AVAILABILITY, getDayOfWeekName, DAYS_OF_WEEK } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/firebase';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, where } from 'firebase/firestore';
 
 interface TimeSlot {
   time: string; 
@@ -79,13 +79,14 @@ export default function AgendaPage() {
   const [activeStudentsList, setActiveStudentsList] = useState<Student[]>([]);
   const [activeLocations, setActiveLocations] = useState<Location[]>([]);
   const [isLoadingStudents, setIsLoadingStudents] = useState(true);
+  const [isLoadingLocations, setIsLoadingLocations] = useState(true);
 
   useEffect(() => {
     setIsLoadingStudents(true);
     const studentsCollectionRef = collection(db, 'students');
-    const q = query(studentsCollectionRef, orderBy('name', 'asc'));
+    const qStudents = query(studentsCollectionRef, orderBy('name', 'asc'));
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribeStudents = onSnapshot(qStudents, (snapshot) => {
       const studentsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Student));
       setAllStudents(studentsData);
       setActiveStudentsList(studentsData.filter(s => s.status === 'active'));
@@ -100,8 +101,23 @@ export default function AgendaPage() {
       setIsLoadingStudents(false);
     });
 
-    setActiveLocations(MOCK_LOCATIONS.filter(loc => loc.status === 'active'));
-    return () => unsubscribe();
+    setIsLoadingLocations(true);
+    const locationsCollectionRef = collection(db, 'locations');
+    const qLocations = query(locationsCollectionRef, where('status', '==', 'active'), orderBy('name', 'asc'));
+    const unsubscribeLocations = onSnapshot(qLocations, (snapshot) => {
+      const locationsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Location));
+      setActiveLocations(locationsData);
+      setIsLoadingLocations(false);
+    }, (error) => {
+      console.error("Error fetching active locations: ", error);
+      toast({ title: "Erro ao Carregar Locais", variant: "destructive" });
+      setIsLoadingLocations(false);
+    });
+
+    return () => {
+        unsubscribeStudents();
+        unsubscribeLocations();
+    };
   }, [toast]);
 
   const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
@@ -441,7 +457,7 @@ export default function AgendaPage() {
             <CardDescription>Disponibilidade e aulas do dia.</CardDescription>
           </CardHeader>
           <CardContent>
-            {isLoadingStudents ? (
+            {isLoadingStudents || isLoadingLocations ? (
               <div className="flex justify-center items-center py-8">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 <p className="ml-2 text-muted-foreground">Carregando dados...</p>
@@ -469,7 +485,7 @@ export default function AgendaPage() {
                       {slot.isBooked && slot.bookedClassDetails && slot.bookingType === 'one-off' && (
                         <div className="mt-2 pl-6">
                           <p className="font-medium text-foreground">{slot.bookedClassDetails.title}</p>
-                          <p className="text-xs text-muted-foreground">{slot.bookedClassDetails.location}</p>
+                          <p className="text-xs text-muted-foreground flex items-center"><MapPin className="h-3 w-3 mr-1"/>{slot.bookedClassDetails.location}</p>
                           <div className="mt-1 flex items-center text-xs text-muted-foreground">
                             <Users className="h-3 w-3 mr-1" /> {slot.bookedClassDetails.studentsCount} aluno(s)
                           </div>
@@ -482,7 +498,7 @@ export default function AgendaPage() {
                         <div className="mt-2 pl-6">
                            <p className="font-medium text-foreground">Aula Recorrente</p>
                            <p className="text-sm text-foreground/90">{slot.recurringStudentDetails.studentName}</p>
-                           <p className="text-xs text-muted-foreground">{slot.recurringStudentDetails.location}</p>
+                           <p className="text-xs text-muted-foreground flex items-center"><MapPin className="h-3 w-3 mr-1"/>{slot.recurringStudentDetails.location}</p>
                            <div className="mt-1 flex items-center text-xs text-muted-foreground">
                              <UserCircle className="h-3 w-3 mr-1" /> Aluno Fixo
                            </div>
@@ -516,7 +532,11 @@ export default function AgendaPage() {
           <div className="py-4">
             <Label className="mb-2 block">Alunos Ativos</Label>
             <ScrollArea className="h-[200px] w-full rounded-md border p-4">
-              {activeStudentsList.length > 0 ? (
+              {isLoadingStudents ? (
+                <div className="flex justify-center items-center h-full">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                </div>
+              ) : activeStudentsList.length > 0 ? (
                 activeStudentsList.map(student => (
                   <div key={student.id} className="flex items-center space-x-2 mb-2">
                     <Checkbox
@@ -538,7 +558,7 @@ export default function AgendaPage() {
             <DialogClose asChild>
               <Button type="button" variant="outline">Cancelar</Button>
             </DialogClose>
-            <Button type="button" onClick={handleConfirmBooking} disabled={selectedStudentIdsForBooking.length === 0}>
+            <Button type="button" onClick={handleConfirmBooking} disabled={selectedStudentIdsForBooking.length === 0 || isLoadingStudents}>
               Confirmar Agendamento
             </Button>
           </DialogFooter>
@@ -565,14 +585,15 @@ export default function AgendaPage() {
                 />
               </div>
               <div>
-                <Label htmlFor="editClassLocation" className="mb-1 block">Local da Aula</Label>
+                <Label htmlFor="editClassLocation" className="mb-1 block flex items-center"><MapPin className="h-4 w-4 mr-1"/>Local da Aula</Label>
                 <div className="flex items-center gap-2">
                   <Select
                     value={editedClassLocation}
                     onValueChange={setEditedClassLocation}
+                    disabled={isLoadingLocations}
                   >
                     <SelectTrigger id="editClassLocation" className="flex-grow">
-                      <SelectValue placeholder="Selecione o local" />
+                      <SelectValue placeholder={isLoadingLocations ? "Carregando..." : "Selecione o local"} />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="A definir">A definir</SelectItem>
@@ -598,7 +619,11 @@ export default function AgendaPage() {
               <div>
                 <Label className="mb-2 block">Alunos Inscritos</Label>
                 <ScrollArea className="h-[180px] w-full rounded-md border p-4">
-                  {activeStudentsList.length > 0 ? (
+                 {isLoadingStudents ? (
+                    <div className="flex justify-center items-center h-full">
+                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                    </div>
+                  ) : activeStudentsList.length > 0 ? (
                     activeStudentsList.map(student => (
                       <div key={student.id} className="flex items-center space-x-2 mb-2">
                         <Checkbox
@@ -626,7 +651,7 @@ export default function AgendaPage() {
                 <DialogClose asChild>
                 <Button type="button" variant="outline">Cancelar</Button>
                 </DialogClose>
-                <Button type="button" onClick={handleSaveChangesToClass} disabled={editedClassStudentIds.length === 0 || !editedClassTitle || !editedClassLocation}>
+                <Button type="button" onClick={handleSaveChangesToClass} disabled={editedClassStudentIds.length === 0 || !editedClassTitle || !editedClassLocation || isLoadingStudents || isLoadingLocations}>
                 Salvar Alterações
                 </Button>
             </div>
@@ -637,4 +662,3 @@ export default function AgendaPage() {
     </div>
   );
 }
-

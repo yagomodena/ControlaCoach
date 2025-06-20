@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Save, PlusCircle, Search, CalendarClock, MapPinIcon, ClockIcon, DollarSign } from 'lucide-react';
+import { ArrowLeft, Save, PlusCircle, Search, CalendarClock, MapPinIcon, ClockIcon, DollarSign, Loader2 } from 'lucide-react'; // Added Loader2
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -23,11 +23,11 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
-import { MOCK_PLANS, MOCK_LOCATIONS, type Plan, type Location, type DayOfWeek, DAYS_OF_WEEK } from '@/types';
+import { MOCK_PLANS, type Plan, type Location, type DayOfWeek, DAYS_OF_WEEK } from '@/types'; // Removed MOCK_LOCATIONS
 import { AddPlanDialog } from '@/components/dialogs/add-plan-dialog';
 import { ManagePlansDialog } from '@/components/dialogs/manage-plans-dialog';
 import { db } from '@/firebase';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, where, orderBy } from 'firebase/firestore';
 
 const NO_LOCATION_VALUE = "__NO_LOCATION__";
 
@@ -58,6 +58,7 @@ export default function NovoAlunoPage() {
   const { toast } = useToast();
   const [activePlans, setActivePlans] = useState<Plan[]>([]);
   const [activeLocations, setActiveLocations] = useState<Location[]>([]);
+  const [isLoadingLocations, setIsLoadingLocations] = useState(true);
   const [isAddPlanDialogOpen, setIsAddPlanDialogOpen] = useState(false);
   const [isManagePlansDialogOpen, setIsManagePlansDialogOpen] = useState(false);
 
@@ -65,14 +66,23 @@ export default function NovoAlunoPage() {
     setActivePlans(MOCK_PLANS.filter(p => p.status === 'active'));
   };
 
-  const refreshActiveLocations = () => {
-    setActiveLocations(MOCK_LOCATIONS.filter(loc => loc.status === 'active'));
-  };
-
   useEffect(() => {
     refreshActivePlans();
-    refreshActiveLocations();
-  }, []);
+    
+    setIsLoadingLocations(true);
+    const locationsCollectionRef = collection(db, 'locations');
+    const qLocations = query(locationsCollectionRef, where('status', '==', 'active'), orderBy('name', 'asc'));
+    const unsubscribeLocations = onSnapshot(qLocations, (snapshot) => {
+      const locationsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Location));
+      setActiveLocations(locationsData);
+      setIsLoadingLocations(false);
+    }, (error) => {
+      console.error("Error fetching active locations: ", error);
+      toast({ title: "Erro ao Carregar Locais", variant: "destructive" });
+      setIsLoadingLocations(false);
+    });
+    return () => unsubscribeLocations();
+  }, [toast]);
 
   const { control, handleSubmit, formState: { errors, isSubmitting }, setValue, watch } = useForm<StudentFormData>({
     resolver: zodResolver(studentSchema),
@@ -85,7 +95,7 @@ export default function NovoAlunoPage() {
       objective: '',
       recurringClassTime: '',
       recurringClassDays: [],
-      recurringClassLocation: undefined,
+      recurringClassLocation: NO_LOCATION_VALUE, // Default to "no location"
       paymentStatus: 'pendente',
       dueDate: '',
       amountDue: undefined,
@@ -96,7 +106,7 @@ export default function NovoAlunoPage() {
 
   const onSubmit = async (data: StudentFormData) => {
     try {
-      const studentDataForFirestore: Record<string, any> = {
+      const studentDataToSave: Record<string, any> = {
         name: data.name,
         phone: data.phone,
         plan: data.plan,
@@ -105,41 +115,24 @@ export default function NovoAlunoPage() {
         registrationDate: new Date().toISOString(),
         attendanceHistory: [],
       };
-
-      if (data.objective && data.objective.trim() !== '') {
-        studentDataForFirestore.objective = data.objective.trim();
-      }
-      if (data.recurringClassTime && data.recurringClassTime.trim() !== '') {
-        studentDataForFirestore.recurringClassTime = data.recurringClassTime.trim();
-      }
-      if (data.recurringClassDays && data.recurringClassDays.length > 0) {
-        studentDataForFirestore.recurringClassDays = data.recurringClassDays;
-      }
-
-      let finalRecurringClassLocation = data.recurringClassLocation;
-      if (data.recurringClassLocation === NO_LOCATION_VALUE || !data.recurringClassLocation || data.recurringClassLocation.trim() === '') {
-        finalRecurringClassLocation = undefined;
-      }
-      if (finalRecurringClassLocation) {
-        studentDataForFirestore.recurringClassLocation = finalRecurringClassLocation;
+      
+      if (data.objective && data.objective.trim() !== '') studentDataToSave.objective = data.objective.trim();
+      if (data.recurringClassTime && data.recurringClassTime.trim() !== '') studentDataToSave.recurringClassTime = data.recurringClassTime.trim();
+      if (data.recurringClassDays && data.recurringClassDays.length > 0) studentDataToSave.recurringClassDays = data.recurringClassDays;
+      
+      if (data.recurringClassLocation && data.recurringClassLocation !== NO_LOCATION_VALUE && data.recurringClassLocation.trim() !== '') {
+        studentDataToSave.recurringClassLocation = data.recurringClassLocation;
+      } else {
+        studentDataToSave.recurringClassLocation = null; 
       }
 
-      studentDataForFirestore.paymentStatus = data.paymentStatus || 'pendente';
+      studentDataToSave.paymentStatus = data.paymentStatus || 'pendente';
+      if (data.dueDate && data.dueDate.trim() !== '') studentDataToSave.dueDate = data.dueDate;
+      if (typeof data.amountDue === 'number' && !isNaN(data.amountDue)) studentDataToSave.amountDue = data.amountDue;
+      if (data.paymentMethod) studentDataToSave.paymentMethod = data.paymentMethod;
+      if (data.lastPaymentDate && data.lastPaymentDate.trim() !== '') studentDataToSave.lastPaymentDate = data.lastPaymentDate;
 
-      if (data.dueDate && data.dueDate.trim() !== '') {
-        studentDataForFirestore.dueDate = data.dueDate;
-      }
-      if (typeof data.amountDue === 'number' && !isNaN(data.amountDue)) {
-        studentDataForFirestore.amountDue = data.amountDue;
-      }
-      if (data.paymentMethod) {
-        studentDataForFirestore.paymentMethod = data.paymentMethod;
-      }
-      if (data.lastPaymentDate && data.lastPaymentDate.trim() !== '') {
-        studentDataForFirestore.lastPaymentDate = data.lastPaymentDate;
-      }
-
-      await addDoc(collection(db, 'students'), studentDataForFirestore);
+      await addDoc(collection(db, 'students'), studentDataToSave);
 
       toast({
         title: "Aluno Adicionado!",
@@ -323,9 +316,9 @@ export default function NovoAlunoPage() {
                     name="recurringClassLocation"
                     control={control}
                     render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value || NO_LOCATION_VALUE}>
+                      <Select onValueChange={field.onChange} value={field.value ?? NO_LOCATION_VALUE} disabled={isLoadingLocations}>
                         <SelectTrigger id="recurringClassLocation">
-                          <SelectValue placeholder="Selecione o local" />
+                          <SelectValue placeholder={isLoadingLocations ? "Carregando..." : "Selecione o local"} />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value={NO_LOCATION_VALUE}>Nenhum local específico</SelectItem>
@@ -435,7 +428,7 @@ export default function NovoAlunoPage() {
               <Button variant="outline" type="button" onClick={() => router.back()}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={isSubmitting} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+              <Button type="submit" disabled={isSubmitting || isLoadingLocations} className="bg-primary hover:bg-primary/90 text-primary-foreground">
                 <Save className="mr-2 h-4 w-4" />
                 {isSubmitting ? 'Salvando...' : 'Salvar Aluno'}
               </Button>

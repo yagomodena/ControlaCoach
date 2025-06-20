@@ -16,7 +16,7 @@ import { Separator } from '@/components/ui/separator';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { type ClassSession, DAYS_OF_WEEK, MOCK_LOCATIONS, type Location, type Student, DayOfWeek } from '@/types';
+import { type ClassSession, DAYS_OF_WEEK, type Location, type Student, DayOfWeek } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/firebase';
 import { doc, getDoc, updateDoc, collection, onSnapshot, query, where, orderBy } from 'firebase/firestore';
@@ -45,29 +45,39 @@ export default function AulaDetalhePage() {
   const [activeLocations, setActiveLocations] = useState<Location[]>([]);
   const [activeStudents, setActiveStudents] = useState<Student[]>([]);
   const [isLoadingStudents, setIsLoadingStudents] = useState(true);
+  const [isLoadingLocations, setIsLoadingLocations] = useState(true);
 
   useEffect(() => {
-    setActiveLocations(MOCK_LOCATIONS.filter(loc => loc.status === 'active'));
+    setIsLoadingLocations(true);
+    const locationsCollectionRef = collection(db, 'locations');
+    const qLocations = query(locationsCollectionRef, where('status', '==', 'active'), orderBy('name', 'asc'));
+    const unsubscribeLocations = onSnapshot(qLocations, (snapshot) => {
+      const locationsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Location));
+      setActiveLocations(locationsData);
+      setIsLoadingLocations(false);
+    }, (error) => {
+      console.error("Error fetching active locations: ", error);
+      toast({ title: "Erro ao Carregar Locais", variant: "destructive" });
+      setIsLoadingLocations(false);
+    });
     
     setIsLoadingStudents(true);
     const studentsCollectionRef = collection(db, 'students');
-    const q = query(studentsCollectionRef, where('status', '==', 'active'), orderBy('name', 'asc'));
-
-    const unsubscribeStudents = onSnapshot(q, (snapshot) => {
+    const qStudents = query(studentsCollectionRef, where('status', '==', 'active'), orderBy('name', 'asc'));
+    const unsubscribeStudents = onSnapshot(qStudents, (snapshot) => {
       const studentsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Student));
       setActiveStudents(studentsData);
       setIsLoadingStudents(false);
     }, (error) => {
       console.error("Error fetching active students: ", error);
-      toast({
-        title: "Erro ao Carregar Alunos",
-        description: "Não foi possível buscar os dados dos alunos ativos.",
-        variant: "destructive",
-      });
+      toast({ title: "Erro ao Carregar Alunos", variant: "destructive" });
       setIsLoadingStudents(false);
     });
 
-    return () => unsubscribeStudents();
+    return () => {
+      unsubscribeLocations();
+      unsubscribeStudents();
+    };
   }, [toast]);
 
   const { control, handleSubmit, reset, formState: { errors, isSubmitting }, watch } = useForm<ClassSessionFormData>({
@@ -121,7 +131,7 @@ export default function AulaDetalhePage() {
       const classSessionDocRef = doc(db, 'classSessions', classId);
       const updatePayload: Omit<ClassSession, 'id'> = {
          ...data,
-         daysOfWeek: data.daysOfWeek.sort((a, b) => DAYS_OF_WEEK.indexOf(a) - DAYS_OF_WEEK.indexOf(b)), // Ensure consistent order
+         daysOfWeek: data.daysOfWeek.sort((a, b) => DAYS_OF_WEEK.indexOf(a) - DAYS_OF_WEEK.indexOf(b)), 
          maxStudents: Number(data.maxStudents),
          enrolledStudentIds: data.enrolledStudentIds || [],
       };
@@ -146,7 +156,7 @@ export default function AulaDetalhePage() {
     }
   };
 
-  if (isLoading || isLoadingStudents) {
+  if (isLoading || isLoadingStudents || isLoadingLocations) {
     return (
       <div className="container mx-auto py-8 flex flex-col items-center justify-center min-h-[calc(100vh-150px)]">
         <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
@@ -258,16 +268,16 @@ export default function AulaDetalhePage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="location">Local</Label>
+                  <Label htmlFor="location" className="flex items-center"><MapPin className="mr-1 h-4 w-4"/>Local</Label>
                   <div className="flex items-center gap-2">
                     <div className="flex-grow">
                       <Controller 
                           name="location" 
                           control={control} 
                           render={({ field }) => (
-                              <Select onValueChange={field.onChange} value={field.value}>
+                              <Select onValueChange={field.onChange} value={field.value} disabled={isLoadingLocations}>
                                   <SelectTrigger id="location">
-                                      <SelectValue placeholder="Selecione o local" />
+                                      <SelectValue placeholder={isLoadingLocations ? "Carregando locais..." : "Selecione o local"} />
                                   </SelectTrigger>
                                   <SelectContent>
                                       {activeLocations.length > 0 ? (
@@ -355,7 +365,7 @@ export default function AulaDetalhePage() {
             </CardContent>
             <CardFooter className="flex justify-end gap-2">
               <Button variant="outline" type="button" onClick={() => { setIsEditMode(false); router.replace(`/aulas/${classId}`); reset({...classSession, daysOfWeek: classSession?.daysOfWeek || [], enrolledStudentIds: classSession?.enrolledStudentIds || [] }); }}>Cancelar</Button>
-              <Button type="submit" disabled={isSubmitting || isLoadingStudents} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+              <Button type="submit" disabled={isSubmitting || isLoadingStudents || isLoadingLocations} className="bg-primary hover:bg-primary/90 text-primary-foreground">
                 <Save className="mr-2 h-4 w-4" />{isSubmitting ? 'Salvando...' : 'Salvar Alterações'}
               </Button>
             </CardFooter>
@@ -389,4 +399,3 @@ export default function AulaDetalhePage() {
     </div>
   );
 }
-

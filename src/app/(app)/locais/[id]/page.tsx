@@ -4,7 +4,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Edit3, Save, MapPin } from 'lucide-react';
+import { ArrowLeft, Edit3, Save, MapPin, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,8 +15,9 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import type { Location } from '@/types';
-import { MOCK_LOCATIONS } from '@/types'; 
 import { useToast } from '@/hooks/use-toast';
+import { db } from '@/firebase';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 
 const locationSchema = z.object({
   name: z.string().min(3, { message: 'Nome do local deve ter pelo menos 3 caracteres.' }),
@@ -41,16 +42,29 @@ export default function LocalDetailPage() {
   });
 
   useEffect(() => {
+    if (!locationId) return;
     setIsLoading(true);
-    const foundLocation = MOCK_LOCATIONS.find(loc => loc.id === locationId);
-    if (foundLocation) {
-      setLocation(foundLocation);
-      reset(foundLocation); 
-    } else {
-      toast({ title: "Erro", description: "Local não encontrado.", variant: "destructive" });
-      router.push('/locais');
-    }
-    setIsLoading(false);
+    const fetchLocation = async () => {
+      try {
+        const locationDocRef = doc(db, 'locations', locationId);
+        const locationDocSnap = await getDoc(locationDocRef);
+
+        if (locationDocSnap.exists()) {
+          const locationData = { ...locationDocSnap.data(), id: locationDocSnap.id } as Location;
+          setLocation(locationData);
+          reset(locationData); 
+        } else {
+          toast({ title: "Erro", description: "Local não encontrado.", variant: "destructive" });
+          router.push('/locais');
+        }
+      } catch (error) {
+        console.error("Error fetching location details: ", error);
+        toast({ title: "Erro ao Carregar", description: "Não foi possível buscar os dados do local.", variant: "destructive" });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchLocation();
   }, [locationId, reset, router, toast]);
 
   useEffect(() => {
@@ -58,25 +72,37 @@ export default function LocalDetailPage() {
   }, [searchParams]);
 
   const onSubmit = async (data: LocationFormData) => {
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    const locationIndex = MOCK_LOCATIONS.findIndex(loc => loc.id === locationId);
-    if (locationIndex !== -1 && location) {
-        const updatedLocation = { ...location, ...data };
-        MOCK_LOCATIONS[locationIndex] = updatedLocation;
-        setLocation(updatedLocation);
-    }
+    if (!locationId || !location) return;
+    try {
+      const locationDocRef = doc(db, 'locations', locationId);
+      await updateDoc(locationDocRef, data);
+      
+      const updatedLocation = { ...location, ...data };
+      setLocation(updatedLocation);
 
-    toast({
-      title: "Local Atualizado!",
-      description: `O local "${data.name}" foi atualizado com sucesso.`,
-    });
-    setIsEditMode(false);
-    router.replace(`/locais/${locationId}`); 
+      toast({
+        title: "Local Atualizado!",
+        description: `O local "${data.name}" foi atualizado com sucesso.`,
+      });
+      setIsEditMode(false);
+      router.replace(`/locais/${locationId}`); 
+    } catch (error) {
+        console.error("Error updating location: ", error);
+        toast({
+            title: "Erro ao Atualizar",
+            description: "Não foi possível atualizar os dados do local. Tente novamente.",
+            variant: "destructive",
+        });
+    }
   };
 
   if (isLoading) {
-    return <div className="container mx-auto py-8 text-center">Carregando dados do local...</div>;
+    return (
+        <div className="container mx-auto py-8 flex flex-col items-center justify-center min-h-[calc(100vh-150px)]">
+            <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+            <p className="text-muted-foreground">Carregando dados do local...</p>
+        </div>
+    );
   }
 
   if (!location) {

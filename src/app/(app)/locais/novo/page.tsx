@@ -20,7 +20,9 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
-import { MOCK_LOCATIONS, type Location } from '@/types';
+import { type Location } from '@/types';
+import { db } from '@/firebase';
+import { collection, addDoc } from 'firebase/firestore';
 
 const locationSchema = z.object({
   name: z.string().min(3, { message: 'Nome do local deve ter pelo menos 3 caracteres.' }),
@@ -41,19 +43,21 @@ export default function NovoLocalPage() {
   });
 
   const onSubmit = async (data: LocationFormData) => {
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
-
-    const newLocation: Location = {
-      id: crypto.randomUUID(), 
-      ...data,
-    };
-    MOCK_LOCATIONS.push(newLocation); 
-    
-    toast({
-      title: "Local Adicionado!",
-      description: `O local "${data.name}" foi cadastrado com sucesso.`,
-    });
-    router.push('/locais'); 
+    try {
+      await addDoc(collection(db, 'locations'), data);
+      toast({
+        title: "Local Adicionado!",
+        description: `O local "${data.name}" foi cadastrado com sucesso.`,
+      });
+      router.push('/locais'); 
+    } catch (error) {
+        console.error("Error adding location: ", error);
+        toast({
+            title: "Erro ao Adicionar Local",
+            description: "Não foi possível cadastrar o local. Tente novamente.",
+            variant: "destructive",
+        });
+    }
   };
 
   return (
