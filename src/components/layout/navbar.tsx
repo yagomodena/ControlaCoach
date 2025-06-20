@@ -1,6 +1,7 @@
 
 'use client';
 
+import Link from 'next/link'; // Import Link
 import { Menu, Search, UserCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,7 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Logo } from '../logo';
 import { useSidebar } from '../ui/sidebar';
-import { auth } from '@/firebase'; // Import Firebase auth
+import { auth } from '@/firebase'; 
 import { signOut } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
@@ -34,7 +35,7 @@ export function Navbar() {
         title: 'Logout Realizado',
         description: 'Você foi desconectado com sucesso.',
       });
-      router.push('/login'); // Redirect to login page after logout
+      router.push('/login'); 
     } catch (error: any) {
       console.error('Logout Error:', error);
       toast({
@@ -79,8 +80,16 @@ export function Navbar() {
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Minha Conta</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>Perfil</DropdownMenuItem>
-            <DropdownMenuItem>Configurações</DropdownMenuItem>
+            <Link href="/configuracoes" passHref>
+              <DropdownMenuItem asChild>
+                <span>Perfil</span>
+              </DropdownMenuItem>
+            </Link>
+            <Link href="/configuracoes" passHref>
+              <DropdownMenuItem asChild>
+                <span>Configurações</span>
+              </DropdownMenuItem>
+            </Link>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout}>Sair</DropdownMenuItem>
           </DropdownMenuContent>
@@ -89,3 +98,4 @@ export function Navbar() {
     </header>
   );
 }
+
