@@ -102,7 +102,7 @@ export default function TermosDeUsoPage() {
             <section>
               <h2 className="text-xl font-semibold text-[#0D0D0D] mb-2">8. Limitação de Responsabilidade</h2>
               <p>Em nenhuma circunstância o ControlaCoach, nem seus diretores, funcionários, parceiros, agentes, fornecedores ou afiliados, serão responsáveis por quaisquer danos indiretos, incidentais, especiais, consequenciais ou punitivos, incluindo, sem limitação, perda de lucros, dados, uso, boa vontade ou outras perdas intangíveis.</p>
-            </Solution>
+            </section>
 
             <section>
               <h2 className="text-xl font-semibold text-[#0D0D0D] mb-2">9. Alterações nos Termos</h2>
@@ -111,7 +111,7 @@ export default function TermosDeUsoPage() {
 
             <section>
               <h2 className="text-xl font-semibold text-[#0D0D0D] mb-2">10. Contato</h2>
-              <p>Se você tiver alguma dúvida sobre estes Termos, entre em contato conosco em [Seu Email de Contato Aqui] ou através da nossa <Link href="/contato" className="text-[#FF6B00] hover:underline">página de contato</Link>.</p>
+              <p>Se você tiver alguma dúvida sobre estes Termos, entre em contato conosco em contato@controlacoach.com.br ou através da nossa <Link href="/contato" className="text-[#FF6B00] hover:underline">página de contato</Link>.</p>
             </section>
           </div>
         </div>
