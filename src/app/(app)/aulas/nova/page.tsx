@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Save, PlusCircle, Search, Users, ClockIcon } from 'lucide-react';
+import { ArrowLeft, Save, PlusCircle, Search, Users, ClockIcon, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -23,7 +23,9 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
-import { MOCK_CLASS_SESSIONS, type ClassSession, DAYS_OF_WEEK, MOCK_LOCATIONS, type Location, MOCK_STUDENTS, type Student } from '@/types';
+import { type ClassSession, DAYS_OF_WEEK, MOCK_LOCATIONS, type Location, type Student } from '@/types';
+import { db } from '@/firebase';
+import { collection, addDoc, onSnapshot, query, where, orderBy } from 'firebase/firestore';
 
 const classSessionSchema = z.object({
   dayOfWeek: z.enum(DAYS_OF_WEEK, { required_error: 'Selecione o dia da semana.' }),
@@ -41,11 +43,31 @@ export default function NovaAulaConfigPage() {
   const { toast } = useToast();
   const [activeLocations, setActiveLocations] = useState<Location[]>([]);
   const [activeStudents, setActiveStudents] = useState<Student[]>([]);
+  const [isLoadingStudents, setIsLoadingStudents] = useState(true);
 
   useEffect(() => {
     setActiveLocations(MOCK_LOCATIONS.filter(loc => loc.status === 'active'));
-    setActiveStudents(MOCK_STUDENTS.filter(s => s.status === 'active'));
-  }, []);
+    
+    setIsLoadingStudents(true);
+    const studentsCollectionRef = collection(db, 'students');
+    const q = query(studentsCollectionRef, where('status', '==', 'active'), orderBy('name', 'asc'));
+
+    const unsubscribeStudents = onSnapshot(q, (snapshot) => {
+      const studentsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Student));
+      setActiveStudents(studentsData);
+      setIsLoadingStudents(false);
+    }, (error) => {
+      console.error("Error fetching active students: ", error);
+      toast({
+        title: "Erro ao Carregar Alunos",
+        description: "Não foi possível buscar os dados dos alunos ativos.",
+        variant: "destructive",
+      });
+      setIsLoadingStudents(false);
+    });
+
+    return () => unsubscribeStudents();
+  }, [toast]);
 
   const { control, handleSubmit, formState: { errors, isSubmitting }, watch } = useForm<ClassSessionFormData>({
     resolver: zodResolver(classSessionSchema),
@@ -70,20 +92,27 @@ export default function NovaAulaConfigPage() {
       });
       return;
     }
-    await new Promise(resolve => setTimeout(resolve, 1000)); 
-
-    const newClassSession: ClassSession = {
-      id: crypto.randomUUID(), 
-      ...data,
-      enrolledStudentIds: data.enrolledStudentIds || [],
-    };
-    MOCK_CLASS_SESSIONS.push(newClassSession); 
     
-    toast({
-      title: "Configuração de Aula Adicionada!",
-      description: `Aula de ${data.dayOfWeek} das ${data.startTime} às ${data.endTime} em ${data.location} configurada.`,
-    });
-    router.push('/aulas'); 
+    try {
+      const classSessionData: Omit<ClassSession, 'id'> = {
+        ...data,
+        enrolledStudentIds: data.enrolledStudentIds || [],
+      };
+      await addDoc(collection(db, 'classSessions'), classSessionData);
+      
+      toast({
+        title: "Configuração de Aula Adicionada!",
+        description: `Aula de ${data.dayOfWeek} das ${data.startTime} às ${data.endTime} em ${data.location} configurada.`,
+      });
+      router.push('/aulas'); 
+    } catch (error) {
+      console.error("Error adding class session: ", error);
+      toast({
+        title: "Erro ao Adicionar Configuração",
+        description: "Não foi possível salvar a configuração da aula. Tente novamente.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -205,6 +234,11 @@ export default function NovaAulaConfigPage() {
             <div>
                 <Label className="text-base font-medium flex items-center"><Users className="mr-2 h-5 w-5 text-primary"/>Alunos Inscritos (Padrão)</Label>
                 <p className="text-sm text-muted-foreground mb-3">Selecione os alunos que tipicamente participam desta configuração de aula.</p>
+                {isLoadingStudents ? (
+                    <div className="flex justify-center items-center h-[200px] w-full rounded-md border p-4">
+                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                    </div>
+                ) : (
                 <ScrollArea className="h-[200px] w-full rounded-md border p-4">
                     {activeStudents.length > 0 ? (
                         activeStudents.map(student => (
@@ -238,6 +272,7 @@ export default function NovaAulaConfigPage() {
                         <p className="text-sm text-muted-foreground text-center py-4">Nenhum aluno ativo encontrado para inscrição.</p>
                     )}
                 </ScrollArea>
+                )}
                  {errors.enrolledStudentIds && <p className="text-sm text-destructive mt-1">{errors.enrolledStudentIds.message}</p>}
             </div>
 
@@ -247,7 +282,7 @@ export default function NovaAulaConfigPage() {
              <Button variant="outline" type="button" onClick={() => router.back()}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={isSubmitting} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+            <Button type="submit" disabled={isSubmitting || isLoadingStudents} className="bg-primary hover:bg-primary/90 text-primary-foreground">
               <Save className="mr-2 h-4 w-4" />
               {isSubmitting ? 'Salvando...' : 'Salvar Configuração'}
             </Button>

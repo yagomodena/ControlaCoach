@@ -11,18 +11,18 @@ export interface Student {
   technicalLevel: 'Iniciante' | 'Intermediário' | 'Avançado';
   status: 'active' | 'inactive';
   registrationDate: string; // ISO String
-  objective?: string;
+  objective?: string | null;
   attendanceHistory?: { date: string; classId: string; bookedClassId: string; status: 'present' | 'absent' | 'rescheduled' | 'pending' }[];
   
-  paymentStatus?: 'pago' | 'pendente' | 'vencido';
-  dueDate?: string; // ISO string or YYYY-MM-DD
-  amountDue?: number;
-  paymentMethod?: 'PIX' | 'Dinheiro' | 'Cartão';
-  lastPaymentDate?: string; // ISO String
+  paymentStatus?: 'pago' | 'pendente' | 'vencido' | null;
+  dueDate?: string | null; // ISO string or YYYY-MM-DD
+  amountDue?: number | null;
+  paymentMethod?: 'PIX' | 'Dinheiro' | 'Cartão' | null;
+  lastPaymentDate?: string | null; // ISO String
 
-  recurringClassTime?: string; // HH:MM
-  recurringClassDays?: DayOfWeek[]; 
-  recurringClassLocation?: string; 
+  recurringClassTime?: string | null; // HH:MM
+  recurringClassDays?: DayOfWeek[] | null; 
+  recurringClassLocation?: string | null; 
 }
 
 export interface Plan {
@@ -34,7 +34,7 @@ export interface Plan {
 }
 
 export interface ClassSession {
-  id: string;
+  id: string; // Firestore document ID
   dayOfWeek: DayOfWeek;
   startTime: string; 
   endTime: string;   
@@ -94,16 +94,6 @@ export interface Location {
   name: string;
   status: 'active' | 'inactive';
 }
-
-// MOCK_STUDENTS is removed as students will be fetched from Firestore.
-
-export let MOCK_CLASS_SESSIONS: ClassSession[] = [
-  { id: 'c1', dayOfWeek: 'Segunda', startTime: '18:00', endTime: '19:00', location: 'Praia Central', maxStudents: 10, enrolledStudentIds: ['1', '2', '4'] },
-  { id: 'c2', dayOfWeek: 'Segunda', startTime: '19:00', endTime: '20:00', location: 'Praia Central', maxStudents: 10, enrolledStudentIds: ['2'] },
-  { id: 'c3', dayOfWeek: 'Terça', startTime: '07:00', endTime: '08:30', location: 'Quadra Coberta A', maxStudents: 12, enrolledStudentIds: [] },
-  { id: 'c4', dayOfWeek: 'Quarta', startTime: '18:30', endTime: '20:00', location: 'Praia do Tombo', maxStudents: 8, enrolledStudentIds: ['1', '4', '5'] },
-  { id: 'c5', dayOfWeek: 'Quinta', startTime: '07:00', endTime: '08:00', location: 'Quadra Coberta B', maxStudents: 12, enrolledStudentIds: [] },
-];
 
 
 export let INITIAL_MOCK_BOOKED_CLASSES: BookedClass[] = [

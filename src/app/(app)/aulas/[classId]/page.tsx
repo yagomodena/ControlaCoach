@@ -16,10 +16,10 @@ import { Separator } from '@/components/ui/separator';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { MOCK_CLASS_SESSIONS, type ClassSession, DAYS_OF_WEEK, MOCK_LOCATIONS, type Location, type Student } from '@/types';
+import { type ClassSession, DAYS_OF_WEEK, MOCK_LOCATIONS, type Location, type Student } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/firebase';
-import { collection, onSnapshot, query, where, orderBy } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, onSnapshot, query, where, orderBy } from 'firebase/firestore';
 
 const classSessionSchema = z.object({
   dayOfWeek: z.enum(DAYS_OF_WEEK, { required_error: 'Selecione o dia da semana.' }),
@@ -77,16 +77,29 @@ export default function AulaDetalhePage() {
   const enrolledStudentIds = watch('enrolledStudentIds') || [];
 
   useEffect(() => {
+    if (!classId) return;
     setIsLoading(true);
-    const foundClassSession = MOCK_CLASS_SESSIONS.find(cs => cs.id === classId);
-    if (foundClassSession) {
-      setClassSession(foundClassSession);
-      reset({...foundClassSession, enrolledStudentIds: foundClassSession.enrolledStudentIds || []}); 
-    } else {
-      toast({ title: "Erro", description: "Configuração de aula não encontrada.", variant: "destructive" });
-      router.push('/aulas');
-    }
-    setIsLoading(false);
+    const fetchClassSession = async () => {
+      try {
+        const classSessionDocRef = doc(db, 'classSessions', classId);
+        const classSessionDocSnap = await getDoc(classSessionDocRef);
+
+        if (classSessionDocSnap.exists()) {
+          const sessionData = { ...classSessionDocSnap.data(), id: classSessionDocSnap.id } as ClassSession;
+          setClassSession(sessionData);
+          reset({...sessionData, enrolledStudentIds: sessionData.enrolledStudentIds || []}); 
+        } else {
+          toast({ title: "Erro", description: "Configuração de aula não encontrada.", variant: "destructive" });
+          router.push('/aulas');
+        }
+      } catch (error) {
+        console.error("Error fetching class session details: ", error);
+        toast({ title: "Erro ao Carregar", description: "Não foi possível buscar os dados da configuração de aula.", variant: "destructive" });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchClassSession();
   }, [classId, reset, router, toast]);
 
   useEffect(() => {
@@ -94,6 +107,7 @@ export default function AulaDetalhePage() {
   }, [searchParams]);
 
   const onSubmit = async (data: ClassSessionFormData) => {
+    if (!classId) return;
     if (data.startTime >= data.endTime) {
       toast({
         title: "Erro de Validação",
@@ -102,26 +116,33 @@ export default function AulaDetalhePage() {
       });
       return;
     }
-    await new Promise(resolve => setTimeout(resolve, 1000)); 
     
-    const classSessionIndex = MOCK_CLASS_SESSIONS.findIndex(cs => cs.id === classId);
-    if (classSessionIndex !== -1 && classSession) {
-        const updatedClassSession: ClassSession = {
-            ...MOCK_CLASS_SESSIONS[classSessionIndex],
-            ...data,
-            maxStudents: Number(data.maxStudents),
-            enrolledStudentIds: data.enrolledStudentIds || [],
-        };
-        MOCK_CLASS_SESSIONS[classSessionIndex] = updatedClassSession;
-        setClassSession(updatedClassSession); 
-    }
+    try {
+      const classSessionDocRef = doc(db, 'classSessions', classId);
+      const updatePayload: Omit<ClassSession, 'id'> = {
+         ...data,
+         maxStudents: Number(data.maxStudents),
+         enrolledStudentIds: data.enrolledStudentIds || [],
+      };
+      await updateDoc(classSessionDocRef, updatePayload);
 
-    toast({
-      title: "Configuração Atualizada!",
-      description: `Aula de ${data.dayOfWeek} das ${data.startTime} às ${data.endTime} foi atualizada.`,
-    });
-    setIsEditMode(false);
-    router.replace(`/aulas/${classId}`); 
+      const updatedClassSessionData = { ...(classSession || {}), ...updatePayload, id: classId } as ClassSession;
+      setClassSession(updatedClassSessionData);
+
+      toast({
+        title: "Configuração Atualizada!",
+        description: `Aula de ${data.dayOfWeek} das ${data.startTime} às ${data.endTime} foi atualizada.`,
+      });
+      setIsEditMode(false);
+      router.replace(`/aulas/${classId}`); 
+    } catch (error) {
+      console.error("Error updating class session: ", error);
+      toast({
+        title: "Erro ao Atualizar",
+        description: "Não foi possível atualizar a configuração da aula. Tente novamente.",
+        variant: "destructive",
+      });
+    }
   };
 
   if (isLoading || isLoadingStudents) {
@@ -148,9 +169,9 @@ export default function AulaDetalhePage() {
   );
   
   const getEnrolledStudentNames = () => {
-    if (!classSession || !classSession.enrolledStudentIds || classSession.enrolledStudentIds.length === 0) return 'Nenhum aluno inscrito.';
+    if (!classSession || !classSession.enrolledStudentIds || classSession.enrolledStudentIds.length === 0) return 'Nenhum aluno inscrito (padrão).';
     return classSession.enrolledStudentIds
-      .map(id => activeStudents.find(s => s.id === id)?.name) // Use activeStudents from state
+      .map(id => activeStudents.find(s => s.id === id)?.name)
       .filter(name => !!name)
       .join(', ');
   };
@@ -335,7 +356,7 @@ export default function AulaDetalhePage() {
                 <InfoItem icon={Users} label="Máximo de Alunos na Turma" value={classSession.maxStudents} />
                 <InfoItem icon={Users} label="Alunos Inscritos (Padrão)">
                     <p className="font-medium text-foreground whitespace-pre-line">
-                        {getEnrolledStudentNames()} ({classSession.enrolledStudentIds.length} de {classSession.maxStudents})
+                        {getEnrolledStudentNames()} ({(classSession.enrolledStudentIds?.length || 0)} de {classSession.maxStudents})
                     </p>
                 </InfoItem>
             </CardContent>
