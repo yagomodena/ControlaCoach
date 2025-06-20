@@ -4,6 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { UsersRound, CalendarClock, CircleDollarSign, Smartphone, ReceiptText, CheckCircle2, Facebook, Instagram, Twitter, ArrowRight, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import bannerImage from '@/images/banner.png'
 
 const featureItems = [
   {
@@ -96,12 +97,11 @@ export default function LandingPage() {
         </div>
         <div className="mt-12 md:mt-16 max-w-4xl mx-auto">
           <Image
-            src="https://placehold.co/1200x675.png"
+            src={bannerImage}
             alt="Dashboard ControlaCoach em um laptop"
             width={1200}
             height={675}
             className="rounded-xl shadow-2xl object-cover"
-            data-ai-hint="dashboard app laptop"
             priority
           />
         </div>
@@ -155,7 +155,7 @@ export default function LandingPage() {
                 <p className="text-gray-600 mb-6">Acesso completo a todas as funcionalidades.</p>
                 <ul className="space-y-2 text-left mb-8">
                   {['Alunos ilimitados', 'Agenda completa', 'Controle financeiro', 'Suporte prioritário'].map(feature => (
-                     <li key={feature} className="flex items-center"><ShieldCheck className="h-5 w-5 text-green-500 mr-2"/>{feature}</li>
+                    <li key={feature} className="flex items-center"><ShieldCheck className="h-5 w-5 text-green-500 mr-2" />{feature}</li>
                   ))}
                 </ul>
               </div>
@@ -171,9 +171,9 @@ export default function LandingPage() {
                 <h3 className="text-2xl font-bold text-[#FF6B00] mb-2 mt-3">Plano Anual</h3>
                 <p className="text-4xl font-bold mb-1">R$ 497<span className="text-lg font-normal text-gray-600">/ano</span></p>
                 <p className="text-gray-600 mb-6">Economize 17% (equivale a R$ 41,41/mês).</p>
-                 <ul className="space-y-2 text-left mb-8">
+                <ul className="space-y-2 text-left mb-8">
                   {['Tudo do Plano Mensal', 'Desconto exclusivo', 'Acesso antecipado a novidades'].map(feature => (
-                     <li key={feature} className="flex items-center"><ShieldCheck className="h-5 w-5 text-green-500 mr-2"/>{feature}</li>
+                    <li key={feature} className="flex items-center"><ShieldCheck className="h-5 w-5 text-green-500 mr-2" />{feature}</li>
                   ))}
                 </ul>
               </div>
