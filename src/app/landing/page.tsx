@@ -1,10 +1,13 @@
+
 'use client';
 
 import Link from 'next/link';
 import Image from 'next/image';
 import { UsersRound, CalendarClock, CircleDollarSign, Smartphone, ReceiptText, CheckCircle2, Facebook, Instagram, Twitter, ArrowRight, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import bannerImage from '@/images/banner.png'
+// import bannerImage from '@/images/banner.png' // Original local image
+const bannerImageUrl = "https://storage.googleapis.com/project-ai-prototyper.appspot.com/projects%2FJzkpAS8qTryME2DL477q%2Ffiles%2Ftreinadores.png";
+
 
 const featureItems = [
   {
@@ -97,10 +100,10 @@ export default function LandingPage() {
         </div>
         <div className="mt-12 md:mt-16 max-w-4xl mx-auto">
           <Image
-            src={bannerImage}
-            alt="Dashboard ControlaCoach em um laptop"
-            width={1200}
-            height={675}
+            src={bannerImageUrl}
+            alt="Profissionais de educação física sorrindo e treinando com o logo ControlaCoach"
+            width={1280}
+            height={720}
             className="rounded-xl shadow-2xl object-cover"
             priority
           />
@@ -231,9 +234,9 @@ export default function LandingPage() {
       <footer className="py-10 bg-[#0D0D0D] text-gray-400 text-sm px-4 sm:px-6 lg:px-8">
         <div className="max-w-5xl mx-auto text-center">
           <div className="flex justify-center space-x-6 mb-6">
-            <Link href="#" className="hover:text-[#FF6B00]">Termos de Uso</Link>
-            <Link href="#" className="hover:text-[#FF6B00]">Política de Privacidade</Link>
-            <Link href="#" className="hover:text-[#FF6B00]">Contato</Link>
+            <Link href="/termos-de-uso" className="hover:text-[#FF6B00]">Termos de Uso</Link>
+            <Link href="/politica-de-privacidade" className="hover:text-[#FF6B00]">Política de Privacidade</Link>
+            <Link href="/contato" className="hover:text-[#FF6B00]">Contato</Link>
           </div>
           <div className="flex justify-center space-x-6 mb-6">
             <Link href="#" aria-label="Facebook" className="text-gray-400 hover:text-[#FF6B00]">
@@ -253,3 +256,4 @@ export default function LandingPage() {
     </div>
   );
 }
+
