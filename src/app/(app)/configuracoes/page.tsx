@@ -11,8 +11,9 @@ import { Switch } from "@/components/ui/switch";
 import { Save, Palette, Bell, Shield, CalendarClock, Loader2 } from "lucide-react";
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { db } from '@/firebase';
+import { db, auth } from '@/firebase'; // Import auth
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { updateProfile } from 'firebase/auth'; // Import updateProfile
 import type { CoachAvailability, DailyAvailability, CoachProfileSettings } from '@/types';
 
 interface DailyScheduleState {
@@ -74,26 +75,46 @@ export default function ConfiguracoesPage() {
     setIsLoadingAvailability(true);
 
     const fetchAllSettings = async () => {
+      const user = auth.currentUser;
+
       try {
-        // Fetch Profile & Notification Settings
+        // Fetch Profile & Notification Settings from Firestore
         const profileSettingsDocRef = doc(db, 'settings', 'coachProfileAndNotifications');
         const profileDocSnap = await getDoc(profileSettingsDocRef);
-        if (profileDocSnap.exists()) {
-          const data = profileDocSnap.data() as CoachProfileSettings;
-          setCoachName(data.coachName || '');
-          setCoachEmail(data.coachEmail || '');
-          setNotificationsEnabled(data.notificationsEnabled === undefined ? true : data.notificationsEnabled);
-          setDefaultPaymentReminderDays(data.defaultPaymentReminderDays || 3);
-        } else {
-          // Set defaults if no doc exists
+        const firestoreData = profileDocSnap.exists() ? profileDocSnap.data() as CoachProfileSettings : null;
+
+        if (user) {
+          setCoachName(user.displayName || firestoreData?.coachName || 'ControlaCoach User');
+          setCoachEmail(user.email || firestoreData?.coachEmail || 'seuemail@example.com');
+        } else if (firestoreData) { // Fallback if user object not yet available (should be rare)
+          setCoachName(firestoreData.coachName || 'ControlaCoach User');
+          setCoachEmail(firestoreData.coachEmail || 'seuemail@example.com');
+        } else { // No user, no Firestore data
           setCoachName('ControlaCoach User');
           setCoachEmail('seuemail@example.com');
-          setNotificationsEnabled(true);
-          setDefaultPaymentReminderDays(3);
         }
+        
+        if (firestoreData) {
+            setNotificationsEnabled(firestoreData.notificationsEnabled === undefined ? true : firestoreData.notificationsEnabled);
+            setDefaultPaymentReminderDays(firestoreData.defaultPaymentReminderDays || 3);
+        } else {
+            setNotificationsEnabled(true);
+            setDefaultPaymentReminderDays(3);
+        }
+
       } catch (error) {
         console.error("Error fetching profile/notification settings: ", error);
         toast({ title: "Erro ao carregar perfil/notificações", variant: "destructive" });
+         // Set defaults on error to avoid undefined states
+        if (user) {
+            setCoachName(user.displayName || 'ControlaCoach User');
+            setCoachEmail(user.email || 'seuemail@example.com');
+        } else {
+            setCoachName('ControlaCoach User');
+            setCoachEmail('seuemail@example.com');
+        }
+        setNotificationsEnabled(true);
+        setDefaultPaymentReminderDays(3);
       } finally {
         setIsLoadingProfile(false);
         setIsLoadingNotifications(false);
@@ -134,7 +155,20 @@ export default function ConfiguracoesPage() {
       }
     };
     
-    fetchAllSettings();
+    // Ensure Firebase auth is initialized before fetching settings
+    const unsubscribe = auth.onAuthStateChanged(user => {
+      if (user) {
+        fetchAllSettings();
+      } else {
+        // Handle user not logged in - potentially redirect or show limited view
+        // For now, settings page assumes user is logged in, so this might be an error state
+        setIsLoadingProfile(false);
+        setIsLoadingNotifications(false);
+        setIsLoadingAvailability(false);
+      }
+      unsubscribe(); // Unsubscribe after first check
+    });
+
   }, [toast]);
   
   const handleScheduleChange = (index: number, field: keyof DailyScheduleState, value: string | boolean) => {
@@ -145,19 +179,34 @@ export default function ConfiguracoesPage() {
 
   const handleSaveProfileInfo = async () => {
     setIsSavingProfile(true);
+    const user = auth.currentUser;
+
+    if (!user) {
+      toast({ title: "Erro", description: "Usuário não autenticado.", variant: "destructive" });
+      setIsSavingProfile(false);
+      return;
+    }
+
     try {
+      // Update Firebase Auth display name
+      if (user.displayName !== coachName) {
+        await updateProfile(user, { displayName: coachName });
+      }
+
+      // Update Firestore document
       const settingsDocRef = doc(db, 'settings', 'coachProfileAndNotifications');
-      // Fetch existing settings to preserve notification part
       const docSnap = await getDoc(settingsDocRef);
       const existingData = docSnap.exists() ? docSnap.data() as Partial<CoachProfileSettings> : {};
       
       const dataToSave: CoachProfileSettings = {
+        ...existingData,
         coachName: coachName,
-        coachEmail: coachEmail,
+        coachEmail: user.email || existingData.coachEmail || '', // Ensure email from auth is stored
         notificationsEnabled: existingData.notificationsEnabled === undefined ? true : existingData.notificationsEnabled,
         defaultPaymentReminderDays: existingData.defaultPaymentReminderDays || 3,
       };
-      await setDoc(settingsDocRef, dataToSave, { merge: true });
+      await setDoc(settingsDocRef, dataToSave, { merge: true }); // Use merge to be safe
+
       toast({ title: "Perfil Salvo!", description: "Suas informações de perfil foram atualizadas." });
     } catch (error) {
       console.error("Error saving profile info:", error);
@@ -169,15 +218,15 @@ export default function ConfiguracoesPage() {
 
   const handleSaveNotificationSettings = async () => {
     setIsSavingNotifications(true);
+    const user = auth.currentUser; 
     try {
       const settingsDocRef = doc(db, 'settings', 'coachProfileAndNotifications');
-      // Fetch existing settings to preserve profile part
       const docSnap = await getDoc(settingsDocRef);
       const existingData = docSnap.exists() ? docSnap.data() as Partial<CoachProfileSettings> : {};
 
       const dataToSave: CoachProfileSettings = {
-        coachName: existingData.coachName || 'ControlaCoach User',
-        coachEmail: existingData.coachEmail || 'seuemail@example.com',
+        coachName: user?.displayName || existingData.coachName || 'ControlaCoach User',
+        coachEmail: user?.email || existingData.coachEmail || 'seuemail@example.com',
         notificationsEnabled: notificationsEnabled,
         defaultPaymentReminderDays: Number(defaultPaymentReminderDays),
       };
@@ -239,7 +288,7 @@ export default function ConfiguracoesPage() {
         <p className="text-muted-foreground">Ajuste as preferências do sistema ControlaCoach.</p>
       </div>
       
-      {isLoadingAny && (
+      {isLoadingAny && !isSavingProfile && !isSavingNotifications && !isSavingAvailability && (
         <div className="fixed inset-0 bg-background/50 backdrop-blur-sm flex items-center justify-center z-50">
             <Loader2 className="h-10 w-10 animate-spin text-primary" />
             <p className="ml-3 text-lg text-foreground">Carregando configurações...</p>
@@ -257,11 +306,23 @@ export default function ConfiguracoesPage() {
           <CardContent className="space-y-4">
             <div className="space-y-1">
               <Label htmlFor="coachName">Nome do Treinador</Label>
-              <Input id="coachName" value={coachName} onChange={(e) => setCoachName(e.target.value)} disabled={isSavingProfile || isLoadingProfile} />
+              <Input 
+                id="coachName" 
+                value={coachName} 
+                onChange={(e) => setCoachName(e.target.value)} 
+                disabled={isSavingProfile || isLoadingProfile} 
+              />
             </div>
             <div className="space-y-1">
               <Label htmlFor="coachEmail">Email de Contato</Label>
-              <Input id="coachEmail" type="email" value={coachEmail} onChange={(e) => setCoachEmail(e.target.value)} disabled={isSavingProfile || isLoadingProfile} />
+              <Input 
+                id="coachEmail" 
+                type="email" 
+                value={coachEmail} 
+                readOnly 
+                disabled 
+                className="bg-muted/50 cursor-not-allowed" 
+              />
             </div>
             <Button onClick={handleSaveProfileInfo} className="w-full mt-2 bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isSavingProfile || isLoadingProfile}>
               {isSavingProfile && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -434,4 +495,3 @@ export default function ConfiguracoesPage() {
     </div>
   );
 }
-
