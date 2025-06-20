@@ -15,7 +15,7 @@ import { BarChart as RechartsBarChart, CartesianGrid, XAxis, YAxis, Bar, Respons
 import { db, auth } from '@/firebase';
 import { collection, onSnapshot, query, orderBy, where } from 'firebase/firestore';
 import type { Student, Plan, BookedClass } from '@/types';
-import { format, parseISO, subMonths, startOfMonth, endOfMonth, eachMonthOfInterval, isWithinInterval, addDays, isBefore, isEqual, startOfDay } from 'date-fns';
+import { format, parseISO, subMonths, startOfMonth, endOfMonth, eachMonthOfInterval, isWithinInterval, addDays, isBefore, isEqual, startOfDay, isAfter } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
