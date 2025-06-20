@@ -91,6 +91,7 @@ export default function PlanosPage() {
     if (window.confirm(`Tem certeza que deseja excluir o plano "${planName}"? Esta ação não pode ser desfeita.`)) {
       try {
         await deleteDoc(doc(db, 'coaches', userId, 'plans', planIdToDelete));
+        setPlans(prevPlans => prevPlans.filter(p => p.id !== planIdToDelete)); // Update local state immediately
         toast({
           title: 'Plano Excluído!',
           description: `O plano "${planName}" foi removido com sucesso.`,
@@ -222,3 +223,4 @@ export default function PlanosPage() {
     </div>
   );
 }
+
