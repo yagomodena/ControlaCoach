@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Save, PlusCircle, Search, CalendarClock, MapPinIcon, ClockIcon } from 'lucide-react';
+import { ArrowLeft, Save, PlusCircle, Search, CalendarClock, MapPinIcon, ClockIcon, DollarSign } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -41,11 +41,11 @@ const studentSchema = z.object({
   recurringClassTime: z.string()
     .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Formato de hora inválido (HH:MM)." })
     .optional()
-    .or(z.literal('')), 
+    .or(z.literal('')),
   recurringClassDays: z.array(z.enum(DAYS_OF_WEEK)).optional(),
   recurringClassLocation: z.string().optional(),
   paymentStatus: z.enum(['pago', 'pendente', 'vencido']).optional(),
-  dueDate: z.string().optional(), 
+  dueDate: z.string().optional(),
   amountDue: z.number().optional(),
   paymentMethod: z.enum(['PIX', 'Dinheiro', 'Cartão']).optional(),
   lastPaymentDate: z.string().optional(),
@@ -64,7 +64,7 @@ export default function NovoAlunoPage() {
   const refreshActivePlans = () => {
     setActivePlans(MOCK_PLANS.filter(p => p.status === 'active'));
   };
-  
+
   const refreshActiveLocations = () => {
     setActiveLocations(MOCK_LOCATIONS.filter(loc => loc.status === 'active'));
   };
@@ -86,60 +86,61 @@ export default function NovoAlunoPage() {
       recurringClassTime: '',
       recurringClassDays: [],
       recurringClassLocation: undefined,
-      paymentStatus: 'pendente', 
+      paymentStatus: 'pendente',
+      dueDate: '',
+      amountDue: undefined,
+      paymentMethod: undefined,
+      lastPaymentDate: '',
     },
   });
 
   const onSubmit = async (data: StudentFormData) => {
     try {
       const studentDataForFirestore: Record<string, any> = {
-        // Required fields from schema
         name: data.name,
         phone: data.phone,
         plan: data.plan,
         technicalLevel: data.technicalLevel,
         status: data.status,
-        // Defaults / System-set
         registrationDate: new Date().toISOString(),
         attendanceHistory: [],
-        paymentStatus: data.paymentStatus ?? 'pendente', // Default to 'pendente' if not provided
       };
 
-      // Optional fields from schema - only add if they have a value from the form
-      if (data.objective !== undefined && data.objective !== null && data.objective.trim() !== '') {
-          studentDataForFirestore.objective = data.objective;
+      if (data.objective && data.objective.trim() !== '') {
+        studentDataForFirestore.objective = data.objective.trim();
       }
-      if (data.recurringClassTime) { 
-          studentDataForFirestore.recurringClassTime = data.recurringClassTime;
+      if (data.recurringClassTime && data.recurringClassTime.trim() !== '') {
+        studentDataForFirestore.recurringClassTime = data.recurringClassTime.trim();
       }
       if (data.recurringClassDays && data.recurringClassDays.length > 0) {
-          studentDataForFirestore.recurringClassDays = data.recurringClassDays;
-      }
-      
-      let finalRecurringClassLocation = data.recurringClassLocation;
-      if (data.recurringClassLocation === NO_LOCATION_VALUE) {
-        finalRecurringClassLocation = undefined;
-      }
-      if (finalRecurringClassLocation) { 
-          studentDataForFirestore.recurringClassLocation = finalRecurringClassLocation;
+        studentDataForFirestore.recurringClassDays = data.recurringClassDays;
       }
 
-      // Optional payment fields
-      if (data.dueDate) { 
-          studentDataForFirestore.dueDate = data.dueDate;
+      let finalRecurringClassLocation = data.recurringClassLocation;
+      if (data.recurringClassLocation === NO_LOCATION_VALUE || !data.recurringClassLocation || data.recurringClassLocation.trim() === '') {
+        finalRecurringClassLocation = undefined;
       }
-      if (typeof data.amountDue === 'number') { 
-          studentDataForFirestore.amountDue = data.amountDue;
+      if (finalRecurringClassLocation) {
+        studentDataForFirestore.recurringClassLocation = finalRecurringClassLocation;
       }
-      if (data.paymentMethod) { 
-          studentDataForFirestore.paymentMethod = data.paymentMethod;
+
+      studentDataForFirestore.paymentStatus = data.paymentStatus || 'pendente';
+
+      if (data.dueDate && data.dueDate.trim() !== '') {
+        studentDataForFirestore.dueDate = data.dueDate;
       }
-      if (data.lastPaymentDate) { 
-          studentDataForFirestore.lastPaymentDate = data.lastPaymentDate;
+      if (typeof data.amountDue === 'number' && !isNaN(data.amountDue)) {
+        studentDataForFirestore.amountDue = data.amountDue;
       }
-      
+      if (data.paymentMethod) {
+        studentDataForFirestore.paymentMethod = data.paymentMethod;
+      }
+      if (data.lastPaymentDate && data.lastPaymentDate.trim() !== '') {
+        studentDataForFirestore.lastPaymentDate = data.lastPaymentDate;
+      }
+
       await addDoc(collection(db, 'students'), studentDataForFirestore);
-      
+
       toast({
         title: "Aluno Adicionado!",
         description: `${data.name} foi cadastrado com sucesso.`,
@@ -157,11 +158,11 @@ export default function NovoAlunoPage() {
 
   const handlePlansManaged = () => {
     const currentPlanValue = watch('plan');
-    refreshActivePlans(); 
+    refreshActivePlans();
     const currentPlanExistsAndIsActive = MOCK_PLANS.some(p => p.name === currentPlanValue && p.status === 'active');
     if (!currentPlanExistsAndIsActive && activePlans.length > 0) {
     } else if (!currentPlanExistsAndIsActive) {
-      setValue('plan', ''); 
+      setValue('plan', '');
     }
   };
 
@@ -193,7 +194,7 @@ export default function NovoAlunoPage() {
                 <Controller
                   name="name"
                   control={control}
-                  render={({ field }) => <Input id="name" placeholder="Ex: João da Silva" {...field} />}
+                  render={({ field }) => <Input id="name" placeholder="Ex: João da Silva" {...field} value={field.value ?? ''} />}
                 />
                 {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
               </div>
@@ -203,7 +204,7 @@ export default function NovoAlunoPage() {
                 <Controller
                   name="phone"
                   control={control}
-                  render={({ field }) => <Input id="phone" type="tel" placeholder="(XX) XXXXX-XXXX" {...field} />}
+                  render={({ field }) => <Input id="phone" type="tel" placeholder="(XX) XXXXX-XXXX" {...field} value={field.value ?? ''} />}
                 />
                 {errors.phone && <p className="text-sm text-destructive">{errors.phone.message}</p>}
               </div>
@@ -217,7 +218,7 @@ export default function NovoAlunoPage() {
                         name="plan"
                         control={control}
                         render={({ field }) => (
-                          <Select onValueChange={field.onChange} value={field.value}>
+                          <Select onValueChange={field.onChange} value={field.value ?? ''}>
                             <SelectTrigger id="plan">
                               <SelectValue placeholder="Selecione o plano" />
                             </SelectTrigger>
@@ -252,7 +253,7 @@ export default function NovoAlunoPage() {
                     name="technicalLevel"
                     control={control}
                     render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value ?? ''} >
                         <SelectTrigger id="technicalLevel">
                           <SelectValue placeholder="Selecione o nível" />
                         </SelectTrigger>
@@ -267,14 +268,14 @@ export default function NovoAlunoPage() {
                   {errors.technicalLevel && <p className="text-sm text-destructive">{errors.technicalLevel.message}</p>}
                 </div>
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="status">Status</Label>
                 <Controller
                     name="status"
                     control={control}
                     render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value ?? ''}>
                         <SelectTrigger id="status">
                           <SelectValue placeholder="Selecione o status" />
                         </SelectTrigger>
@@ -293,7 +294,7 @@ export default function NovoAlunoPage() {
                 <Controller
                   name="objective"
                   control={control}
-                  render={({ field }) => <Textarea id="objective" placeholder="Descreva o objetivo do aluno..." {...field} />}
+                  render={({ field }) => <Textarea id="objective" placeholder="Descreva o objetivo do aluno..." {...field} value={field.value ?? ''} />}
                 />
                 {errors.objective && <p className="text-sm text-destructive">{errors.objective.message}</p>}
               </div>
@@ -312,7 +313,7 @@ export default function NovoAlunoPage() {
                   <Controller
                     name="recurringClassTime"
                     control={control}
-                    render={({ field }) => <Input id="recurringClassTime" type="time" {...field} />}
+                    render={({ field }) => <Input id="recurringClassTime" type="time" {...field} value={field.value ?? ''}/>}
                   />
                   {errors.recurringClassTime && <p className="text-sm text-destructive">{errors.recurringClassTime.message}</p>}
                 </div>
@@ -322,7 +323,7 @@ export default function NovoAlunoPage() {
                     name="recurringClassLocation"
                     control={control}
                     render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value || NO_LOCATION_VALUE}>
                         <SelectTrigger id="recurringClassLocation">
                           <SelectValue placeholder="Selecione o local" />
                         </SelectTrigger>
@@ -372,6 +373,63 @@ export default function NovoAlunoPage() {
                 {errors.recurringClassDays && <p className="text-sm text-destructive">{errors.recurringClassDays.message}</p>}
               </div>
             </CardContent>
+
+            <Separator className="my-6" />
+
+            <CardHeader className="pt-0">
+                <CardTitle className="flex items-center"><DollarSign className="mr-2 h-5 w-5 text-primary"/>Informações de Pagamento</CardTitle>
+                <CardDescription>Gerencie os detalhes financeiros do aluno. (Opcional)</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                        <Label htmlFor="paymentStatus">Status do Pagamento</Label>
+                        <Controller name="paymentStatus" control={control} render={({ field }) => (
+                            <Select onValueChange={field.onChange} value={field.value || ''}>
+                            <SelectTrigger id="paymentStatus"><SelectValue placeholder="Selecione"/></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="pago">Pago</SelectItem>
+                                <SelectItem value="pendente">Pendente</SelectItem>
+                                <SelectItem value="vencido">Vencido</SelectItem>
+                            </SelectContent>
+                            </Select>
+                        )} />
+                        {errors.paymentStatus && <p className="text-sm text-destructive">{errors.paymentStatus.message}</p>}
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="dueDate">Data de Vencimento</Label>
+                        <Controller name="dueDate" control={control} render={({ field }) => <Input id="dueDate" type="date" {...field} value={field.value ?? ''} />} />
+                        {errors.dueDate && <p className="text-sm text-destructive">{errors.dueDate.message}</p>}
+                    </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                        <Label htmlFor="amountDue">Valor Devido (R$)</Label>
+                        <Controller name="amountDue" control={control} render={({ field }) => <Input id="amountDue" type="number" step="0.01" {...field} value={field.value ?? ''}  onChange={e => { const val = e.target.value; field.onChange(val === '' ? undefined : parseFloat(val)); }} />} />
+                        {errors.amountDue && <p className="text-sm text-destructive">{errors.amountDue.message}</p>}
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="paymentMethod">Método de Pagamento</Label>
+                         <Controller name="paymentMethod" control={control} render={({ field }) => (
+                            <Select onValueChange={field.onChange} value={field.value || ''}>
+                            <SelectTrigger id="paymentMethod"><SelectValue placeholder="Selecione"/></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="PIX">PIX</SelectItem>
+                                <SelectItem value="Dinheiro">Dinheiro</SelectItem>
+                                <SelectItem value="Cartão">Cartão</SelectItem>
+                            </SelectContent>
+                            </Select>
+                        )} />
+                        {errors.paymentMethod && <p className="text-sm text-destructive">{errors.paymentMethod.message}</p>}
+                    </div>
+                </div>
+                 <div className="space-y-2 md:max-w-[calc(50%-0.75rem)]">
+                    <Label htmlFor="lastPaymentDate">Data do Último Pagamento</Label>
+                    <Controller name="lastPaymentDate" control={control} render={({ field }) => <Input id="lastPaymentDate" type="date" {...field} value={field.value ?? ''} />} />
+                    {errors.lastPaymentDate && <p className="text-sm text-destructive">{errors.lastPaymentDate.message}</p>}
+                </div>
+            </CardContent>
+
 
             <CardFooter className="flex justify-end gap-2 pt-6">
               <Button variant="outline" type="button" onClick={() => router.back()}>
