@@ -3,41 +3,42 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow read/write access to the 'users' collection for authenticated users,
-    // restricted to their own user document.
+    // Allow read/write access to all users for users collection
+    // In a production app, you should restrict write access to the owner of the data
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if request.auth != null;
     }
 
-    // Allow authenticated users to read/write their own student data
-    // And allow admin/owner to read all student data (example, adjust if needed)
+    // Students: Authenticated users can read all, write all (adjust for prod)
     match /students/{studentId} {
-      allow read: if request.auth != null; // Or more restrictive: request.auth.uid == resource.data.coachId;
-      allow create, update, delete: if request.auth != null; // Typically, only the coach/admin should write.
+      allow read, write: if request.auth != null;
     }
 
-    // Allow authenticated users to read/write their own class session configurations
-    match /classSessions/{sessionId} {
-      allow read: if request.auth != null;
-      allow create, update, delete: if request.auth != null; // Assuming coach owns these
-    }
-
-    // Allow authenticated users to read/write locations
-    match /locations/{locationId} {
-      allow read: if request.auth != null;
-      allow create, update, delete: if request.auth != null; // Assuming coach owns these
-    }
-
-    // Allow authenticated users to read/write plans
+    // Plans: Authenticated users can read all, write all (adjust for prod)
     match /plans/{planId} {
-      allow read: if request.auth != null;
-      allow create, update, delete: if request.auth != null; // Assuming coach owns these
+      allow read, write: if request.auth != null;
     }
 
-    // Example: Allow only admins to write to a 'settings' collection.
-    // match /settings/{settingId} {
-    //   allow read: if request.auth != null;
-    //   allow write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
-    // }
+    // Locations: Authenticated users can read all, write all (adjust for prod)
+    match /locations/{locationId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // ClassSessions: Authenticated users can read all, write all (adjust for prod)
+    match /classSessions/{classSessionId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Settings: Allow authenticated users to read and write their own settings
+    // Assuming a single 'coachAvailability' document for simplicity.
+    // For multi-user apps, you'd use `request.auth.uid` in the document path or rules.
+    match /settings/{settingId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Default deny all other paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
   }
 }

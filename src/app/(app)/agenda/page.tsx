@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
-import { ChevronLeft, ChevronRight, Users, Edit, PlusCircle, Clock, Trash2, Search, UserCircle, Loader2, MapPin } from "lucide-react"; // Added MapPin
+import { ChevronLeft, ChevronRight, Users, Edit, PlusCircle, Clock, Trash2, Search, UserCircle, Loader2, MapPin } from "lucide-react";
 import Link from 'next/link';
 import { 
   Dialog,
@@ -36,11 +36,11 @@ import {
   parseISO
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import type { BookedClass, DailyAvailability, Student, Location, DayOfWeek } from '@/types';
-import { INITIAL_MOCK_BOOKED_CLASSES, MOCK_COACH_AVAILABILITY, getDayOfWeekName, DAYS_OF_WEEK } from '@/types';
+import type { BookedClass, DailyAvailability, Student, Location, DayOfWeek, CoachAvailability } from '@/types';
+import { INITIAL_MOCK_BOOKED_CLASSES, getDayOfWeekName, DAYS_OF_WEEK } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/firebase';
-import { collection, onSnapshot, query, orderBy, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, where, doc, getDoc } from 'firebase/firestore';
 
 interface TimeSlot {
   time: string; 
@@ -80,6 +80,8 @@ export default function AgendaPage() {
   const [activeLocations, setActiveLocations] = useState<Location[]>([]);
   const [isLoadingStudents, setIsLoadingStudents] = useState(true);
   const [isLoadingLocations, setIsLoadingLocations] = useState(true);
+  const [coachAvailability, setCoachAvailability] = useState<CoachAvailability | null>(null);
+  const [isLoadingAvailability, setIsLoadingAvailability] = useState(true);
 
   useEffect(() => {
     setIsLoadingStudents(true);
@@ -113,6 +115,28 @@ export default function AgendaPage() {
       toast({ title: "Erro ao Carregar Locais", variant: "destructive" });
       setIsLoadingLocations(false);
     });
+
+    setIsLoadingAvailability(true);
+    const fetchCoachAvailability = async () => {
+        try {
+            const availabilityDocRef = doc(db, 'settings', 'coachAvailability');
+            const docSnap = await getDoc(availabilityDocRef);
+            if (docSnap.exists()) {
+                setCoachAvailability(docSnap.data() as CoachAvailability);
+            } else {
+                // No settings found, use a default empty schedule or show a message
+                toast({ title: "Disponibilidade não configurada", description: "Por favor, configure sua disponibilidade semanal em Configurações.", variant: "default" });
+                setCoachAvailability({ defaultDaily: { workRanges: [], breaks: [] } }); // Basic default
+            }
+        } catch (error) {
+            console.error("Error fetching coach availability: ", error);
+            toast({ title: "Erro ao carregar disponibilidade", variant: "destructive" });
+            setCoachAvailability({ defaultDaily: { workRanges: [], breaks: [] } }); // Fallback
+        } finally {
+            setIsLoadingAvailability(false);
+        }
+    };
+    fetchCoachAvailability();
 
     return () => {
         unsubscribeStudents();
@@ -151,13 +175,12 @@ export default function AgendaPage() {
   }, [bookedClasses, allStudents, currentMonth, selectedDate]);
 
   const availableTimeSlots = useMemo((): TimeSlot[] => {
-    if (!selectedDate) return [];
+    if (!selectedDate || !coachAvailability) return [];
 
     const slots: TimeSlot[] = [];
     const numericDayOfWeek = getDay(selectedDate);
-    const dayOfWeekName = getDayOfWeekName(numericDayOfWeek);
     
-    const dailySchedule: DailyAvailability = MOCK_COACH_AVAILABILITY[numericDayOfWeek] || MOCK_COACH_AVAILABILITY.defaultDaily;
+    const dailySchedule: DailyAvailability = coachAvailability[numericDayOfWeek] || coachAvailability.defaultDaily;
 
     if (!dailySchedule || dailySchedule.workRanges.length === 0) {
       return [];
@@ -166,6 +189,7 @@ export default function AgendaPage() {
     const slotDurationMinutes = 60;
 
     dailySchedule.workRanges.forEach(workRange => {
+      if(!workRange.start || !workRange.end) return; // Skip if range is incomplete
       let currentSlotStartDateTime = set(selectedDate, {
         hours: parseInt(workRange.start.split(':')[0]),
         minutes: parseInt(workRange.start.split(':')[1]),
@@ -186,6 +210,7 @@ export default function AgendaPage() {
 
         let isWithinBreak = false;
         for (const breakRange of dailySchedule.breaks) {
+          if(!breakRange.start || !breakRange.end) continue;
           const breakStartDateTime = set(selectedDate, {
             hours: parseInt(breakRange.start.split(':')[0]),
             minutes: parseInt(breakRange.start.split(':')[1]),
@@ -229,7 +254,8 @@ export default function AgendaPage() {
           currentSlotStartDateTime = addMinutes(currentSlotStartDateTime, slotDurationMinutes);
           continue; 
         }
-
+        
+        const dayOfWeekName = getDayOfWeekName(numericDayOfWeek);
         let recurringStudentBookedThisSlot: Student | undefined = undefined;
         if (dayOfWeekName) {
             for (const student of allStudents) {
@@ -261,7 +287,7 @@ export default function AgendaPage() {
       }
     });
     return slots.sort((a, b) => a.time.localeCompare(b.time));
-  }, [selectedDate, bookedClasses, allStudents]);
+  }, [selectedDate, bookedClasses, allStudents, coachAvailability]);
 
   const openStudentSelectionDialog = (time: string) => {
     if (!selectedDate) {
@@ -457,7 +483,7 @@ export default function AgendaPage() {
             <CardDescription>Disponibilidade e aulas do dia.</CardDescription>
           </CardHeader>
           <CardContent>
-            {isLoadingStudents || isLoadingLocations ? (
+            {isLoadingStudents || isLoadingLocations || isLoadingAvailability ? (
               <div className="flex justify-center items-center py-8">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 <p className="ml-2 text-muted-foreground">Carregando dados...</p>
@@ -509,7 +535,7 @@ export default function AgendaPage() {
                 </div>
               ) : (
                 <p className="text-muted-foreground text-center py-8">
-                  Nenhum horário de trabalho configurado para este dia ou todos os horários são pausas.
+                  Nenhum horário de trabalho configurado para este dia ou todos os horários são pausas. Verifique suas <Link href="/configuracoes" className="text-primary hover:underline">configurações de disponibilidade</Link>.
                 </p>
               )
             ) : (

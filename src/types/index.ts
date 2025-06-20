@@ -84,6 +84,8 @@ export interface DailyAvailability {
   breaks: TimeRange[];
 }
 
+// CoachAvailability: Keys are numeric day of week (0 for Sunday, 1 for Monday, ..., 6 for Saturday)
+// defaultDaily is a fallback if a specific day isn't defined.
 export type CoachAvailability = {
   [dayOfWeek: number]: DailyAvailability; 
   defaultDaily: DailyAvailability; 
@@ -128,18 +130,6 @@ export let INITIAL_MOCK_BOOKED_CLASSES: BookedClass[] = [
   },
 ];
 
-export const MOCK_COACH_AVAILABILITY: CoachAvailability = {
-  1: { workRanges: [{ start: '08:00', end: '20:00' }], breaks: [{ start: '12:00', end: '13:30' }] }, // Mon
-  2: { workRanges: [{ start: '08:00', end: '20:00' }], breaks: [{ start: '12:00', end: '13:30' }] }, // Tue
-  3: { workRanges: [{ start: '08:00', end: '20:00' }], breaks: [{ start: '12:00', end: '13:30' }] }, // Wed
-  4: { workRanges: [{ start: '08:00', end: '20:00' }], breaks: [{ start: '12:00', end: '13:30' }] }, // Thu
-  5: { workRanges: [{ start: '08:00', end: '20:00' }], breaks: [{ start: '12:00', end: '13:30' }] }, // Fri
-  6: { workRanges: [{ start: '08:00', end: '14:00' }], breaks: [] }, // Sat
-  0: { workRanges: [{ start: '08:00', end: '12:00' }], breaks: [] }, // Sun
-  defaultDaily: { workRanges: [], breaks: [] } 
-};
-
-
 export const getDayOfWeekName = (dayNumber: number): DayOfWeek | undefined => {
   const map: Record<number, DayOfWeek> = {
     0: 'Domingo',
@@ -152,8 +142,3 @@ export const getDayOfWeekName = (dayNumber: number): DayOfWeek | undefined => {
   };
   return map[dayNumber];
 };
-
-// MOCK_PLANS is removed as plans will be fetched from Firestore
-// MOCK_LOCATIONS is removed as locations will be fetched from Firestore
-// MOCK_STUDENTS is removed as students will be fetched from Firestore
-// MOCK_CLASS_SESSIONS is removed as class sessions will be fetched from Firestore
