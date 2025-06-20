@@ -19,13 +19,15 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
-import { useForm, Controller, useFieldArray } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
-import { MOCK_PLANS, MOCK_LOCATIONS, MOCK_STUDENTS, type Plan, type Location, type DayOfWeek, DAYS_OF_WEEK } from '@/types';
+import { MOCK_PLANS, MOCK_LOCATIONS, type Plan, type Location, type DayOfWeek, DAYS_OF_WEEK } from '@/types';
 import { AddPlanDialog } from '@/components/dialogs/add-plan-dialog';
 import { ManagePlansDialog } from '@/components/dialogs/manage-plans-dialog';
+import { db } from '@/firebase';
+import { collection, addDoc } from 'firebase/firestore';
 
 const NO_LOCATION_VALUE = "__NO_LOCATION__";
 
@@ -42,6 +44,12 @@ const studentSchema = z.object({
     .or(z.literal('')), 
   recurringClassDays: z.array(z.enum(DAYS_OF_WEEK)).optional(),
   recurringClassLocation: z.string().optional(),
+  // Fields related to payment, optional for new student creation by coach
+  paymentStatus: z.enum(['pago', 'pendente', 'vencido']).optional(),
+  dueDate: z.string().optional(), // Will likely be set based on plan start
+  amountDue: z.number().optional(),
+  paymentMethod: z.enum(['PIX', 'Dinheiro', 'Cartão']).optional(),
+  lastPaymentDate: z.string().optional(),
 });
 
 type StudentFormData = z.infer<typeof studentSchema>;
@@ -55,6 +63,7 @@ export default function NovoAlunoPage() {
   const [isManagePlansDialogOpen, setIsManagePlansDialogOpen] = useState(false);
 
   const refreshActivePlans = () => {
+    // In a real app, these would be fetched from Firestore too
     setActivePlans(MOCK_PLANS.filter(p => p.status === 'active'));
   };
   
@@ -79,40 +88,61 @@ export default function NovoAlunoPage() {
       recurringClassTime: '',
       recurringClassDays: [],
       recurringClassLocation: undefined,
+      paymentStatus: 'pendente', // Default for new students
     },
   });
 
   const onSubmit = async (data: StudentFormData) => {
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    let finalRecurringClassLocation = data.recurringClassLocation;
-    if (data.recurringClassLocation === NO_LOCATION_VALUE) {
-      finalRecurringClassLocation = undefined;
-    }
+    try {
+      let finalRecurringClassLocation = data.recurringClassLocation;
+      if (data.recurringClassLocation === NO_LOCATION_VALUE) {
+        finalRecurringClassLocation = undefined;
+      }
 
-    const newStudent = {
-      id: crypto.randomUUID(),
-      registrationDate: new Date().toISOString(),
-      ...data,
-      objective: data.objective || undefined,
-      recurringClassTime: data.recurringClassTime || undefined,
-      recurringClassDays: data.recurringClassDays?.length ? data.recurringClassDays : undefined,
-      recurringClassLocation: finalRecurringClassLocation,
-    };
-    MOCK_STUDENTS.push(newStudent);
-    
-    toast({
-      title: "Aluno Adicionado!",
-      description: `${data.name} foi cadastrado com sucesso.`,
-    });
-    router.push('/alunos');
+      const studentDataToSave = {
+        ...data,
+        registrationDate: new Date().toISOString(),
+        objective: data.objective || undefined,
+        recurringClassTime: data.recurringClassTime || undefined,
+        recurringClassDays: data.recurringClassDays?.length ? data.recurringClassDays : undefined,
+        recurringClassLocation: finalRecurringClassLocation,
+        // Ensure optional payment fields are undefined if not explicitly set
+        paymentStatus: data.paymentStatus || 'pendente',
+        dueDate: data.dueDate || undefined,
+        amountDue: data.amountDue || undefined,
+        paymentMethod: data.paymentMethod || undefined,
+        lastPaymentDate: data.lastPaymentDate || undefined,
+        attendanceHistory: [], // Initialize with empty attendance
+      };
+      
+      // Remove id from studentDataToSave as Firestore will generate it
+      // Type assertion needed if Student type still has id: string;
+      const { id, ...studentDataWithoutId } = studentDataToSave as any;
+
+
+      await addDoc(collection(db, 'students'), studentDataWithoutId);
+      
+      toast({
+        title: "Aluno Adicionado!",
+        description: `${data.name} foi cadastrado com sucesso.`,
+      });
+      router.push('/alunos');
+    } catch (error) {
+      console.error("Error adding student: ", error);
+      toast({
+        title: "Erro ao Adicionar Aluno",
+        description: "Não foi possível cadastrar o aluno. Tente novamente.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handlePlansManaged = () => {
     const currentPlanValue = watch('plan');
-    refreshActivePlans();
+    refreshActivePlans(); // This still uses MOCK_PLANS
     const currentPlanExistsAndIsActive = MOCK_PLANS.some(p => p.name === currentPlanValue && p.status === 'active');
     if (!currentPlanExistsAndIsActive && activePlans.length > 0) {
+      // Potentially set to first active plan or leave as is
     } else if (!currentPlanExistsAndIsActive) {
       setValue('plan', ''); 
     }

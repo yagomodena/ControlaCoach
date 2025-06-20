@@ -4,23 +4,23 @@ export type DayOfWeek = 'Segunda' | 'Terça' | 'Quarta' | 'Quinta' | 'Sexta' | '
 export const DAYS_OF_WEEK: DayOfWeek[] = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
 
 export interface Student {
-  id: string;
+  id: string; // Firestore document ID
   name: string;
   phone: string;
   plan: string; 
   technicalLevel: 'Iniciante' | 'Intermediário' | 'Avançado';
   status: 'active' | 'inactive';
-  registrationDate: string; 
+  registrationDate: string; // ISO String
   objective?: string;
   attendanceHistory?: { date: string; classId: string; bookedClassId: string; status: 'present' | 'absent' | 'rescheduled' | 'pending' }[];
   
   paymentStatus?: 'pago' | 'pendente' | 'vencido';
-  dueDate?: string; 
+  dueDate?: string; // ISO string or YYYY-MM-DD
   amountDue?: number;
   paymentMethod?: 'PIX' | 'Dinheiro' | 'Cartão';
-  lastPaymentDate?: string; 
+  lastPaymentDate?: string; // ISO String
 
-  recurringClassTime?: string; 
+  recurringClassTime?: string; // HH:MM
   recurringClassDays?: DayOfWeek[]; 
   recurringClassLocation?: string; 
 }
@@ -95,103 +95,7 @@ export interface Location {
   status: 'active' | 'inactive';
 }
 
-
-export const MOCK_STUDENTS: Student[] = [
-  {
-    id: '1',
-    name: 'Ana Silva',
-    phone: '(11) 98765-4321',
-    plan: 'Mensal', 
-    technicalLevel: 'Iniciante',
-    status: 'active',
-    registrationDate: '2023-01-15',
-    objective: 'Melhorar o condicionamento físico e aprender os fundamentos do futevôlei.',
-    paymentStatus: 'pago',
-    dueDate: '2024-08-05',
-    amountDue: 150,
-    paymentMethod: 'PIX',
-    attendanceHistory: [
-      { date: '2024-07-01', classId: 'c1', bookedClassId: 'bc1', status: 'present' },
-      { date: '2024-07-03', classId: 'c1', bookedClassId: 'bc1', status: 'present' },
-    ],
-    lastPaymentDate: '2024-07-05',
-    recurringClassTime: '09:00',
-    recurringClassDays: ['Segunda', 'Quarta'],
-    recurringClassLocation: 'Praia Central',
-  },
-  {
-    id: '2',
-    name: 'Bruno Costa',
-    phone: '(21) 91234-5678',
-    plan: 'Trimestral', 
-    technicalLevel: 'Intermediário',
-    status: 'active',
-    registrationDate: '2022-11-20',
-    objective: 'Aprimorar técnicas de ataque e defesa, participar de torneios amadores.',
-    paymentStatus: 'pendente',
-    dueDate: '2024-07-20',
-    amountDue: 400,
-    paymentMethod: 'Cartão',
-    attendanceHistory: [
-      { date: '2024-07-02', classId: 'c2', bookedClassId: 'bc2', status: 'present' },
-      { date: '2024-07-04', classId: 'c2', bookedClassId: 'bc2', status: 'absent' },
-    ],
-  },
-  {
-    id: '3',
-    name: 'Carlos Dias',
-    phone: '(31) 99999-8888',
-    plan: 'Mensal', 
-    technicalLevel: 'Avançado',
-    status: 'inactive',
-    registrationDate: '2023-05-10',
-    objective: 'Manter a forma física e jogar em alto nível.',
-    paymentStatus: 'vencido',
-    dueDate: '2024-06-10',
-    amountDue: 150,
-    paymentMethod: 'Dinheiro',
-    attendanceHistory: [],
-    recurringClassTime: '10:00',
-    recurringClassDays: ['Sexta'],
-    recurringClassLocation: 'Quadra Coberta A',
-  },
-   {
-    id: '4',
-    name: 'Daniela Rocha',
-    phone: '(41) 98888-7777',
-    plan: 'Mensal', 
-    technicalLevel: 'Intermediário',
-    status: 'active',
-    registrationDate: '2023-08-01',
-    objective: 'Aprender o saque tubarão e melhorar o posicionamento em quadra.',
-    paymentStatus: 'pago',
-    dueDate: '2024-08-10',
-    amountDue: 150,
-    paymentMethod: 'PIX',
-    attendanceHistory: [
-        { date: '2024-07-01', classId: 'c1', bookedClassId: 'bc_daniela1', status: 'present' },
-        { date: '2024-07-08', classId: 'c1', bookedClassId: 'bc_daniela2', status: 'present' },
-    ],
-    lastPaymentDate: '2024-07-10',
-  },
-  {
-    id: '5',
-    name: 'Eduardo Lima',
-    phone: '(51) 97777-6666',
-    plan: 'Avulso', 
-    technicalLevel: 'Iniciante',
-    status: 'active',
-    registrationDate: '2024-06-15',
-    objective: 'Experimentar o futevôlei e decidir se matricula em plano fixo.',
-    paymentStatus: 'pendente',
-    dueDate: '2024-07-25',
-    amountDue: 50,
-    paymentMethod: 'PIX',
-    attendanceHistory: [
-        { date: '2024-07-15', classId: 'c3', bookedClassId: 'bc_eduardo1', status: 'present' },
-    ],
-  }
-];
+// MOCK_STUDENTS is removed as students will be fetched from Firestore.
 
 export let MOCK_CLASS_SESSIONS: ClassSession[] = [
   { id: 'c1', dayOfWeek: 'Segunda', startTime: '18:00', endTime: '19:00', location: 'Praia Central', maxStudents: 10, enrolledStudentIds: ['1', '2', '4'] },

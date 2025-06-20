@@ -4,7 +4,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Edit3, Save, CalendarDays, DollarSign, ShieldCheck, ShieldOff, User, Phone, BarChart, Users, CheckCircle, XCircle, Clock, Goal, PlusCircle, Search, MapPinIcon, ClockIcon } from 'lucide-react';
+import { ArrowLeft, Edit3, Save, CalendarDays, DollarSign, ShieldCheck, ShieldOff, User, Phone, BarChart, Users, CheckCircle, XCircle, Clock, Goal, PlusCircle, Search, MapPinIcon, ClockIcon, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,10 +20,12 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import type { Student, Plan, Location, DayOfWeek } from '@/types';
-import { MOCK_STUDENTS, MOCK_PLANS, MOCK_LOCATIONS, DAYS_OF_WEEK } from '@/types';
+import { MOCK_PLANS, MOCK_LOCATIONS, DAYS_OF_WEEK } from '@/types'; // Keep MOCK_PLANS and MOCK_LOCATIONS for now
 import { useToast } from '@/hooks/use-toast';
 import { AddPlanDialog } from '@/components/dialogs/add-plan-dialog';
 import { ManagePlansDialog } from '@/components/dialogs/manage-plans-dialog';
+import { db } from '@/firebase';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 
 const NO_LOCATION_VALUE = "__NO_LOCATION__";
 
@@ -35,7 +37,7 @@ const studentSchema = z.object({
   status: z.enum(['active', 'inactive'], { required_error: 'Selecione o status.' }),
   objective: z.string().optional(),
   paymentStatus: z.enum(['pago', 'pendente', 'vencido']).optional(),
-  dueDate: z.string().optional(),
+  dueDate: z.string().optional(), // Should be YYYY-MM-DD or ISO
   amountDue: z.number().optional(),
   paymentMethod: z.enum(['PIX', 'Dinheiro', 'Cartão']).optional(),
   recurringClassTime: z.string()
@@ -44,6 +46,7 @@ const studentSchema = z.object({
     .or(z.literal('')), 
   recurringClassDays: z.array(z.enum(DAYS_OF_WEEK)).optional(),
   recurringClassLocation: z.string().optional(),
+  lastPaymentDate: z.string().optional(), // ISO String
 });
 
 type StudentFormData = z.infer<typeof studentSchema>;
@@ -58,18 +61,13 @@ export default function AlunoDetailPage() {
   const [student, setStudent] = useState<Student | null>(null);
   const [isEditMode, setIsEditMode] = useState(searchParams.get('edit') === 'true');
   const [isLoading, setIsLoading] = useState(true);
-  const [activePlans, setActivePlans] = useState<Plan[]>([]);
-  const [activeLocations, setActiveLocations] = useState<Location[]>([]);
+  const [activePlans, setActivePlans] = useState<Plan[]>([]); // Still from MOCK
+  const [activeLocations, setActiveLocations] = useState<Location[]>([]); // Still from MOCK
   const [isAddPlanDialogOpen, setIsAddPlanDialogOpen] = useState(false);
   const [isManagePlansDialogOpen, setIsManagePlansDialogOpen] = useState(false);
 
-  const refreshActivePlans = () => {
-    setActivePlans(MOCK_PLANS.filter(p => p.status === 'active'));
-  };
-
-  const refreshActiveLocations = () => {
-    setActiveLocations(MOCK_LOCATIONS.filter(loc => loc.status === 'active'));
-  };
+  const refreshActivePlans = () => setActivePlans(MOCK_PLANS.filter(p => p.status === 'active'));
+  const refreshActiveLocations = () => setActiveLocations(MOCK_LOCATIONS.filter(loc => loc.status === 'active'));
 
   useEffect(() => {
     refreshActivePlans();
@@ -81,21 +79,38 @@ export default function AlunoDetailPage() {
   });
 
   useEffect(() => {
+    if (!studentId) return;
     setIsLoading(true);
-    const foundStudent = MOCK_STUDENTS.find(s => s.id === studentId);
-    if (foundStudent) {
-      setStudent(foundStudent);
-      reset({
-        ...foundStudent,
-        recurringClassTime: foundStudent.recurringClassTime || '',
-        recurringClassDays: foundStudent.recurringClassDays || [],
-        recurringClassLocation: foundStudent.recurringClassLocation || '',
-      } as StudentFormData);
-    } else {
-      toast({ title: "Erro", description: "Aluno não encontrado.", variant: "destructive" });
-      router.push('/alunos');
-    }
-    setIsLoading(false);
+    const fetchStudent = async () => {
+      try {
+        const studentDocRef = doc(db, 'students', studentId);
+        const studentDocSnap = await getDoc(studentDocRef);
+
+        if (studentDocSnap.exists()) {
+          const studentData = { ...studentDocSnap.data(), id: studentDocSnap.id } as Student;
+          setStudent(studentData);
+          reset({
+            ...studentData,
+            recurringClassTime: studentData.recurringClassTime || '',
+            recurringClassDays: studentData.recurringClassDays || [],
+            recurringClassLocation: studentData.recurringClassLocation || '',
+            // Ensure dates are in YYYY-MM-DD for input[type=date] if applicable
+            dueDate: studentData.dueDate ? studentData.dueDate.split('T')[0] : undefined,
+            lastPaymentDate: studentData.lastPaymentDate ? studentData.lastPaymentDate.split('T')[0] : undefined,
+          });
+        } else {
+          toast({ title: "Erro", description: "Aluno não encontrado.", variant: "destructive" });
+          router.push('/alunos');
+        }
+      } catch (error) {
+        console.error("Error fetching student details: ", error);
+        toast({ title: "Erro ao Carregar", description: "Não foi possível buscar os dados do aluno.", variant: "destructive" });
+        router.push('/alunos');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchStudent();
   }, [studentId, reset, router, toast]);
 
   useEffect(() => {
@@ -103,34 +118,47 @@ export default function AlunoDetailPage() {
   }, [searchParams]);
 
   const onSubmit = async (data: StudentFormData) => {
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    let finalRecurringClassLocation = data.recurringClassLocation;
-    if (data.recurringClassLocation === NO_LOCATION_VALUE) {
-      finalRecurringClassLocation = undefined;
-    }
+    if (!studentId) return;
+    try {
+      let finalRecurringClassLocation = data.recurringClassLocation;
+      if (data.recurringClassLocation === NO_LOCATION_VALUE) {
+        finalRecurringClassLocation = undefined;
+      }
 
-    const updatedStudentData = { 
-      ...student, 
-      ...data,
-      objective: data.objective || undefined,
-      recurringClassTime: data.recurringClassTime || undefined,
-      recurringClassDays: data.recurringClassDays?.length ? data.recurringClassDays : undefined,
-      recurringClassLocation: finalRecurringClassLocation,
-    } as Student;
-    setStudent(updatedStudentData);
-    
-    const studentIndex = MOCK_STUDENTS.findIndex(s => s.id === studentId);
-    if (studentIndex !== -1) {
-        MOCK_STUDENTS[studentIndex] = updatedStudentData;
-    }
+      const studentDataToUpdate = { 
+        ...data, // This includes all fields from the form
+        objective: data.objective || undefined,
+        recurringClassTime: data.recurringClassTime || undefined,
+        recurringClassDays: data.recurringClassDays?.length ? data.recurringClassDays : undefined,
+        recurringClassLocation: finalRecurringClassLocation,
+        // Ensure dates are stored correctly if they were modified
+        dueDate: data.dueDate ? new Date(data.dueDate).toISOString() : undefined,
+        lastPaymentDate: data.lastPaymentDate ? new Date(data.lastPaymentDate).toISOString() : undefined,
+      };
 
-    toast({
-      title: "Aluno Atualizado!",
-      description: `${data.name} foi atualizado com sucesso.`,
-    });
-    setIsEditMode(false);
-    router.replace(`/alunos/${studentId}`);
+      // Remove id from data if it was included by spread
+      const { id, ...updatePayload } = studentDataToUpdate as any;
+
+      const studentDocRef = doc(db, 'students', studentId);
+      await updateDoc(studentDocRef, updatePayload);
+      
+      // Optimistically update local state or refetch
+      setStudent(prev => prev ? { ...prev, ...studentDataToUpdate, id: prev.id, registrationDate: prev.registrationDate } : null);
+
+      toast({
+        title: "Aluno Atualizado!",
+        description: `${data.name} foi atualizado com sucesso.`,
+      });
+      setIsEditMode(false);
+      router.replace(`/alunos/${studentId}`);
+    } catch (error) {
+        console.error("Error updating student: ", error);
+        toast({
+            title: "Erro ao Atualizar",
+            description: "Não foi possível atualizar os dados do aluno. Tente novamente.",
+            variant: "destructive",
+        });
+    }
   };
 
   const handlePlansManaged = () => {
@@ -138,13 +166,19 @@ export default function AlunoDetailPage() {
     refreshActivePlans();
     const currentPlanExistsAndIsActive = MOCK_PLANS.some(p => p.name === currentPlanValue && p.status === 'active');
     if (!currentPlanExistsAndIsActive && activePlans.length > 0) {
+      // Potentially update or clear plan
     } else if (!currentPlanExistsAndIsActive) {
        setValue('plan', ''); 
     }
   };
 
   if (isLoading) {
-    return <div className="container mx-auto py-8 text-center">Carregando dados do aluno...</div>;
+    return (
+      <div className="container mx-auto py-8 flex flex-col items-center justify-center min-h-[calc(100vh-150px)]">
+        <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+        <p className="text-muted-foreground">Carregando dados do aluno...</p>
+      </div>
+    );
   }
 
   if (!student) {
@@ -161,7 +195,7 @@ export default function AlunoDetailPage() {
         ) : isLongText && value ? (
             <p className="font-medium text-foreground whitespace-pre-wrap">{String(value)}</p>
         ) : (
-            <p className="font-medium text-foreground">{value != null ? String(value) : 'N/A'}</p>
+            <p className="font-medium text-foreground">{value != null && value !== '' ? String(value) : 'N/A'}</p>
         )}
       </div>
     </div>
@@ -175,6 +209,20 @@ export default function AlunoDetailPage() {
       default: return <Badge variant="outline">N/A</Badge>;
     }
   };
+  
+  const formatDateString = (dateString?: string) => {
+    if (!dateString) return 'N/A';
+    try {
+        // Check if it's already YYYY-MM-DD
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+            return new Date(dateString + 'T00:00:00').toLocaleDateString('pt-BR'); // Ensure UTC interpretation for YYYY-MM-DD
+        }
+        return new Date(dateString).toLocaleDateString('pt-BR');
+    } catch (e) {
+        return 'Data inválida';
+    }
+  };
+
 
   return (
     <>
@@ -194,7 +242,7 @@ export default function AlunoDetailPage() {
             </p>
           </div>
           {!isEditMode && (
-            <Button onClick={() => setIsEditMode(true)} className="ml-auto bg-primary hover:bg-primary/90 text-primary-foreground">
+            <Button onClick={() => router.push(`/alunos/${studentId}?edit=true`)} className="ml-auto bg-primary hover:bg-primary/90 text-primary-foreground">
               <Edit3 className="mr-2 h-4 w-4" /> Editar
             </Button>
           )}
@@ -299,7 +347,7 @@ export default function AlunoDetailPage() {
                       name="recurringClassLocation"
                       control={control}
                       render={({ field }) => (
-                        <Select onValueChange={field.onChange} value={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value ?? NO_LOCATION_VALUE}>
                           <SelectTrigger id="recurringClassLocation">
                             <SelectValue placeholder="Selecione o local" />
                           </SelectTrigger>
@@ -351,7 +399,7 @@ export default function AlunoDetailPage() {
               </CardContent>
 
               <CardFooter className="flex justify-end gap-2 pt-6">
-                <Button variant="outline" type="button" onClick={() => { setIsEditMode(false); router.replace(`/alunos/${studentId}`); reset({...student, recurringClassTime: student?.recurringClassTime || '', recurringClassDays: student?.recurringClassDays || [], recurringClassLocation: student?.recurringClassLocation || ''} as StudentFormData); }}>Cancelar</Button>
+                <Button variant="outline" type="button" onClick={() => { setIsEditMode(false); router.replace(`/alunos/${studentId}`); reset({...student, recurringClassTime: student?.recurringClassTime || '', recurringClassDays: student?.recurringClassDays || [], recurringClassLocation: student?.recurringClassLocation || '', dueDate: student?.dueDate?.split('T')[0], lastPaymentDate: student?.lastPaymentDate?.split('T')[0] } as StudentFormData); }}>Cancelar</Button>
                 <Button type="submit" disabled={isSubmitting} className="bg-primary hover:bg-primary/90 text-primary-foreground">
                   <Save className="mr-2 h-4 w-4" />{isSubmitting ? 'Salvando...' : 'Salvar Alterações'}
                 </Button>
@@ -383,7 +431,7 @@ export default function AlunoDetailPage() {
                   <InfoItem icon={Phone} label="Telefone" value={student.phone} />
                   <InfoItem icon={Users} label="Plano" value={student.plan} />
                   <InfoItem icon={BarChart} label="Nível Técnico" value={student.technicalLevel} />
-                  <InfoItem icon={CalendarDays} label="Data de Cadastro" value={new Date(student.registrationDate).toLocaleDateString('pt-BR')} />
+                  <InfoItem icon={CalendarDays} label="Data de Cadastro" value={formatDateString(student.registrationDate)} />
                   <InfoItem icon={student.status === 'active' ? ShieldCheck : ShieldOff} label="Status" value={student.status === 'active' ? 'Ativo' : 'Inativo'} />
                 </CardContent>
                 {student.objective && (
@@ -392,19 +440,20 @@ export default function AlunoDetailPage() {
                   </CardContent>
                 )}
                  <CardContent className="pt-2"> 
-                   <Label className="text-sm text-muted-foreground">Histórico de Presença</Label>
+                   <Label className="text-sm text-muted-foreground">Histórico de Presença (Últimos 5)</Label>
                     {student.attendanceHistory && student.attendanceHistory.length > 0 ? (
                       <Table className="mt-2">
-                        <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Aula ID</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                        <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>ID Aula Agendada</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
                         <TableBody>
                           {student.attendanceHistory.slice(0, 5).map((att, index) => ( 
                             <TableRow key={index}>
-                              <TableCell>{new Date(att.date).toLocaleDateString('pt-BR')}</TableCell>
-                              <TableCell>{att.classId}</TableCell>
+                              <TableCell>{formatDateString(att.date)}</TableCell>
+                              <TableCell>{att.bookedClassId}</TableCell>
                               <TableCell>
                                 {att.status === 'present' && <Badge className="bg-green-500/20 text-green-700 border-green-500/30"><CheckCircle className="inline mr-1 h-3 w-3" /> Presente</Badge>}
                                 {att.status === 'absent' && <Badge className="bg-red-500/20 text-red-700 border-red-500/30"><XCircle className="inline mr-1 h-3 w-3" /> Ausente</Badge>}
                                 {att.status === 'rescheduled' && <Badge className="bg-blue-500/20 text-blue-700 border-blue-500/30"><Clock className="inline mr-1 h-3 w-3" /> Remarcado</Badge>}
+                                {att.status === 'pending' && <Badge className="bg-yellow-500/20 text-yellow-700 border-yellow-500/30"><Clock className="inline mr-1 h-3 w-3" /> Pendente</Badge>}
                               </TableCell>
                             </TableRow>
                           ))}
@@ -451,10 +500,10 @@ export default function AlunoDetailPage() {
                       {getPaymentStatusBadge(student.paymentStatus)}
                     </div>
                   </div>
-                  <InfoItem icon={CalendarDays} label="Data de Vencimento" value={student.dueDate ? new Date(student.dueDate).toLocaleDateString('pt-BR') : 'N/A'} />
+                  <InfoItem icon={CalendarDays} label="Data de Vencimento" value={formatDateString(student.dueDate)} />
                   <InfoItem icon={DollarSign} label="Valor Devido" value={student.amountDue ? `R$ ${student.amountDue.toFixed(2)}` : 'N/A'} />
                   <InfoItem icon={DollarSign} label="Método de Pagamento Preferencial" value={student.paymentMethod} />
-                  <InfoItem icon={CalendarDays} label="Último Pagamento" value={student.lastPaymentDate ? new Date(student.lastPaymentDate).toLocaleDateString('pt-BR') : 'N/A'} />
+                  <InfoItem icon={CalendarDays} label="Último Pagamento" value={formatDateString(student.lastPaymentDate)} />
                   <Button asChild className="mt-4">
                     <Link href={`/financeiro/lembrete/${student.id}`}>
                       <DollarSign className="mr-2 h-4 w-4" /> Gerar Lembrete de Pagamento

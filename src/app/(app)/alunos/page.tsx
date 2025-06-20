@@ -1,9 +1,9 @@
 
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
-import { PlusCircle, Search, Edit3, Trash2, MoreVertical, Eye } from 'lucide-react';
+import { PlusCircle, Search, Edit3, Trash2, MoreVertical, Eye, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -23,14 +23,38 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import type { Student } from '@/types';
-import { MOCK_STUDENTS } from '@/types'; // Using mock data
+import { db } from '@/firebase';
+import { collection, getDocs, deleteDoc, doc, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { useToast } from '@/hooks/use-toast';
 
 export default function AlunosPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
-  
-  // In a real app, this would come from a data store (e.g., Firebase)
-  const [students, setStudents] = useState<Student[]>(MOCK_STUDENTS);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    setIsLoading(true);
+    const studentsCollectionRef = collection(db, 'students');
+    const q = query(studentsCollectionRef, orderBy('name', 'asc'));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const studentsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Student));
+      setStudents(studentsData);
+      setIsLoading(false);
+    }, (error) => {
+      console.error("Error fetching students: ", error);
+      toast({
+        title: "Erro ao Carregar Alunos",
+        description: "Não foi possível buscar os dados dos alunos. Tente novamente.",
+        variant: "destructive",
+      });
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe(); // Cleanup on unmount
+  }, [toast]);
 
   const filteredStudents = useMemo(() => {
     return students.filter(student => {
@@ -40,11 +64,23 @@ export default function AlunosPage() {
     });
   }, [students, searchTerm, statusFilter]);
 
-  const handleDeleteStudent = (studentId: string) => {
-    // Placeholder for delete logic
-    if (window.confirm('Tem certeza que deseja excluir este aluno? Esta ação não pode ser desfeita.')) {
-      setStudents(prevStudents => prevStudents.filter(s => s.id !== studentId));
-      // Add toast notification for success
+  const handleDeleteStudent = async (studentId: string, studentName: string) => {
+    if (window.confirm(`Tem certeza que deseja excluir o aluno "${studentName}"? Esta ação não pode ser desfeita.`)) {
+      try {
+        await deleteDoc(doc(db, 'students', studentId));
+        toast({
+          title: 'Aluno Excluído!',
+          description: `O aluno "${studentName}" foi removido com sucesso.`,
+        });
+        // Real-time listener will update the list automatically
+      } catch (error) {
+        console.error("Error deleting student: ", error);
+        toast({
+          title: "Erro ao Excluir",
+          description: "Não foi possível excluir o aluno. Tente novamente.",
+          variant: "destructive",
+        });
+      }
     }
   };
 
@@ -104,68 +140,75 @@ export default function AlunosPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nome</TableHead>
-                <TableHead className="hidden lg:table-cell">Telefone</TableHead>
-                <TableHead className="hidden sm:table-cell">Plano</TableHead>
-                <TableHead className="hidden md:table-cell">Nível</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredStudents.length > 0 ? (
-                filteredStudents.map((student) => (
-                  <TableRow key={student.id}>
-                    <TableCell className="font-medium">{student.name}</TableCell>
-                    <TableCell className="hidden lg:table-cell text-muted-foreground">{student.phone}</TableCell>
-                    <TableCell className="hidden sm:table-cell">{student.plan}</TableCell>
-                    <TableCell className="hidden md:table-cell">{student.technicalLevel}</TableCell>
-                    <TableCell>
-                      <Badge variant={student.status === 'active' ? 'default' : 'secondary'}
-                       className={student.status === 'active' ? 'bg-green-500/20 text-green-700 border-green-500/30' : 'bg-red-500/20 text-red-700 border-red-500/30'}
-                      >
-                        {student.status === 'active' ? 'Ativo' : 'Inativo'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
-                            <MoreVertical className="h-4 w-4" />
-                            <span className="sr-only">Mais ações</span>
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                           <DropdownMenuItem asChild>
-                             <Link href={`/alunos/${student.id}`} className="flex items-center">
-                               <Eye className="mr-2 h-4 w-4" /> Ver Detalhes
-                             </Link>
-                           </DropdownMenuItem>
-                          <DropdownMenuItem asChild>
-                            <Link href={`/alunos/${student.id}?edit=true`} className="flex items-center"> {/* Assuming edit mode via query param or separate route */}
-                              <Edit3 className="mr-2 h-4 w-4" /> Editar
-                            </Link>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleDeleteStudent(student.id)} className="text-destructive focus:text-destructive focus:bg-destructive/10 flex items-center">
-                            <Trash2 className="mr-2 h-4 w-4" /> Excluir
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+          {isLoading ? (
+            <div className="flex justify-center items-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="ml-2 text-muted-foreground">Carregando alunos...</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nome</TableHead>
+                  <TableHead className="hidden lg:table-cell">Telefone</TableHead>
+                  <TableHead className="hidden sm:table-cell">Plano</TableHead>
+                  <TableHead className="hidden md:table-cell">Nível</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredStudents.length > 0 ? (
+                  filteredStudents.map((student) => (
+                    <TableRow key={student.id}>
+                      <TableCell className="font-medium">{student.name}</TableCell>
+                      <TableCell className="hidden lg:table-cell text-muted-foreground">{student.phone}</TableCell>
+                      <TableCell className="hidden sm:table-cell">{student.plan}</TableCell>
+                      <TableCell className="hidden md:table-cell">{student.technicalLevel}</TableCell>
+                      <TableCell>
+                        <Badge variant={student.status === 'active' ? 'default' : 'secondary'}
+                        className={student.status === 'active' ? 'bg-green-500/20 text-green-700 border-green-500/30' : 'bg-red-500/20 text-red-700 border-red-500/30'}
+                        >
+                          {student.status === 'active' ? 'Ativo' : 'Inativo'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <MoreVertical className="h-4 w-4" />
+                              <span className="sr-only">Mais ações</span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem asChild>
+                              <Link href={`/alunos/${student.id}`} className="flex items-center">
+                                <Eye className="mr-2 h-4 w-4" /> Ver Detalhes
+                              </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem asChild>
+                              <Link href={`/alunos/${student.id}?edit=true`} className="flex items-center">
+                                <Edit3 className="mr-2 h-4 w-4" /> Editar
+                              </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDeleteStudent(student.id, student.name)} className="text-destructive focus:text-destructive focus:bg-destructive/10 flex items-center">
+                              <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                      Nenhum aluno encontrado.
                     </TableCell>
                   </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                    Nenhum aluno encontrado.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>
