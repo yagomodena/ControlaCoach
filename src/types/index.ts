@@ -97,6 +97,13 @@ export interface Location {
   status: 'active' | 'inactive';
 }
 
+export interface CoachProfileSettings {
+  coachName: string;
+  coachEmail: string;
+  notificationsEnabled: boolean;
+  defaultPaymentReminderDays: number;
+}
+
 
 export let INITIAL_MOCK_BOOKED_CLASSES: BookedClass[] = [
   { 
@@ -142,3 +149,4 @@ export const getDayOfWeekName = (dayNumber: number): DayOfWeek | undefined => {
   };
   return map[dayNumber];
 };
+

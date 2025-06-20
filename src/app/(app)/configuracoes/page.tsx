@@ -13,7 +13,7 @@ import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import type { CoachAvailability, DailyAvailability } from '@/types';
+import type { CoachAvailability, DailyAvailability, CoachProfileSettings } from '@/types';
 
 interface DailyScheduleState {
   name: string;
@@ -34,12 +34,6 @@ const dayNameToNumeric: Record<string, number> = {
   'Sábado': 6,
 };
 
-const numericToDayName = (num: number): string => {
-    const names = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
-    return names[num] || 'Dia Desconhecido';
-};
-
-
 const initialWeekScheduleState: DailyScheduleState[] = [
   { name: 'Segunda-feira', isWorkDay: true, workStart: '08:00', workEnd: '18:00', breakStart: '12:00', breakEnd: '13:30' },
   { name: 'Terça-feira', isWorkDay: true, workStart: '08:00', workEnd: '18:00', breakStart: '12:00', breakEnd: '13:30' },
@@ -48,32 +42,69 @@ const initialWeekScheduleState: DailyScheduleState[] = [
   { name: 'Sexta-feira', isWorkDay: true, workStart: '08:00', workEnd: '18:00', breakStart: '12:00', breakEnd: '13:30' },
   { name: 'Sábado', isWorkDay: true, workStart: '08:00', workEnd: '12:00', breakStart: '', breakEnd: '' },
   { name: 'Domingo', isWorkDay: false, workStart: '08:00', workEnd: '12:00', breakStart: '', breakEnd: '' },
-].sort((a, b) => dayNameToNumeric[a.name] - dayNameToNumeric[b.name]); // Ensure sorted by numeric day for consistent display
+].sort((a, b) => dayNameToNumeric[a.name] - dayNameToNumeric[b.name]); 
 
 
 export default function ConfiguracoesPage() {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = React.useState(false);
+  const { toast } = useToast();
+
+  // Profile State
+  const [coachName, setCoachName] = useState('');
+  const [coachEmail, setCoachEmail] = useState('');
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  // Notifications State
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [defaultPaymentReminderDays, setDefaultPaymentReminderDays] = useState(3);
+  const [isLoadingNotifications, setIsLoadingNotifications] = useState(true); 
+  const [isSavingNotifications, setIsSavingNotifications] = useState(false);
+
+  // Availability State
   const [weekSchedule, setWeekSchedule] = useState<DailyScheduleState[]>(initialWeekScheduleState);
   const [isLoadingAvailability, setIsLoadingAvailability] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const { toast } = useToast();
+  const [isSavingAvailability, setIsSavingAvailability] = useState(false);
   
-  const mockSettings = { // This can be fetched from Firestore too if needed
-    coachName: "ControlaCoach",
-    notificationsEnabled: true,
-    defaultPaymentReminderDays: 3,
-  };
-
   useEffect(() => {
     setMounted(true);
+    setIsLoadingProfile(true);
+    setIsLoadingNotifications(true);
     setIsLoadingAvailability(true);
-    const fetchAvailability = async () => {
+
+    const fetchAllSettings = async () => {
+      try {
+        // Fetch Profile & Notification Settings
+        const profileSettingsDocRef = doc(db, 'settings', 'coachProfileAndNotifications');
+        const profileDocSnap = await getDoc(profileSettingsDocRef);
+        if (profileDocSnap.exists()) {
+          const data = profileDocSnap.data() as CoachProfileSettings;
+          setCoachName(data.coachName || '');
+          setCoachEmail(data.coachEmail || '');
+          setNotificationsEnabled(data.notificationsEnabled === undefined ? true : data.notificationsEnabled);
+          setDefaultPaymentReminderDays(data.defaultPaymentReminderDays || 3);
+        } else {
+          // Set defaults if no doc exists
+          setCoachName('ControlaCoach User');
+          setCoachEmail('seuemail@example.com');
+          setNotificationsEnabled(true);
+          setDefaultPaymentReminderDays(3);
+        }
+      } catch (error) {
+        console.error("Error fetching profile/notification settings: ", error);
+        toast({ title: "Erro ao carregar perfil/notificações", variant: "destructive" });
+      } finally {
+        setIsLoadingProfile(false);
+        setIsLoadingNotifications(false);
+      }
+
+      // Fetch Availability Settings
       try {
         const availabilityDocRef = doc(db, 'settings', 'coachAvailability');
-        const docSnap = await getDoc(availabilityDocRef);
-        if (docSnap.exists()) {
-          const fetchedData = docSnap.data() as CoachAvailability;
+        const availabilityDocSnap = await getDoc(availabilityDocRef);
+        if (availabilityDocSnap.exists()) {
+          const fetchedData = availabilityDocSnap.data() as CoachAvailability;
           const newFormSchedule = initialWeekScheduleState.map(dayState => {
             const numericDay = dayNameToNumeric[dayState.name];
             const firestoreDayData = fetchedData[numericDay];
@@ -88,23 +119,22 @@ export default function ConfiguracoesPage() {
                 breakEnd: firestoreDayData.breaks[0]?.end || '',
               };
             }
-            // If not found in Firestore or no workRanges, default to not a workday for form consistency
             return { ...dayState, isWorkDay: false, workStart: '08:00', workEnd: '18:00', breakStart: '', breakEnd: '' };
           }).sort((a,b) => dayNameToNumeric[a.name] - dayNameToNumeric[b.name]);
           setWeekSchedule(newFormSchedule);
         } else {
-          // No settings found, use initial defaults
           setWeekSchedule(initialWeekScheduleState);
         }
       } catch (error) {
         console.error("Error fetching availability settings: ", error);
         toast({ title: "Erro ao carregar disponibilidade", variant: "destructive" });
-        setWeekSchedule(initialWeekScheduleState); // Fallback to defaults
+        setWeekSchedule(initialWeekScheduleState); 
       } finally {
         setIsLoadingAvailability(false);
       }
     };
-    fetchAvailability();
+    
+    fetchAllSettings();
   }, [toast]);
   
   const handleScheduleChange = (index: number, field: keyof DailyScheduleState, value: string | boolean) => {
@@ -113,13 +143,60 @@ export default function ConfiguracoesPage() {
     setWeekSchedule(newSchedule);
   };
 
+  const handleSaveProfileInfo = async () => {
+    setIsSavingProfile(true);
+    try {
+      const settingsDocRef = doc(db, 'settings', 'coachProfileAndNotifications');
+      // Fetch existing settings to preserve notification part
+      const docSnap = await getDoc(settingsDocRef);
+      const existingData = docSnap.exists() ? docSnap.data() as Partial<CoachProfileSettings> : {};
+      
+      const dataToSave: CoachProfileSettings = {
+        coachName: coachName,
+        coachEmail: coachEmail,
+        notificationsEnabled: existingData.notificationsEnabled === undefined ? true : existingData.notificationsEnabled,
+        defaultPaymentReminderDays: existingData.defaultPaymentReminderDays || 3,
+      };
+      await setDoc(settingsDocRef, dataToSave, { merge: true });
+      toast({ title: "Perfil Salvo!", description: "Suas informações de perfil foram atualizadas." });
+    } catch (error) {
+      console.error("Error saving profile info:", error);
+      toast({ title: "Erro ao Salvar Perfil", variant: "destructive" });
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const handleSaveNotificationSettings = async () => {
+    setIsSavingNotifications(true);
+    try {
+      const settingsDocRef = doc(db, 'settings', 'coachProfileAndNotifications');
+      // Fetch existing settings to preserve profile part
+      const docSnap = await getDoc(settingsDocRef);
+      const existingData = docSnap.exists() ? docSnap.data() as Partial<CoachProfileSettings> : {};
+
+      const dataToSave: CoachProfileSettings = {
+        coachName: existingData.coachName || 'ControlaCoach User',
+        coachEmail: existingData.coachEmail || 'seuemail@example.com',
+        notificationsEnabled: notificationsEnabled,
+        defaultPaymentReminderDays: Number(defaultPaymentReminderDays),
+      };
+      await setDoc(settingsDocRef, dataToSave, { merge: true });
+      toast({ title: "Notificações Salvas!", description: "Suas preferências de notificação foram atualizadas." });
+    } catch (error) {
+      console.error("Error saving notification settings:", error);
+      toast({ title: "Erro ao Salvar Notificações", variant: "destructive" });
+    } finally {
+      setIsSavingNotifications(false);
+    }
+  };
+
   const handleSaveAvailability = async () => {
-    setIsSaving(true);
+    setIsSavingAvailability(true);
     try {
       const availabilityToSave: CoachAvailability = { 
-        defaultDaily: { workRanges: [], breaks: [] } // Initialize defaultDaily
+        defaultDaily: { workRanges: [], breaks: [] } 
       };
-
       weekSchedule.forEach(dayState => {
         const numericDay = dayNameToNumeric[dayState.name];
         if (dayState.isWorkDay && dayState.workStart && dayState.workEnd) {
@@ -133,36 +210,27 @@ export default function ConfiguracoesPage() {
         }
       });
       
-      // Example: setting defaultDaily from Monday's settings if available
-      const mondaySettings = availabilityToSave[1]; // 1 is Monday
+      const mondaySettings = availabilityToSave[1]; 
       if (mondaySettings) {
         availabilityToSave.defaultDaily = mondaySettings;
       }
 
-
       const availabilityDocRef = doc(db, 'settings', 'coachAvailability');
       await setDoc(availabilityDocRef, availabilityToSave);
-
-      toast({
-        title: "Disponibilidade Salva!",
-        description: "Seus horários foram atualizados com sucesso.",
-      });
+      toast({ title: "Disponibilidade Salva!", description: "Seus horários foram atualizados." });
     } catch (error) {
       console.error("Error saving availability: ", error);
-      toast({
-        title: "Erro ao Salvar",
-        description: "Não foi possível salvar sua disponibilidade. Tente novamente.",
-        variant: "destructive",
-      });
+      toast({ title: "Erro ao Salvar Disponibilidade", variant: "destructive" });
     } finally {
-      setIsSaving(false);
+      setIsSavingAvailability(false);
     }
   };
-
 
   if (!mounted) {
     return null; 
   }
+
+  const isLoadingAny = isLoadingProfile || isLoadingNotifications || isLoadingAvailability;
 
   return (
     <div className="container mx-auto py-8">
@@ -170,6 +238,13 @@ export default function ConfiguracoesPage() {
         <h1 className="text-3xl font-headline font-bold text-foreground">Configurações</h1>
         <p className="text-muted-foreground">Ajuste as preferências do sistema ControlaCoach.</p>
       </div>
+      
+      {isLoadingAny && (
+        <div className="fixed inset-0 bg-background/50 backdrop-blur-sm flex items-center justify-center z-50">
+            <Loader2 className="h-10 w-10 animate-spin text-primary" />
+            <p className="ml-3 text-lg text-foreground">Carregando configurações...</p>
+        </div>
+      )}
 
       <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
         <Card className="shadow-lg">
@@ -182,14 +257,15 @@ export default function ConfiguracoesPage() {
           <CardContent className="space-y-4">
             <div className="space-y-1">
               <Label htmlFor="coachName">Nome do Treinador</Label>
-              <Input id="coachName" defaultValue={mockSettings.coachName} />
+              <Input id="coachName" value={coachName} onChange={(e) => setCoachName(e.target.value)} disabled={isSavingProfile || isLoadingProfile} />
             </div>
             <div className="space-y-1">
               <Label htmlFor="coachEmail">Email de Contato</Label>
-              <Input id="coachEmail" type="email" defaultValue="coach@bossolan.com" />
+              <Input id="coachEmail" type="email" value={coachEmail} onChange={(e) => setCoachEmail(e.target.value)} disabled={isSavingProfile || isLoadingProfile} />
             </div>
-            <Button className="w-full mt-2 bg-primary hover:bg-primary/90 text-primary-foreground">
-              <Save className="mr-2 h-4 w-4" /> Salvar Informações
+            <Button onClick={handleSaveProfileInfo} className="w-full mt-2 bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isSavingProfile || isLoadingProfile}>
+              {isSavingProfile && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              <Save className="mr-2 h-4 w-4" /> {isSavingProfile ? 'Salvando...' : 'Salvar Informações'}
             </Button>
           </CardContent>
         </Card>
@@ -203,21 +279,33 @@ export default function ConfiguracoesPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between space-x-2 rounded-lg border p-4">
-              <Label htmlFor="notificationsEnabled" className="flex flex-col space-y-1">
+              <Label htmlFor="notificationsEnabledSwitch" className="flex flex-col space-y-1">
                 <span>Ativar Notificações Gerais</span>
                 <span className="font-normal leading-snug text-muted-foreground">
                   Receber alertas sobre pagamentos, aulas, etc.
                 </span>
               </Label>
-              <Switch id="notificationsEnabled" defaultChecked={mockSettings.notificationsEnabled} />
+              <Switch 
+                id="notificationsEnabledSwitch" 
+                checked={notificationsEnabled} 
+                onCheckedChange={setNotificationsEnabled}
+                disabled={isSavingNotifications || isLoadingNotifications}
+              />
             </div>
              <div className="space-y-1">
               <Label htmlFor="reminderDays">Dias para Lembrete de Pagamento</Label>
-              <Input id="reminderDays" type="number" defaultValue={mockSettings.defaultPaymentReminderDays} />
+              <Input 
+                id="reminderDays" 
+                type="number" 
+                value={defaultPaymentReminderDays} 
+                onChange={(e) => setDefaultPaymentReminderDays(Number(e.target.value))} 
+                disabled={isSavingNotifications || isLoadingNotifications}
+              />
               <p className="text-xs text-muted-foreground">Quantos dias antes do vencimento enviar lembrete.</p>
             </div>
-            <Button className="w-full mt-2 bg-primary hover:bg-primary/90 text-primary-foreground">
-              <Save className="mr-2 h-4 w-4" /> Salvar Preferências de Notificação
+            <Button onClick={handleSaveNotificationSettings} className="w-full mt-2 bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isSavingNotifications || isLoadingNotifications}>
+              {isSavingNotifications && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              <Save className="mr-2 h-4 w-4" /> {isSavingNotifications ? 'Salvando...' : 'Salvar Preferências'}
             </Button>
           </CardContent>
         </Card>
@@ -250,7 +338,6 @@ export default function ConfiguracoesPage() {
         </Card>
       </div>
 
-      {/* Weekly Availability Card */}
       <Card className="shadow-lg mt-8 lg:col-span-3">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -279,6 +366,7 @@ export default function ConfiguracoesPage() {
                         id={`isWorkDay-${index}`}
                         checked={day.isWorkDay}
                         onCheckedChange={(checked) => handleScheduleChange(index, 'isWorkDay', checked)}
+                        disabled={isSavingAvailability}
                         />
                     </div>
                     </div>
@@ -292,6 +380,7 @@ export default function ConfiguracoesPage() {
                             type="time"
                             value={day.workStart}
                             onChange={(e) => handleScheduleChange(index, 'workStart', e.target.value)}
+                            disabled={isSavingAvailability}
                         />
                         </div>
                         <div className="space-y-1">
@@ -301,6 +390,7 @@ export default function ConfiguracoesPage() {
                             type="time"
                             value={day.workEnd}
                             onChange={(e) => handleScheduleChange(index, 'workEnd', e.target.value)}
+                            disabled={isSavingAvailability}
                         />
                         </div>
 
@@ -311,6 +401,7 @@ export default function ConfiguracoesPage() {
                             type="time"
                             value={day.breakStart}
                             onChange={(e) => handleScheduleChange(index, 'breakStart', e.target.value)}
+                            disabled={isSavingAvailability}
                         />
                         </div>
                         <div className="space-y-1">
@@ -320,6 +411,7 @@ export default function ConfiguracoesPage() {
                             type="time"
                             value={day.breakEnd}
                             onChange={(e) => handleScheduleChange(index, 'breakEnd', e.target.value)}
+                            disabled={isSavingAvailability}
                         />
                         </div>
                     </div>
@@ -333,13 +425,13 @@ export default function ConfiguracoesPage() {
           )}
         </CardContent>
         <CardFooter>
-          <Button onClick={handleSaveAvailability} disabled={isSaving || isLoadingAvailability} className="ml-auto bg-primary hover:bg-primary/90 text-primary-foreground">
-            {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            <Save className="mr-2 h-4 w-4" /> {isSaving ? 'Salvando...' : 'Salvar Disponibilidade'}
+          <Button onClick={handleSaveAvailability} disabled={isSavingAvailability || isLoadingAvailability} className="ml-auto bg-primary hover:bg-primary/90 text-primary-foreground">
+            {isSavingAvailability && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            <Save className="mr-2 h-4 w-4" /> {isSavingAvailability ? 'Salvando...' : 'Salvar Disponibilidade'}
           </Button>
         </CardFooter>
       </Card>
-
     </div>
   );
 }
+
