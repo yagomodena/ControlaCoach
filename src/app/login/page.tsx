@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -8,24 +9,44 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Logo } from '@/components/logo';
 import { Eye, EyeOff } from 'lucide-react';
+import { auth } from '@/firebase'; // Import Firebase auth
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { useToast } from '@/hooks/use-toast';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    // Placeholder login logic
-    if (email === 'admin@bossolan.com' && password === 'password') {
-      // In a real app, you'd set some auth state (e.g., cookie, localStorage token)
-      // and then redirect.
+    setIsLoading(true);
+    
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      // Successful login, Firebase auth state will change.
+      // Next step would be to use an AuthProvider to listen to this change
+      // and protect routes / redirect accordingly.
       router.push('/dashboard');
-    } else {
-      setError('Email ou senha inválidos. (Use admin@bossolan.com / password)');
+    } catch (err: any) {
+      console.error('Login Error:', err);
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+        setError('Email ou senha inválidos.');
+      } else {
+        setError('Erro ao fazer login. Tente novamente mais tarde.');
+         toast({
+          title: 'Erro de Login',
+          description: err.message || 'Ocorreu um problema ao tentar fazer login.',
+          variant: 'destructive',
+        });
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -53,6 +74,7 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 className="bg-input"
+                disabled={isLoading}
               />
             </div>
             <div className="space-y-2">
@@ -66,6 +88,7 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   className="bg-input pr-10"
+                  disabled={isLoading}
                 />
                 <Button
                   type="button"
@@ -74,18 +97,25 @@ export default function LoginPage() {
                   className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   onClick={() => setShowPassword(!showPassword)}
                   aria-label={showPassword ? "Hide password" : "Show password"}
+                  disabled={isLoading}
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </Button>
               </div>
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
-            <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
-              Entrar
+            <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isLoading}>
+              {isLoading ? 'Entrando...' : 'Entrar'}
             </Button>
           </form>
         </CardContent>
         <CardFooter className="flex flex-col items-center text-sm">
+           <p className="text-muted-foreground mb-2">
+            Não tem uma conta?{' '}
+            <Link href="/cadastro" className="font-medium text-primary hover:underline">
+              Cadastre-se
+            </Link>
+          </p>
           <p className="text-muted-foreground">
             Esqueceu sua senha?{' '}
             <a href="#" className="font-medium text-primary hover:underline">

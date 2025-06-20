@@ -13,8 +13,11 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Logo } from '@/components/logo';
-import { Eye, EyeOff, CreditCard, ListChecks } from 'lucide-react';
+import { Eye, EyeOff, CreditCard } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { auth, db } from '@/firebase'; // Import Firebase auth and db
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
 
 const registrationSchema = z.object({
   fullName: z.string().min(3, { message: 'Nome completo deve ter pelo menos 3 caracteres.' }),
@@ -49,14 +52,48 @@ export default function CadastroPage() {
   });
 
   const onSubmit = async (data: RegistrationFormData) => {
-    console.log('Registration Data:', data);
-    // Placeholder for actual registration logic
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    toast({
-      title: 'Cadastro Realizado!',
-      description: 'Sua conta foi criada com sucesso. Redirecionando para o login...',
-    });
-    router.push('/login');
+    try {
+      // Create user with email and password
+      const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
+      const user = userCredential.user;
+
+      // Update user profile with full name
+      await updateProfile(user, {
+        displayName: data.fullName,
+      });
+
+      // Store additional user information in Firestore
+      await setDoc(doc(db, "users", user.uid), {
+        uid: user.uid,
+        fullName: data.fullName,
+        email: data.email,
+        cpf: data.cpf,
+        paymentMethod: data.paymentMethod,
+        createdAt: new Date().toISOString(),
+      });
+
+      toast({
+        title: 'Cadastro Realizado!',
+        description: 'Sua conta foi criada com sucesso. Redirecionando para o login...',
+      });
+      router.push('/login');
+
+    } catch (error: any) {
+      console.error('Registration Error:', error);
+      if (error.code === 'auth/email-already-in-use') {
+        toast({
+          title: 'Erro no Cadastro',
+          description: 'Este email já está cadastrado. Tente fazer login ou use um email diferente.',
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Erro no Cadastro',
+          description: error.message || 'Não foi possível criar sua conta. Tente novamente.',
+          variant: 'destructive',
+        });
+      }
+    }
   };
 
   return (

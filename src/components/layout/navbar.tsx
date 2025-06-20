@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Menu, Search, UserCircle } from 'lucide-react';
@@ -15,12 +16,33 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Logo } from '../logo';
 import { useSidebar } from '../ui/sidebar';
+import { auth } from '@/firebase'; // Import Firebase auth
+import { signOut } from 'firebase/auth';
+import { useToast } from '@/hooks/use-toast';
+import { useRouter } from 'next/navigation';
+
 
 export function Navbar() {
   const { toggleSidebar, isMobile } = useSidebar();
+  const { toast } = useToast();
+  const router = useRouter();
 
-  const handleLogout = () => {
-    window.location.href = '/login';
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      toast({
+        title: 'Logout Realizado',
+        description: 'Você foi desconectado com sucesso.',
+      });
+      router.push('/login'); // Redirect to login page after logout
+    } catch (error: any) {
+      console.error('Logout Error:', error);
+      toast({
+        title: 'Erro ao Sair',
+        description: error.message || 'Não foi possível fazer logout. Tente novamente.',
+        variant: 'destructive',
+      });
+    }
   };
   
   return (

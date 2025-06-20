@@ -2,7 +2,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation'; // Added useRouter
 import {
   Users,
   BookOpenCheck,
@@ -11,7 +11,7 @@ import {
   Settings,
   LogOut,
   MapPin, 
-  ListChecks, // Added ListChecks for Planos
+  ListChecks, 
 } from 'lucide-react';
 import {
   Sidebar,
@@ -28,19 +28,24 @@ import { Logo } from '@/components/logo';
 import { Button } from '@/components/ui/button';
 import { Separator } from '../ui/separator';
 import React from 'react';
+import { auth } from '@/firebase'; // Import Firebase auth
+import { signOut } from 'firebase/auth';
+import { useToast } from '@/hooks/use-toast';
 
 const navItems = [
   { href: '/alunos', label: 'Alunos', icon: Users },
   { href: '/aulas', label: 'Aulas', icon: BookOpenCheck },
   { href: '/agenda', label: 'Agenda', icon: CalendarDays },
   { href: '/locais', label: 'Locais', icon: MapPin },
-  { href: '/planos', label: 'Planos', icon: ListChecks }, // Added Planos
+  { href: '/planos', label: 'Planos', icon: ListChecks }, 
   { href: '/financeiro', label: 'Financeiro', icon: DollarSign },
   { href: '/configuracoes', label: 'Configurações', icon: Settings },
 ];
 
 export function SidebarNav() {
   const pathname = usePathname();
+  const router = useRouter(); // Added router
+  const { toast } = useToast(); // Added toast
   const { state: sidebarState, isMobile, setOpenMobile } = useSidebar();
   const [mounted, setMounted] = React.useState(false);
 
@@ -51,10 +56,22 @@ export function SidebarNav() {
 
   const isCollapsed = sidebarState === 'collapsed';
 
-  const handleLogout = () => {
-    // Placeholder for logout logic
-    // For now, redirect to login
-    window.location.href = '/login';
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      toast({
+        title: 'Logout Realizado',
+        description: 'Você foi desconectado com sucesso.',
+      });
+      router.push('/login'); // Redirect to login page after logout
+    } catch (error: any) {
+      console.error('Logout Error:', error);
+      toast({
+        title: 'Erro ao Sair',
+        description: error.message || 'Não foi possível fazer logout. Tente novamente.',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleLinkClick = () => {
@@ -108,4 +125,3 @@ export function SidebarNav() {
     </Sidebar>
   );
 }
-
