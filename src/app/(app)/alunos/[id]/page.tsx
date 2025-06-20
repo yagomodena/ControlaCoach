@@ -20,7 +20,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import type { Student, Plan, Location, DayOfWeek } from '@/types';
-import { MOCK_PLANS, MOCK_LOCATIONS, DAYS_OF_WEEK } from '@/types'; // Keep MOCK_PLANS and MOCK_LOCATIONS for now
+import { MOCK_PLANS, MOCK_LOCATIONS, DAYS_OF_WEEK } from '@/types'; 
 import { useToast } from '@/hooks/use-toast';
 import { AddPlanDialog } from '@/components/dialogs/add-plan-dialog';
 import { ManagePlansDialog } from '@/components/dialogs/manage-plans-dialog';
@@ -37,7 +37,7 @@ const studentSchema = z.object({
   status: z.enum(['active', 'inactive'], { required_error: 'Selecione o status.' }),
   objective: z.string().optional(),
   paymentStatus: z.enum(['pago', 'pendente', 'vencido']).optional(),
-  dueDate: z.string().optional(), // Should be YYYY-MM-DD or ISO
+  dueDate: z.string().optional(), 
   amountDue: z.number().optional(),
   paymentMethod: z.enum(['PIX', 'Dinheiro', 'Cartão']).optional(),
   recurringClassTime: z.string()
@@ -46,7 +46,7 @@ const studentSchema = z.object({
     .or(z.literal('')), 
   recurringClassDays: z.array(z.enum(DAYS_OF_WEEK)).optional(),
   recurringClassLocation: z.string().optional(),
-  lastPaymentDate: z.string().optional(), // ISO String
+  lastPaymentDate: z.string().optional(), 
 });
 
 type StudentFormData = z.infer<typeof studentSchema>;
@@ -61,8 +61,8 @@ export default function AlunoDetailPage() {
   const [student, setStudent] = useState<Student | null>(null);
   const [isEditMode, setIsEditMode] = useState(searchParams.get('edit') === 'true');
   const [isLoading, setIsLoading] = useState(true);
-  const [activePlans, setActivePlans] = useState<Plan[]>([]); // Still from MOCK
-  const [activeLocations, setActiveLocations] = useState<Location[]>([]); // Still from MOCK
+  const [activePlans, setActivePlans] = useState<Plan[]>([]); 
+  const [activeLocations, setActiveLocations] = useState<Location[]>([]); 
   const [isAddPlanDialogOpen, setIsAddPlanDialogOpen] = useState(false);
   const [isManagePlansDialogOpen, setIsManagePlansDialogOpen] = useState(false);
 
@@ -94,9 +94,8 @@ export default function AlunoDetailPage() {
             recurringClassTime: studentData.recurringClassTime || '',
             recurringClassDays: studentData.recurringClassDays || [],
             recurringClassLocation: studentData.recurringClassLocation || '',
-            // Ensure dates are in YYYY-MM-DD for input[type=date] if applicable
-            dueDate: studentData.dueDate ? studentData.dueDate.split('T')[0] : undefined,
-            lastPaymentDate: studentData.lastPaymentDate ? studentData.lastPaymentDate.split('T')[0] : undefined,
+            dueDate: studentData.dueDate ? (studentData.dueDate.includes('T') ? studentData.dueDate.split('T')[0] : studentData.dueDate) : undefined,
+            lastPaymentDate: studentData.lastPaymentDate ? (studentData.lastPaymentDate.includes('T') ? studentData.lastPaymentDate.split('T')[0] : studentData.lastPaymentDate) : undefined,
           });
         } else {
           toast({ title: "Erro", description: "Aluno não encontrado.", variant: "destructive" });
@@ -120,30 +119,58 @@ export default function AlunoDetailPage() {
   const onSubmit = async (data: StudentFormData) => {
     if (!studentId) return;
     try {
+      const studentDocRef = doc(db, 'students', studentId);
+      
+      const updatePayload: Record<string, any> = {
+        name: data.name,
+        phone: data.phone,
+        plan: data.plan,
+        technicalLevel: data.technicalLevel,
+        status: data.status,
+        paymentStatus: data.paymentStatus ?? null, 
+      };
+
+      if (data.objective !== undefined && data.objective !== null) {
+        updatePayload.objective = data.objective.trim() === '' ? null : data.objective;
+      } else if (student?.objective) {
+         updatePayload.objective = null; // Clear if was previously set and now undefined/null
+      }
+
+      updatePayload.recurringClassTime = data.recurringClassTime || null;
+      updatePayload.recurringClassDays = (data.recurringClassDays && data.recurringClassDays.length > 0) ? data.recurringClassDays : null;
+      
       let finalRecurringClassLocation = data.recurringClassLocation;
       if (data.recurringClassLocation === NO_LOCATION_VALUE) {
         finalRecurringClassLocation = undefined;
       }
+      updatePayload.recurringClassLocation = finalRecurringClassLocation || null;
 
-      const studentDataToUpdate = { 
-        ...data, // This includes all fields from the form
-        objective: data.objective || undefined,
-        recurringClassTime: data.recurringClassTime || undefined,
-        recurringClassDays: data.recurringClassDays?.length ? data.recurringClassDays : undefined,
-        recurringClassLocation: finalRecurringClassLocation,
-        // Ensure dates are stored correctly if they were modified
-        dueDate: data.dueDate ? new Date(data.dueDate).toISOString() : undefined,
-        lastPaymentDate: data.lastPaymentDate ? new Date(data.lastPaymentDate).toISOString() : undefined,
-      };
 
-      // Remove id from data if it was included by spread
-      const { id, ...updatePayload } = studentDataToUpdate as any;
+      updatePayload.dueDate = data.dueDate ? new Date(data.dueDate).toISOString().split('T')[0] : null;
+      
+      if (typeof data.amountDue === 'number') {
+          updatePayload.amountDue = data.amountDue;
+      } else {
+          updatePayload.amountDue = null; 
+      }
 
-      const studentDocRef = doc(db, 'students', studentId);
+      updatePayload.paymentMethod = data.paymentMethod || null;
+      updatePayload.lastPaymentDate = data.lastPaymentDate ? new Date(data.lastPaymentDate).toISOString().split('T')[0] : null;
+      
+      // Remove any top-level undefined properties before sending to Firestore
+      Object.keys(updatePayload).forEach(key => {
+        if (updatePayload[key] === undefined) {
+          // For update, sending null is preferred to clear a field.
+          // If undefined was intended to mean "don't change", this needs more complex logic
+          // comparing against original `student` data. For now, undefined from form means clear.
+          updatePayload[key] = null; 
+        }
+      });
+
+
       await updateDoc(studentDocRef, updatePayload);
       
-      // Optimistically update local state or refetch
-      setStudent(prev => prev ? { ...prev, ...studentDataToUpdate, id: prev.id, registrationDate: prev.registrationDate } : null);
+      setStudent(prev => prev ? { ...prev, ...updatePayload, id: prev.id, registrationDate: prev.registrationDate } : null);
 
       toast({
         title: "Aluno Atualizado!",
@@ -166,7 +193,6 @@ export default function AlunoDetailPage() {
     refreshActivePlans();
     const currentPlanExistsAndIsActive = MOCK_PLANS.some(p => p.name === currentPlanValue && p.status === 'active');
     if (!currentPlanExistsAndIsActive && activePlans.length > 0) {
-      // Potentially update or clear plan
     } else if (!currentPlanExistsAndIsActive) {
        setValue('plan', ''); 
     }
@@ -213,9 +239,8 @@ export default function AlunoDetailPage() {
   const formatDateString = (dateString?: string) => {
     if (!dateString) return 'N/A';
     try {
-        // Check if it's already YYYY-MM-DD
         if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
-            return new Date(dateString + 'T00:00:00').toLocaleDateString('pt-BR'); // Ensure UTC interpretation for YYYY-MM-DD
+            return new Date(dateString + 'T00:00:00Z').toLocaleDateString('pt-BR', {timeZone: 'UTC'});
         }
         return new Date(dateString).toLocaleDateString('pt-BR');
     } catch (e) {

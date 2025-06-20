@@ -44,9 +44,8 @@ const studentSchema = z.object({
     .or(z.literal('')), 
   recurringClassDays: z.array(z.enum(DAYS_OF_WEEK)).optional(),
   recurringClassLocation: z.string().optional(),
-  // Fields related to payment, optional for new student creation by coach
   paymentStatus: z.enum(['pago', 'pendente', 'vencido']).optional(),
-  dueDate: z.string().optional(), // Will likely be set based on plan start
+  dueDate: z.string().optional(), 
   amountDue: z.number().optional(),
   paymentMethod: z.enum(['PIX', 'Dinheiro', 'Cartão']).optional(),
   lastPaymentDate: z.string().optional(),
@@ -63,7 +62,6 @@ export default function NovoAlunoPage() {
   const [isManagePlansDialogOpen, setIsManagePlansDialogOpen] = useState(false);
 
   const refreshActivePlans = () => {
-    // In a real app, these would be fetched from Firestore too
     setActivePlans(MOCK_PLANS.filter(p => p.status === 'active'));
   };
   
@@ -88,39 +86,59 @@ export default function NovoAlunoPage() {
       recurringClassTime: '',
       recurringClassDays: [],
       recurringClassLocation: undefined,
-      paymentStatus: 'pendente', // Default for new students
+      paymentStatus: 'pendente', 
     },
   });
 
   const onSubmit = async (data: StudentFormData) => {
     try {
+      const studentDataForFirestore: Record<string, any> = {
+        // Required fields from schema
+        name: data.name,
+        phone: data.phone,
+        plan: data.plan,
+        technicalLevel: data.technicalLevel,
+        status: data.status,
+        // Defaults / System-set
+        registrationDate: new Date().toISOString(),
+        attendanceHistory: [],
+        paymentStatus: data.paymentStatus ?? 'pendente', // Default to 'pendente' if not provided
+      };
+
+      // Optional fields from schema - only add if they have a value from the form
+      if (data.objective !== undefined && data.objective !== null && data.objective.trim() !== '') {
+          studentDataForFirestore.objective = data.objective;
+      }
+      if (data.recurringClassTime) { 
+          studentDataForFirestore.recurringClassTime = data.recurringClassTime;
+      }
+      if (data.recurringClassDays && data.recurringClassDays.length > 0) {
+          studentDataForFirestore.recurringClassDays = data.recurringClassDays;
+      }
+      
       let finalRecurringClassLocation = data.recurringClassLocation;
       if (data.recurringClassLocation === NO_LOCATION_VALUE) {
         finalRecurringClassLocation = undefined;
       }
+      if (finalRecurringClassLocation) { 
+          studentDataForFirestore.recurringClassLocation = finalRecurringClassLocation;
+      }
 
-      const studentDataToSave = {
-        ...data,
-        registrationDate: new Date().toISOString(),
-        objective: data.objective || undefined,
-        recurringClassTime: data.recurringClassTime || undefined,
-        recurringClassDays: data.recurringClassDays?.length ? data.recurringClassDays : undefined,
-        recurringClassLocation: finalRecurringClassLocation,
-        // Ensure optional payment fields are undefined if not explicitly set
-        paymentStatus: data.paymentStatus || 'pendente',
-        dueDate: data.dueDate || undefined,
-        amountDue: data.amountDue || undefined,
-        paymentMethod: data.paymentMethod || undefined,
-        lastPaymentDate: data.lastPaymentDate || undefined,
-        attendanceHistory: [], // Initialize with empty attendance
-      };
+      // Optional payment fields
+      if (data.dueDate) { 
+          studentDataForFirestore.dueDate = data.dueDate;
+      }
+      if (typeof data.amountDue === 'number') { 
+          studentDataForFirestore.amountDue = data.amountDue;
+      }
+      if (data.paymentMethod) { 
+          studentDataForFirestore.paymentMethod = data.paymentMethod;
+      }
+      if (data.lastPaymentDate) { 
+          studentDataForFirestore.lastPaymentDate = data.lastPaymentDate;
+      }
       
-      // Remove id from studentDataToSave as Firestore will generate it
-      // Type assertion needed if Student type still has id: string;
-      const { id, ...studentDataWithoutId } = studentDataToSave as any;
-
-
-      await addDoc(collection(db, 'students'), studentDataWithoutId);
+      await addDoc(collection(db, 'students'), studentDataForFirestore);
       
       toast({
         title: "Aluno Adicionado!",
@@ -139,10 +157,9 @@ export default function NovoAlunoPage() {
 
   const handlePlansManaged = () => {
     const currentPlanValue = watch('plan');
-    refreshActivePlans(); // This still uses MOCK_PLANS
+    refreshActivePlans(); 
     const currentPlanExistsAndIsActive = MOCK_PLANS.some(p => p.name === currentPlanValue && p.status === 'active');
     if (!currentPlanExistsAndIsActive && activePlans.length > 0) {
-      // Potentially set to first active plan or leave as is
     } else if (!currentPlanExistsAndIsActive) {
       setValue('plan', ''); 
     }
