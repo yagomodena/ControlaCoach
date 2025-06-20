@@ -14,7 +14,7 @@ import { BadgeDollarSign, CalendarClock, ListChecks, Save } from 'lucide-react';
 
 export const planSchema = z.object({
   name: z.string().min(3, { message: 'Nome do plano deve ter pelo menos 3 caracteres.' }),
-  price: z.coerce.number().min(0, { message: 'Preço deve ser positivo ou zero.' }),
+  price: z.coerce.number().min(0, { message: 'Preço deve ser positivo ou zero.' }).optional(), // Made optional for empty initial state
   durationDays: z.coerce.number().int().positive({ message: 'Duração deve ser um número inteiro positivo.' }),
   status: z.enum(['active', 'inactive'], { required_error: 'Selecione o status.' }),
 });
@@ -32,7 +32,7 @@ export function PlanForm({ onSubmit, initialData, submitButtonText = 'Salvar Pla
     resolver: zodResolver(planSchema),
     defaultValues: {
       name: initialData?.name || '',
-      price: initialData?.price || 0,
+      price: initialData?.price ?? undefined, // Changed default to undefined
       durationDays: initialData?.durationDays || 30,
       status: initialData?.status || 'active',
     },
@@ -56,7 +56,20 @@ export function PlanForm({ onSubmit, initialData, submitButtonText = 'Salvar Pla
           <Controller
             name="price"
             control={control}
-            render={({ field }) => <Input id="price" type="number" step="0.01" placeholder="Ex: 150.00" {...field} onChange={e => field.onChange(parseFloat(e.target.value))}/>}
+            render={({ field }) => (
+              <Input 
+                id="price" 
+                type="number" 
+                step="0.01" 
+                placeholder="Ex: 150.00" 
+                {...field} 
+                value={field.value ?? ''} // Display empty string if undefined
+                onChange={e => {
+                  const val = e.target.value;
+                  field.onChange(val === '' ? undefined : parseFloat(val)); // Pass undefined if empty
+                }}
+              />
+            )}
           />
           {errors.price && <p className="text-sm text-destructive">{errors.price.message}</p>}
         </div>
