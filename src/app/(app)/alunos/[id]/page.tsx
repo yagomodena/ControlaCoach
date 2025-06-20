@@ -94,6 +94,7 @@ export default function AlunoDetailPage() {
             recurringClassTime: studentData.recurringClassTime || '',
             recurringClassDays: studentData.recurringClassDays || [],
             recurringClassLocation: studentData.recurringClassLocation || '',
+            // Ensure date fields are in YYYY-MM-DD format for the input type="date"
             dueDate: studentData.dueDate ? (studentData.dueDate.includes('T') ? studentData.dueDate.split('T')[0] : studentData.dueDate) : undefined,
             lastPaymentDate: studentData.lastPaymentDate ? (studentData.lastPaymentDate.includes('T') ? studentData.lastPaymentDate.split('T')[0] : studentData.lastPaymentDate) : undefined,
           });
@@ -132,23 +133,27 @@ export default function AlunoDetailPage() {
 
       if (data.objective !== undefined && data.objective !== null) {
         updatePayload.objective = data.objective.trim() === '' ? null : data.objective;
-      } else if (student?.objective) {
-         updatePayload.objective = null; // Clear if was previously set and now undefined/null
+      } else if (student?.objective !== undefined && student?.objective !== null) { 
+         // Clear if form field is empty/cleared and there was an existing value
+         if (data.objective === '' || data.objective === null || data.objective === undefined) {
+            updatePayload.objective = null;
+         }
       }
+
 
       updatePayload.recurringClassTime = data.recurringClassTime || null;
       updatePayload.recurringClassDays = (data.recurringClassDays && data.recurringClassDays.length > 0) ? data.recurringClassDays : null;
       
       let finalRecurringClassLocation = data.recurringClassLocation;
-      if (data.recurringClassLocation === NO_LOCATION_VALUE) {
-        finalRecurringClassLocation = undefined;
+      if (data.recurringClassLocation === NO_LOCATION_VALUE || data.recurringClassLocation === '') {
+        finalRecurringClassLocation = undefined; // Will be converted to null below
       }
       updatePayload.recurringClassLocation = finalRecurringClassLocation || null;
 
 
       updatePayload.dueDate = data.dueDate ? new Date(data.dueDate).toISOString().split('T')[0] : null;
       
-      if (typeof data.amountDue === 'number') {
+      if (typeof data.amountDue === 'number' && !isNaN(data.amountDue)) { // Ensure it's a valid number
           updatePayload.amountDue = data.amountDue;
       } else {
           updatePayload.amountDue = null; 
@@ -157,20 +162,18 @@ export default function AlunoDetailPage() {
       updatePayload.paymentMethod = data.paymentMethod || null;
       updatePayload.lastPaymentDate = data.lastPaymentDate ? new Date(data.lastPaymentDate).toISOString().split('T')[0] : null;
       
-      // Remove any top-level undefined properties before sending to Firestore
       Object.keys(updatePayload).forEach(key => {
         if (updatePayload[key] === undefined) {
-          // For update, sending null is preferred to clear a field.
-          // If undefined was intended to mean "don't change", this needs more complex logic
-          // comparing against original `student` data. For now, undefined from form means clear.
           updatePayload[key] = null; 
         }
       });
 
-
       await updateDoc(studentDocRef, updatePayload);
       
-      setStudent(prev => prev ? { ...prev, ...updatePayload, id: prev.id, registrationDate: prev.registrationDate } : null);
+      // Ensure local state `student` is correctly updated with potentially nulled fields
+      const updatedStudentData = { ...student, ...updatePayload } as Student;
+      setStudent(updatedStudentData);
+
 
       toast({
         title: "Aluno Atualizado!",
@@ -193,6 +196,8 @@ export default function AlunoDetailPage() {
     refreshActivePlans();
     const currentPlanExistsAndIsActive = MOCK_PLANS.some(p => p.name === currentPlanValue && p.status === 'active');
     if (!currentPlanExistsAndIsActive && activePlans.length > 0) {
+        // Potentially set to the first available plan if current becomes invalid
+        // setValue('plan', activePlans[0].name);
     } else if (!currentPlanExistsAndIsActive) {
        setValue('plan', ''); 
     }
@@ -239,11 +244,16 @@ export default function AlunoDetailPage() {
   const formatDateString = (dateString?: string) => {
     if (!dateString) return 'N/A';
     try {
+        // Handle YYYY-MM-DD format directly from date inputs
         if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
-            return new Date(dateString + 'T00:00:00Z').toLocaleDateString('pt-BR', {timeZone: 'UTC'});
+            // Add time component to ensure it's treated as local date, then convert to UTC for consistent parsing
+            // Or, simply re-format:
+            const [year, month, day] = dateString.split('-').map(Number);
+            return new Date(year, month - 1, day).toLocaleDateString('pt-BR');
         }
         return new Date(dateString).toLocaleDateString('pt-BR');
     } catch (e) {
+        console.warn("Invalid date string for formatting:", dateString, e);
         return 'Data inválida';
     }
   };
@@ -372,7 +382,7 @@ export default function AlunoDetailPage() {
                       name="recurringClassLocation"
                       control={control}
                       render={({ field }) => (
-                        <Select onValueChange={field.onChange} value={field.value ?? NO_LOCATION_VALUE}>
+                        <Select onValueChange={field.onChange} value={field.value || NO_LOCATION_VALUE}>
                           <SelectTrigger id="recurringClassLocation">
                             <SelectValue placeholder="Selecione o local" />
                           </SelectTrigger>
@@ -397,7 +407,7 @@ export default function AlunoDetailPage() {
                         name="recurringClassDays"
                         control={control}
                         render={({ field }) => {
-                          const currentDays = field.value || [];
+                          const currentDays = Array.isArray(field.value) ? field.value : [];
                           return (
                             <div className="flex items-center space-x-2">
                               <Checkbox
@@ -422,6 +432,61 @@ export default function AlunoDetailPage() {
                   {errors.recurringClassDays && <p className="text-sm text-destructive">{errors.recurringClassDays.message}</p>}
                 </div>
               </CardContent>
+               <Separator className="my-6" />
+
+                <CardHeader className="pt-0">
+                    <CardTitle className="flex items-center"><DollarSign className="mr-2 h-5 w-5 text-primary"/>Informações de Pagamento</CardTitle>
+                    <CardDescription>Gerencie os detalhes financeiros do aluno. (Opcional)</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                            <Label htmlFor="paymentStatus">Status do Pagamento</Label>
+                            <Controller name="paymentStatus" control={control} render={({ field }) => (
+                                <Select onValueChange={field.onChange} value={field.value || ''}>
+                                <SelectTrigger id="paymentStatus"><SelectValue placeholder="Selecione"/></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="pago">Pago</SelectItem>
+                                    <SelectItem value="pendente">Pendente</SelectItem>
+                                    <SelectItem value="vencido">Vencido</SelectItem>
+                                </SelectContent>
+                                </Select>
+                            )} />
+                            {errors.paymentStatus && <p className="text-sm text-destructive">{errors.paymentStatus.message}</p>}
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="dueDate">Data de Vencimento</Label>
+                            <Controller name="dueDate" control={control} render={({ field }) => <Input id="dueDate" type="date" {...field} />} />
+                            {errors.dueDate && <p className="text-sm text-destructive">{errors.dueDate.message}</p>}
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                            <Label htmlFor="amountDue">Valor Devido (R$)</Label>
+                            <Controller name="amountDue" control={control} render={({ field }) => <Input id="amountDue" type="number" step="0.01" {...field} onChange={e => field.onChange(parseFloat(e.target.value))} />} />
+                            {errors.amountDue && <p className="text-sm text-destructive">{errors.amountDue.message}</p>}
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="paymentMethod">Método de Pagamento</Label>
+                             <Controller name="paymentMethod" control={control} render={({ field }) => (
+                                <Select onValueChange={field.onChange} value={field.value || ''}>
+                                <SelectTrigger id="paymentMethod"><SelectValue placeholder="Selecione"/></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="PIX">PIX</SelectItem>
+                                    <SelectItem value="Dinheiro">Dinheiro</SelectItem>
+                                    <SelectItem value="Cartão">Cartão</SelectItem>
+                                </SelectContent>
+                                </Select>
+                            )} />
+                            {errors.paymentMethod && <p className="text-sm text-destructive">{errors.paymentMethod.message}</p>}
+                        </div>
+                    </div>
+                     <div className="space-y-2 md:max-w-[calc(50%-0.75rem)]"> {/* 0.75rem is half of gap-6 for md screens */}
+                        <Label htmlFor="lastPaymentDate">Data do Último Pagamento</Label>
+                        <Controller name="lastPaymentDate" control={control} render={({ field }) => <Input id="lastPaymentDate" type="date" {...field} />} />
+                        {errors.lastPaymentDate && <p className="text-sm text-destructive">{errors.lastPaymentDate.message}</p>}
+                    </div>
+                </CardContent>
 
               <CardFooter className="flex justify-end gap-2 pt-6">
                 <Button variant="outline" type="button" onClick={() => { setIsEditMode(false); router.replace(`/alunos/${studentId}`); reset({...student, recurringClassTime: student?.recurringClassTime || '', recurringClassDays: student?.recurringClassDays || [], recurringClassLocation: student?.recurringClassLocation || '', dueDate: student?.dueDate?.split('T')[0], lastPaymentDate: student?.lastPaymentDate?.split('T')[0] } as StudentFormData); }}>Cancelar</Button>
@@ -554,3 +619,6 @@ export default function AlunoDetailPage() {
     </>
   );
 }
+
+
+    
