@@ -5,8 +5,8 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { UsersRound, CalendarClock, CircleDollarSign, Smartphone, ReceiptText, CheckCircle2, Facebook, Instagram, Twitter, ArrowRight, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-// import bannerImage from '@/images/banner.png' // Original local image
-const bannerImageUrl = "https://storage.googleapis.com/project-ai-prototyper.appspot.com/projects%2FJzkpAS8qTryME2DL477q%2Ffiles%2Ftreinadores.png";
+import bannerImage from '@/images/banner.png' // Original local image
+//const bannerImageUrl = "https://storage.googleapis.com/project-ai-prototyper.appspot.com/projects%2FJzkpAS8qTryME2DL477q%2Ffiles%2Ftreinadores.png";
 
 
 const featureItems = [
@@ -100,7 +100,7 @@ export default function LandingPage() {
         </div>
         <div className="mt-12 md:mt-16 max-w-4xl mx-auto">
           <Image
-            src={bannerImageUrl}
+            src={bannerImage}
             alt="Profissionais de educação física sorrindo e treinando com o logo ControlaCoach"
             width={1280}
             height={720}
