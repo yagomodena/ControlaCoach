@@ -5,8 +5,8 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { UsersRound, CalendarClock, CircleDollarSign, Smartphone, ReceiptText, CheckCircle2, Facebook, Instagram, Twitter, ArrowRight, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import bannerImage from '@/images/banner.png' // Original local image
-//const bannerImageUrl = "https://storage.googleapis.com/project-ai-prototyper.appspot.com/projects%2FJzkpAS8qTryME2DL477q%2Ffiles%2Ftreinadores.png";
+// import bannerImage from '@/images/banner.png' // Original local image
+const bannerImageUrl = "https://storage.googleapis.com/project-ai-prototyper.appspot.com/projects%2FJzkpAS8qTryME2DL477q%2Ffiles%2Ftreinadores.png";
 
 
 const featureItems = [
@@ -91,7 +91,7 @@ export default function LandingPage() {
             Controle seus alunos, aulas e finanças com o ControlaCoach. Tudo em um só lugar, de forma simples e 100% online.
           </p>
           <div className="mt-10">
-            <Link href="/login" passHref>
+            <Link href="/cadastro" passHref>
               <Button size="lg" className="bg-[#FF6B00] text-white hover:bg-[#FF8C42] px-10 py-4 text-lg font-semibold rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 focus:ring-[#FF8C42] focus:ring-offset-2">
                 Testar grátis por 14 dias <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
@@ -100,7 +100,7 @@ export default function LandingPage() {
         </div>
         <div className="mt-12 md:mt-16 max-w-4xl mx-auto">
           <Image
-            src={bannerImage}
+            src={bannerImageUrl}
             alt="Profissionais de educação física sorrindo e treinando com o logo ControlaCoach"
             width={1280}
             height={720}
@@ -162,7 +162,7 @@ export default function LandingPage() {
                   ))}
                 </ul>
               </div>
-              <Link href="/login" passHref>
+              <Link href="/cadastro" passHref>
                 <Button size="lg" className="w-full bg-[#FF6B00] text-white hover:bg-[#FF8C42] py-3 text-md font-semibold rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105">
                   Começar Teste Gratuito
                 </Button>
@@ -180,7 +180,7 @@ export default function LandingPage() {
                   ))}
                 </ul>
               </div>
-              <Link href="/login" passHref>
+              <Link href="/cadastro" passHref>
                 <Button size="lg" className="w-full bg-[#FF6B00] text-white hover:bg-[#FF8C42] py-3 text-md font-semibold rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105">
                   Começar Teste Gratuito
                 </Button>
@@ -222,7 +222,7 @@ export default function LandingPage() {
           <p className="text-lg text-gray-700 mb-10">
             Junte-se a centenas de treinadores que já estão economizando tempo e organizando suas vidas com o ControlaCoach.
           </p>
-          <Link href="/login" passHref>
+          <Link href="/cadastro" passHref>
             <Button size="lg" className="bg-[#FF6B00] text-white hover:bg-[#FF8C42] px-10 py-4 text-lg font-semibold rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 focus:ring-[#FF8C42] focus:ring-offset-2">
               Comece agora – Grátis por 14 dias <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
@@ -256,4 +256,3 @@ export default function LandingPage() {
     </div>
   );
 }
-
