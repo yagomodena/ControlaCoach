@@ -24,18 +24,41 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import type { Location } from '@/types';
 import { useToast } from '@/hooks/use-toast';
-import { db } from '@/firebase';
+import { db, auth } from '@/firebase';
 import { collection, onSnapshot, deleteDoc, doc, query, orderBy } from 'firebase/firestore';
+import { useRouter } from 'next/navigation';
 
 export default function LocaisPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [locations, setLocations] = useState<Location[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
   const { toast } = useToast();
+  const router = useRouter();
 
   useEffect(() => {
+    const unsubscribeAuth = auth.onAuthStateChanged(user => {
+      if (user) {
+        setUserId(user.uid);
+      } else {
+        setUserId(null);
+        toast({ title: "Autenticação Necessária", variant: "destructive" });
+        router.push('/login');
+      }
+    });
+    return () => unsubscribeAuth();
+  }, [router, toast]);
+
+
+  useEffect(() => {
+    if (!userId) {
+      setIsLoading(false);
+      setLocations([]);
+      return;
+    }
+
     setIsLoading(true);
-    const locationsCollectionRef = collection(db, 'locations');
+    const locationsCollectionRef = collection(db, 'coaches', userId, 'locations');
     const q = query(locationsCollectionRef, orderBy('name', 'asc'));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -53,7 +76,7 @@ export default function LocaisPage() {
     });
 
     return () => unsubscribe();
-  }, [toast]);
+  }, [userId, toast]);
 
   const filteredLocations = useMemo(() => {
     return locations.filter(location =>
@@ -61,15 +84,18 @@ export default function LocaisPage() {
     );
   }, [locations, searchTerm]);
 
-  const handleDeleteLocation = async (locationId: string, locationName: string) => {
+  const handleDeleteLocation = async (locationIdToDelete: string, locationName: string) => {
+    if (!userId) {
+      toast({ title: "Erro", description: "Usuário não autenticado.", variant: "destructive" });
+      return;
+    }
     if (window.confirm(`Tem certeza que deseja excluir o local "${locationName}"? Esta ação não pode ser desfeita.`)) {
       try {
-        await deleteDoc(doc(db, 'locations', locationId));
+        await deleteDoc(doc(db, 'coaches', userId, 'locations', locationIdToDelete));
         toast({
           title: 'Local Excluído!',
           description: `O local "${locationName}" foi removido com sucesso.`,
         });
-        // Real-time listener will update the list
       } catch (error) {
         console.error("Error deleting location: ", error);
         toast({
@@ -80,6 +106,16 @@ export default function LocaisPage() {
       }
     }
   };
+  
+  if (isLoading || !userId) {
+    return (
+        <div className="container mx-auto py-8 flex flex-col items-center justify-center min-h-[calc(100vh-150px)]">
+            <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+            <p className="text-muted-foreground">Carregando locais...</p>
+        </div>
+    );
+  }
+
 
   return (
     <div className="container mx-auto py-8">

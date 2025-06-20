@@ -1,62 +1,48 @@
-
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Deny all reads and writes by default
-    match /{document=**} {
-      allow read, write: if false;
-    }
-
-    // Allow authenticated users to manage their own data in these collections
-    match /users/{userId}/{document=**} {
+    // Global user profiles (from registration)
+    match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Allow authenticated users to manage app-wide data (students, plans, etc.)
-    // These rules are broad for now; refine based on specific user roles or ownership if needed.
-    match /students/{studentId} {
-      allow read, write: if request.auth != null;
-    }
-    match /students/{studentId}/{subcollection}/{document=**} {
-      allow read, write: if request.auth != null;
-    }
+    // Coach-specific data
+    match /coaches/{coachId} {
+      // Allow coach to read/write their own top-level document (if any data is stored there directly)
+      // This rule might be too permissive if sensitive data is at the root of /coaches/{coachId}
+      // For now, assuming subcollections are the primary data stores.
+      allow read, write: if request.auth != null && request.auth.uid == coachId;
 
-    match /plans/{planId} {
-      allow read, write: if request.auth != null;
-    }
-    
-    match /locations/{locationId} {
-      allow read, write: if request.auth != null;
-    }
+      // Students subcollection
+      match /students/{studentId} {
+        allow read, list, create, update, delete: if request.auth != null && request.auth.uid == coachId;
+      }
 
-    match /classSessions/{sessionId} {
-      allow read, write: if request.auth != null;
-    }
-    
-    match /bookedClasses/{bookedClassId} {
-      allow read, write: if request.auth != null;
-    }
+      // Plans subcollection
+      match /plans/{planId} {
+        allow read, list, create, update, delete: if request.auth != null && request.auth.uid == coachId;
+      }
 
-    // Settings collection
-    // coachAvailability settings can be read by any authenticated user (for the agenda)
-    // but written only by an admin (or a specific user ID if single coach app)
-    // For now, let's assume any authenticated user can write, can be tightened later.
-    match /settings/coachAvailability {
-      allow read, write: if request.auth != null;
-    }
-    
-    // Coach profile and notification settings
-    match /settings/coachProfileAndNotifications {
-      allow read, write: if request.auth != null; // Assuming single coach setup or admin.
-                                                  // For multi-coach, rules would need to be per-user.
-    }
+      // Locations subcollection
+      match /locations/{locationId} {
+        allow read, list, create, update, delete: if request.auth != null && request.auth.uid == coachId;
+      }
 
-    // You might want to add more specific rules for other collections if they are added.
-    // For example, if you had a 'payments' collection independent of students:
-    // match /payments/{paymentId} {
-    //   allow read, write: if request.auth != null;
-    // }
+      // ClassSessions subcollection
+      match /classSessions/{classSessionId} {
+        allow read, list, create, update, delete: if request.auth != null && request.auth.uid == coachId;
+      }
+
+      // BookedClasses subcollection
+      match /bookedClasses/{bookedClassId} {
+        allow read, list, create, update, delete: if request.auth != null && request.auth.uid == coachId;
+      }
+
+      // Settings subcollection (documents within it)
+      match /settings/{settingDocId} { // e.g., settingDocId could be 'availability' or 'profile'
+        allow read, write: if request.auth != null && request.auth.uid == coachId;
+      }
+    }
   }
 }

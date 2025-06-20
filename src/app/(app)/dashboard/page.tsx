@@ -6,10 +6,9 @@ import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Users, CalendarDays, DollarSign, BarChart3, BookOpenCheck, Loader2 } from "lucide-react";
-import { db } from '@/firebase';
-import { collection, onSnapshot, query, where, orderBy } from 'firebase/firestore';
+import { db, auth } from '@/firebase';
+import { collection, onSnapshot, query, where, orderBy, getDocs } from 'firebase/firestore'; // Added getDocs
 import type { Student, Plan, BookedClass } from '@/types';
-import { INITIAL_MOCK_BOOKED_CLASSES } from '@/types'; // Using this for booked class stats for now
 import { 
   format, 
   parseISO, 
@@ -25,6 +24,8 @@ import {
   startOfDay
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useToast } from '@/hooks/use-toast';
+import { useRouter } from 'next/navigation';
 
 interface DashboardStats {
   totalAlunos: number;
@@ -36,10 +37,11 @@ interface DashboardStats {
 export default function DashboardPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
-  // For booked classes, we'll use the mock data as per current app structure.
-  // In a real scenario, these would be fetched from Firestore if the Agenda page saved them there.
-  const [bookedClasses] = useState<BookedClass[]>(INITIAL_MOCK_BOOKED_CLASSES); 
+  const [bookedClasses, setBookedClasses] = useState<BookedClass[]>([]); 
   const [isLoading, setIsLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
+  const { toast } = useToast();
+  const router = useRouter();
 
   const [dashboardStats, setDashboardStats] = useState<DashboardStats>({
     totalAlunos: 0,
@@ -50,15 +52,42 @@ export default function DashboardPage() {
   const [proximasAulas, setProximasAulas] = useState<BookedClass[]>([]);
 
   useEffect(() => {
+    const unsubscribeAuth = auth.onAuthStateChanged(user => {
+      if (user) {
+        setUserId(user.uid);
+      } else {
+        setUserId(null);
+        setIsLoading(false); // Ensure loading stops if no user
+        toast({ title: "Autenticação Necessária", variant: "destructive" });
+        router.push('/login');
+      }
+    });
+    return () => unsubscribeAuth();
+  }, [router, toast]);
+
+  useEffect(() => {
+    if (!userId) {
+      // Clear data and stop loading if userId is null
+      setStudents([]);
+      setPlans([]);
+      setBookedClasses([]);
+      setDashboardStats({ totalAlunos: 0, aulasHoje: 0, pagamentosPendentes: 0, receitaEstimada: 0 });
+      setProximasAulas([]);
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
-    const studentQuery = query(collection(db, 'students'), where('status', '==', 'active'), orderBy('name'));
-    const planQuery = query(collection(db, 'plans'), orderBy('name'));
+    const studentQuery = query(collection(db, 'coaches', userId, 'students'), where('status', '==', 'active'), orderBy('name'));
+    const planQuery = query(collection(db, 'coaches', userId, 'plans'), orderBy('name'));
+    const bookedClassesQuery = query(collection(db, 'coaches', userId, 'bookedClasses'), orderBy('date'));
 
     const unsubStudents = onSnapshot(studentQuery, (snapshot) => {
       const activeStudentsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Student));
       setStudents(activeStudentsData);
     }, (error) => {
       console.error("Error fetching students:", error);
+      toast({ title: "Erro ao buscar alunos", variant: "destructive" });
     });
 
     const unsubPlans = onSnapshot(planQuery, (snapshot) => {
@@ -66,26 +95,33 @@ export default function DashboardPage() {
       setPlans(plansData);
     }, (error) => {
       console.error("Error fetching plans:", error);
+      toast({ title: "Erro ao buscar planos", variant: "destructive" });
     });
     
-    // Simulate loading completion; in a real app with booked classes from Firestore, this would depend on that fetch too.
-    const timer = setTimeout(() => setIsLoading(false), 1200);
-
+    const unsubBookedClasses = onSnapshot(bookedClassesQuery, (snapshot) => {
+        const bookedClassesData = snapshot.docs.map(doc => ({...doc.data(), id: doc.id} as BookedClass));
+        setBookedClasses(bookedClassesData);
+        // Set loading to false after all essential data (or at least booked classes) is fetched.
+        // If other fetches are slower, this might cause a flicker. Better to use Promise.all or similar.
+        setIsLoading(false); 
+    }, (error) => {
+        console.error("Error fetching booked classes:", error);
+        toast({ title: "Erro ao buscar aulas agendadas", variant: "destructive" });
+        setIsLoading(false);
+    });
 
     return () => {
       unsubStudents();
       unsubPlans();
-      clearTimeout(timer);
+      unsubBookedClasses();
     };
-  }, []);
+  }, [userId, toast]);
 
   useEffect(() => {
-    if (!students.length && !plans.length && !isLoading) return; // Avoid calculation if initial load isn't complete or no data
+    if (isLoading || !userId) return; 
 
-    // Calculate Total Alunos Ativos
     const totalAlunosAtivos = students.filter(s => s.status === 'active').length;
 
-    // Calculate Aulas Agendadas Hoje (using mock data)
     const today = startOfToday();
     const aulasHojeCount = bookedClasses.filter(c => {
         try {
@@ -93,12 +129,11 @@ export default function DashboardPage() {
         } catch (e) { return false; }
     }).length;
 
-    // Calculate Pagamentos Pendentes
     let pendentesCount = 0;
     if (students.length > 0 && plans.length > 0) {
         students.filter(s => s.status === 'active').forEach(student => {
             const planDetails = plans.find(p => p.name === student.plan);
-            if (!planDetails) return;
+            if (!planDetails || !planDetails.durationDays || planDetails.durationDays <= 0) return;
 
             let effectiveStatus = student.paymentStatus;
             let currentDueDate: Date | null = student.dueDate ? startOfDay(parseISO(student.dueDate)) : null;
@@ -107,14 +142,10 @@ export default function DashboardPage() {
                 const lastPaymentDate = startOfDay(parseISO(student.lastPaymentDate));
                 const cycleEndDate = addDays(lastPaymentDate, planDetails.durationDays);
                 
-                if (isBefore(cycleEndDate, today)) { // Paid period ended
+                if (isBefore(cycleEndDate, today)) { 
                     effectiveStatus = 'vencido';
-                    currentDueDate = cycleEndDate; // The due date for the cycle that just ended
+                    currentDueDate = cycleEndDate; 
                 } else {
-                    // Still within paid period, not pending/overdue FOR THE CURRENT CYCLE
-                    // The student.dueDate should ideally point to the *next* cycle's due date
-                    // if this logic is to be perfect.
-                    // For simplicity here, if they are 'pago' and period not ended, they are not counted as pending.
                     effectiveStatus = 'pago'; 
                 }
             } else if (currentDueDate && (student.paymentStatus === 'pendente' || student.paymentStatus === 'vencido')) {
@@ -123,7 +154,7 @@ export default function DashboardPage() {
                  } else {
                     effectiveStatus = 'pendente';
                  }
-            } else if (!student.paymentStatus && currentDueDate) { // Default new student to pending if due date exists
+            } else if (!student.paymentStatus && currentDueDate) { 
                  if (isBefore(currentDueDate, today)) {
                     effectiveStatus = 'vencido';
                  } else {
@@ -138,7 +169,6 @@ export default function DashboardPage() {
         });
     }
     
-    // Calculate Receita Mensal Estimada
     const receitaEstimadaTotal = students
       .filter(s => s.status === 'active')
       .reduce((sum, student) => {
@@ -153,7 +183,6 @@ export default function DashboardPage() {
       receitaEstimada: receitaEstimadaTotal,
     });
 
-    // Calculate Próximas Aulas (using mock data)
     const tomorrow = addDays(today, 1);
     const upcoming = bookedClasses
       .filter(c => {
@@ -171,7 +200,7 @@ export default function DashboardPage() {
       .slice(0, 3);
     setProximasAulas(upcoming);
 
-  }, [students, plans, bookedClasses, isLoading]);
+  }, [students, plans, bookedClasses, isLoading, userId]); // Added userId dependency
 
   const statCards = [
     { title: "Total de Alunos Ativos", value: dashboardStats.totalAlunos.toString(), icon: Users, color: "text-primary", bgColor: "bg-primary/10" },
@@ -180,7 +209,7 @@ export default function DashboardPage() {
     { title: "Receita Mensal (Estimada)", value: `R$ ${dashboardStats.receitaEstimada.toFixed(2)}`, icon: BarChart3, color: "text-indigo-500", bgColor: "bg-indigo-500/10" },
   ];
 
-  if (isLoading) {
+  if (isLoading || !userId) {
     return (
       <div className="container mx-auto py-8 flex flex-col items-center justify-center min-h-[calc(100vh-150px)]">
         <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
@@ -277,12 +306,10 @@ export default function DashboardPage() {
             <Button asChild variant="link" className="mt-4 px-0 text-primary">
               <Link href="/agenda">Ver agenda completa &rarr;</Link>
             </Button>
-             <p className="text-xs text-muted-foreground mt-2">* A lista de próximas aulas é baseada em dados de exemplo.</p>
+             {/* <p className="text-xs text-muted-foreground mt-2">* A lista de próximas aulas é baseada em dados de exemplo.</p> */}
           </CardContent>
         </Card>
       </div>
     </div>
   );
 }
-
-    

@@ -41,10 +41,10 @@ import {
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { BookedClass, DailyAvailability, Student, Location, DayOfWeek, CoachAvailability, ClassSession } from '@/types';
-import { getDayOfWeekName, DAYS_OF_WEEK } from '@/types'; // Removed INITIAL_MOCK_BOOKED_CLASSES
+import { getDayOfWeekName, DAYS_OF_WEEK } from '@/types';
 import { useToast } from '@/hooks/use-toast';
-import { db } from '@/firebase';
-import { collection, onSnapshot, query, orderBy, where, doc, getDoc, addDoc, updateDoc, deleteDoc } from 'firebase/firestore'; // Added addDoc, updateDoc, deleteDoc
+import { db, auth } from '@/firebase';
+import { collection, onSnapshot, query, orderBy, where, doc, getDoc, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 const generateHourIntervals = (startHour: number, endHour: number, intervalMinutes: number = 60): string[] => {
@@ -64,8 +64,9 @@ const generateHourIntervals = (startHour: number, endHour: number, intervalMinut
 
 export default function AgendaPage() {
   const [currentWeekStartDate, setCurrentWeekStartDate] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
-  const [bookedClasses, setBookedClasses] = useState<BookedClass[]>([]); // Now fetched from Firestore
+  const [bookedClasses, setBookedClasses] = useState<BookedClass[]>([]);
   const { toast } = useToast();
+  const [userId, setUserId] = useState<string | null>(null);
 
   const [isStudentSelectionDialogOpen, setIsStudentSelectionDialogOpen] = useState(false);
   const [slotBeingBooked, setSlotBeingBooked] = useState<{ date: Date, time: string, location?: string } | null>(null);
@@ -89,10 +90,25 @@ export default function AgendaPage() {
   const [isLoadingClassSessions, setIsLoadingClassSessions] = useState(true);
   const [isLoadingBookedClasses, setIsLoadingBookedClasses] = useState(true);
 
+  useEffect(() => {
+    const unsubscribeAuth = auth.onAuthStateChanged(user => {
+      if (user) {
+        setUserId(user.uid);
+      } else {
+        setUserId(null);
+        toast({ title: "Autenticação Necessária", variant: "destructive" });
+        // router.push('/login'); // Consider redirecting if not handled by layout
+      }
+    });
+    return () => unsubscribeAuth();
+  }, [toast]);
+
 
   useEffect(() => {
+    if (!userId) return;
+
     setIsLoadingStudents(true);
-    const studentsCollectionRef = collection(db, 'students');
+    const studentsCollectionRef = collection(db, 'coaches', userId, 'students');
     const qStudents = query(studentsCollectionRef, orderBy('name', 'asc'));
     const unsubStudents = onSnapshot(qStudents, (snapshot) => {
       const studentsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Student));
@@ -106,7 +122,7 @@ export default function AgendaPage() {
     });
 
     setIsLoadingLocations(true);
-    const locationsCollectionRef = collection(db, 'locations');
+    const locationsCollectionRef = collection(db, 'coaches', userId, 'locations');
     const qLocations = query(locationsCollectionRef, where('status', '==', 'active'), orderBy('name', 'asc'));
     const unsubLocations = onSnapshot(qLocations, (snapshot) => {
       const locationsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Location));
@@ -121,7 +137,7 @@ export default function AgendaPage() {
     setIsLoadingAvailability(true);
     const fetchCoachAvailability = async () => {
         try {
-            const availabilityDocRef = doc(db, 'settings', 'coachAvailability');
+            const availabilityDocRef = doc(db, 'coaches', userId, 'settings', 'coachAvailability');
             const docSnap = await getDoc(availabilityDocRef);
             if (docSnap.exists()) {
                 setCoachAvailability(docSnap.data() as CoachAvailability);
@@ -138,7 +154,7 @@ export default function AgendaPage() {
     fetchCoachAvailability();
 
     setIsLoadingClassSessions(true);
-    const classSessionsCollectionRef = collection(db, 'classSessions');
+    const classSessionsCollectionRef = collection(db, 'coaches', userId, 'classSessions');
     const qClassSessions = query(classSessionsCollectionRef, orderBy('startTime'));
     const unsubClassSessions = onSnapshot(qClassSessions, (snapshot) => {
         const sessionsData = snapshot.docs.map(sDoc => ({ ...sDoc.data(), id: sDoc.id } as ClassSession));
@@ -151,7 +167,7 @@ export default function AgendaPage() {
     });
 
     setIsLoadingBookedClasses(true);
-    const bookedClassesCollectionRef = collection(db, 'bookedClasses');
+    const bookedClassesCollectionRef = collection(db, 'coaches', userId, 'bookedClasses');
     const qBookedClasses = query(bookedClassesCollectionRef, orderBy('date'), orderBy('time'));
     const unsubBookedClasses = onSnapshot(qBookedClasses, (snapshot) => {
       const bookedData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as BookedClass));
@@ -170,7 +186,7 @@ export default function AgendaPage() {
         unsubClassSessions();
         unsubBookedClasses();
     };
-  }, [toast]);
+  }, [userId, toast]);
 
   const goToNextWeek = () => setCurrentWeekStartDate(addWeeks(currentWeekStartDate, 1));
   const goToPrevWeek = () => setCurrentWeekStartDate(subWeeks(currentWeekStartDate, 1));
@@ -222,7 +238,7 @@ export default function AgendaPage() {
       );
     }
     
-    if (!coachAvailability) { // Should be handled by outer isLoading check
+    if (!coachAvailability) {
         return <div className="bg-muted/30 h-full rounded-md"></div>; 
     }
 
@@ -309,10 +325,10 @@ export default function AgendaPage() {
   };
 
   const handleConfirmBooking = async () => {
-    if (!slotBeingBooked || selectedStudentIdsForBooking.length === 0) {
+    if (!userId || !slotBeingBooked || selectedStudentIdsForBooking.length === 0) {
       toast({
         title: "Erro ao Agendar",
-        description: "Informações incompletas. Selecione data, horário e pelo menos um aluno.",
+        description: "Informações incompletas ou usuário não autenticado.",
         variant: "destructive",
       });
       return;
@@ -336,7 +352,7 @@ export default function AgendaPage() {
     };
 
     try {
-      await addDoc(collection(db, 'bookedClasses'), newBookedClassData);
+      await addDoc(collection(db, 'coaches', userId, 'bookedClasses'), newBookedClassData);
       toast({ title: "Aula Agendada!", description: `Aula às ${slotBeingBooked.time} foi agendada em ${locationForBooking}.` });
       setIsStudentSelectionDialogOpen(false);
       setSlotBeingBooked(null);
@@ -363,12 +379,12 @@ export default function AgendaPage() {
   };
 
   const handleSaveChangesToClass = async () => {
-    if (!classBeingEdited || editedClassStudentIds.length === 0 || !editedClassTitle || !editedClassLocation) {
-      toast({ title: "Erro ao Salvar", description: "Título, local e ao menos um aluno são necessários.", variant: "destructive" });
+    if (!userId || !classBeingEdited || editedClassStudentIds.length === 0 || !editedClassTitle || !editedClassLocation) {
+      toast({ title: "Erro ao Salvar", description: "Título, local e ao menos um aluno são necessários. Verifique a autenticação.", variant: "destructive" });
       return;
     }
 
-    const classDocRef = doc(db, 'bookedClasses', classBeingEdited.id);
+    const classDocRef = doc(db, 'coaches', userId, 'bookedClasses', classBeingEdited.id);
     const updatedData = { 
       title: editedClassTitle, 
       location: editedClassLocation, 
@@ -387,10 +403,10 @@ export default function AgendaPage() {
   };
 
   const handleDeleteClass = async () => {
-    if (!classBeingEdited) return;
+    if (!userId || !classBeingEdited) return;
     if (window.confirm(`Tem certeza que deseja excluir a aula "${classBeingEdited.title}"?`)) {
         try {
-            await deleteDoc(doc(db, 'bookedClasses', classBeingEdited.id));
+            await deleteDoc(doc(db, 'coaches', userId, 'bookedClasses', classBeingEdited.id));
             toast({ title: "Aula Excluída!", description: `A aula "${classBeingEdited.title}" foi excluída.` });
             setIsEditClassDialogOpen(false);
             setClassBeingEdited(null);
@@ -401,7 +417,7 @@ export default function AgendaPage() {
     }
   };
 
-  const isLoading = isLoadingStudents || isLoadingLocations || isLoadingAvailability || isLoadingClassSessions || isLoadingBookedClasses;
+  const isLoading = isLoadingStudents || isLoadingLocations || isLoadingAvailability || isLoadingClassSessions || isLoadingBookedClasses || !userId;
 
   return (
     <div className="container mx-auto py-8">

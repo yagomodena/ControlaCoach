@@ -23,20 +23,42 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import type { Student } from '@/types';
-import { db } from '@/firebase';
-import { collection, getDocs, deleteDoc, doc, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { db, auth } from '@/firebase';
+import { collection, deleteDoc, doc, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
+import { useRouter } from 'next/navigation';
 
 export default function AlunosPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [students, setStudents] = useState<Student[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
   const { toast } = useToast();
+  const router = useRouter();
 
   useEffect(() => {
+    const unsubscribeAuth = auth.onAuthStateChanged(user => {
+      if (user) {
+        setUserId(user.uid);
+      } else {
+        setUserId(null);
+        toast({ title: "Autenticação Necessária", variant: "destructive" });
+        router.push('/login');
+      }
+    });
+    return () => unsubscribeAuth();
+  }, [router, toast]);
+
+  useEffect(() => {
+    if (!userId) {
+      setIsLoading(false); // Stop loading if no user
+      setStudents([]); // Clear students if no user
+      return;
+    }
+
     setIsLoading(true);
-    const studentsCollectionRef = collection(db, 'students');
+    const studentsCollectionRef = collection(db, 'coaches', userId, 'students');
     const q = query(studentsCollectionRef, orderBy('name', 'asc'));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -53,8 +75,8 @@ export default function AlunosPage() {
       setIsLoading(false);
     });
 
-    return () => unsubscribe(); // Cleanup on unmount
-  }, [toast]);
+    return () => unsubscribe();
+  }, [userId, toast]);
 
   const filteredStudents = useMemo(() => {
     return students.filter(student => {
@@ -64,15 +86,18 @@ export default function AlunosPage() {
     });
   }, [students, searchTerm, statusFilter]);
 
-  const handleDeleteStudent = async (studentId: string, studentName: string) => {
+  const handleDeleteStudent = async (studentIdToDelete: string, studentName: string) => {
+    if (!userId) {
+      toast({ title: "Erro", description: "Usuário não autenticado.", variant: "destructive" });
+      return;
+    }
     if (window.confirm(`Tem certeza que deseja excluir o aluno "${studentName}"? Esta ação não pode ser desfeita.`)) {
       try {
-        await deleteDoc(doc(db, 'students', studentId));
+        await deleteDoc(doc(db, 'coaches', userId, 'students', studentIdToDelete));
         toast({
           title: 'Aluno Excluído!',
           description: `O aluno "${studentName}" foi removido com sucesso.`,
         });
-        // Real-time listener will update the list automatically
       } catch (error) {
         console.error("Error deleting student: ", error);
         toast({

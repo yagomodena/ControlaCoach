@@ -24,18 +24,40 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import type { Plan } from '@/types';
 import { useToast } from '@/hooks/use-toast';
-import { db } from '@/firebase';
+import { db, auth } from '@/firebase';
 import { collection, onSnapshot, deleteDoc, doc, query, orderBy } from 'firebase/firestore';
+import { useRouter } from 'next/navigation';
 
 export default function PlanosPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [plans, setPlans] = useState<Plan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
   const { toast } = useToast();
+  const router = useRouter();
 
   useEffect(() => {
+    const unsubscribeAuth = auth.onAuthStateChanged(user => {
+      if (user) {
+        setUserId(user.uid);
+      } else {
+        setUserId(null);
+        toast({ title: "Autenticação Necessária", variant: "destructive" });
+        router.push('/login');
+      }
+    });
+    return () => unsubscribeAuth();
+  }, [router, toast]);
+
+  useEffect(() => {
+    if (!userId) {
+      setIsLoading(false);
+      setPlans([]);
+      return;
+    }
+
     setIsLoading(true);
-    const plansCollectionRef = collection(db, 'plans');
+    const plansCollectionRef = collection(db, 'coaches', userId, 'plans');
     const q = query(plansCollectionRef, orderBy('name', 'asc'));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -53,7 +75,7 @@ export default function PlanosPage() {
     });
 
     return () => unsubscribe();
-  }, [toast]);
+  }, [userId, toast]);
 
   const filteredPlans = useMemo(() => {
     return plans.filter(plan =>
@@ -61,15 +83,18 @@ export default function PlanosPage() {
     );
   }, [plans, searchTerm]);
 
-  const handleDeletePlan = async (planId: string, planName: string) => {
+  const handleDeletePlan = async (planIdToDelete: string, planName: string) => {
+    if (!userId) {
+      toast({ title: "Erro", description: "Usuário não autenticado.", variant: "destructive" });
+      return;
+    }
     if (window.confirm(`Tem certeza que deseja excluir o plano "${planName}"? Esta ação não pode ser desfeita.`)) {
       try {
-        await deleteDoc(doc(db, 'plans', planId));
+        await deleteDoc(doc(db, 'coaches', userId, 'plans', planIdToDelete));
         toast({
           title: 'Plano Excluído!',
           description: `O plano "${planName}" foi removido com sucesso.`,
         });
-        // Real-time listener will update the list
       } catch (error) {
         console.error("Error deleting plan: ", error);
         toast({
@@ -80,6 +105,15 @@ export default function PlanosPage() {
       }
     }
   };
+  
+  if (isLoading || !userId) {
+    return (
+        <div className="container mx-auto py-8 flex flex-col items-center justify-center min-h-[calc(100vh-150px)]">
+            <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+            <p className="text-muted-foreground">Carregando planos...</p>
+        </div>
+    );
+  }
 
   return (
     <div className="container mx-auto py-8">

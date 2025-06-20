@@ -16,7 +16,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import type { Location } from '@/types';
 import { useToast } from '@/hooks/use-toast';
-import { db } from '@/firebase';
+import { db, auth } from '@/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 
 const locationSchema = z.object({
@@ -32,6 +32,7 @@ export default function LocalDetailPage() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const locationId = params.id as string;
+  const [userId, setUserId] = useState<string | null>(null);
   
   const [location, setLocation] = useState<Location | null>(null);
   const [isEditMode, setIsEditMode] = useState(searchParams.get('edit') === 'true');
@@ -42,11 +43,24 @@ export default function LocalDetailPage() {
   });
 
   useEffect(() => {
-    if (!locationId) return;
+    const unsubscribeAuth = auth.onAuthStateChanged(user => {
+      if (user) {
+        setUserId(user.uid);
+      } else {
+        setUserId(null);
+        toast({ title: "Autenticação Necessária", variant: "destructive" });
+        router.push('/login');
+      }
+    });
+    return () => unsubscribeAuth();
+  }, [router, toast]);
+
+  useEffect(() => {
+    if (!locationId || !userId) return;
     setIsLoading(true);
     const fetchLocation = async () => {
       try {
-        const locationDocRef = doc(db, 'locations', locationId);
+        const locationDocRef = doc(db, 'coaches', userId, 'locations', locationId);
         const locationDocSnap = await getDoc(locationDocRef);
 
         if (locationDocSnap.exists()) {
@@ -65,16 +79,19 @@ export default function LocalDetailPage() {
       }
     };
     fetchLocation();
-  }, [locationId, reset, router, toast]);
+  }, [locationId, userId, reset, router, toast]);
 
   useEffect(() => {
     setIsEditMode(searchParams.get('edit') === 'true');
   }, [searchParams]);
 
   const onSubmit = async (data: LocationFormData) => {
-    if (!locationId || !location) return;
+    if (!locationId || !location || !userId) {
+        toast({ title: "Erro", description: "Informações de usuário ou local ausentes.", variant: "destructive" });
+        return;
+    }
     try {
-      const locationDocRef = doc(db, 'locations', locationId);
+      const locationDocRef = doc(db, 'coaches', userId, 'locations', locationId);
       await updateDoc(locationDocRef, data);
       
       const updatedLocation = { ...location, ...data };
@@ -96,7 +113,7 @@ export default function LocalDetailPage() {
     }
   };
 
-  if (isLoading) {
+  if (isLoading || !userId) {
     return (
         <div className="container mx-auto py-8 flex flex-col items-center justify-center min-h-[calc(100vh-150px)]">
             <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
@@ -192,7 +209,7 @@ export default function LocalDetailPage() {
             <CardContent className="grid gap-6 pt-6">
                 <InfoItem icon={MapPin} label="Nome do Local" value={location.name} />
                 <InfoItem 
-                    icon={location.status === 'active' ? Edit3 : Edit3} // Placeholder, consider ShieldCheck / ShieldOff
+                    icon={location.status === 'active' ? Edit3 : Edit3} 
                     label="Status" 
                     value={location.status === 'active' ? 'Ativo' : 'Inativo'} />
             </CardContent>

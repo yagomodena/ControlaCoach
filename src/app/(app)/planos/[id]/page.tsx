@@ -16,7 +16,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import type { Plan } from '@/types';
 import { useToast } from '@/hooks/use-toast';
-import { db } from '@/firebase';
+import { db, auth } from '@/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 
 const planSchema = z.object({
@@ -34,6 +34,7 @@ export default function PlanoDetailPage() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const planId = params.id as string;
+  const [userId, setUserId] = useState<string | null>(null);
   
   const [plan, setPlan] = useState<Plan | null>(null);
   const [isEditMode, setIsEditMode] = useState(searchParams.get('edit') === 'true');
@@ -44,11 +45,25 @@ export default function PlanoDetailPage() {
   });
 
   useEffect(() => {
-    if (!planId) return;
+    const unsubscribeAuth = auth.onAuthStateChanged(user => {
+      if (user) {
+        setUserId(user.uid);
+      } else {
+        setUserId(null);
+        toast({ title: "Autenticação Necessária", variant: "destructive" });
+        router.push('/login');
+      }
+    });
+    return () => unsubscribeAuth();
+  }, [router, toast]);
+
+
+  useEffect(() => {
+    if (!planId || !userId) return;
     setIsLoading(true);
     const fetchPlan = async () => {
       try {
-        const planDocRef = doc(db, 'plans', planId);
+        const planDocRef = doc(db, 'coaches', userId, 'plans', planId);
         const planDocSnap = await getDoc(planDocRef);
 
         if (planDocSnap.exists()) {
@@ -67,16 +82,19 @@ export default function PlanoDetailPage() {
       }
     };
     fetchPlan();
-  }, [planId, reset, router, toast]);
+  }, [planId, userId, reset, router, toast]);
 
   useEffect(() => {
     setIsEditMode(searchParams.get('edit') === 'true');
   }, [searchParams]);
 
   const onSubmit = async (data: PlanFormData) => {
-    if (!planId || !plan) return;
+    if (!planId || !plan || !userId) {
+        toast({ title: "Erro", description: "Informações de usuário ou plano ausentes.", variant: "destructive" });
+        return;
+    }
     try {
-      const planDocRef = doc(db, 'plans', planId);
+      const planDocRef = doc(db, 'coaches', userId, 'plans', planId);
       await updateDoc(planDocRef, data);
       
       const updatedPlan = { ...plan, ...data };
@@ -98,7 +116,7 @@ export default function PlanoDetailPage() {
     }
   };
 
-  if (isLoading) {
+  if (isLoading || !userId) {
     return (
         <div className="container mx-auto py-8 flex flex-col items-center justify-center min-h-[calc(100vh-150px)]">
             <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
@@ -216,7 +234,7 @@ export default function PlanoDetailPage() {
                 <InfoItem icon={BadgeDollarSign} label="Preço" value={plan.price.toFixed(2)} prefix="R$ " />
                 <InfoItem icon={CalendarClock} label="Duração (dias)" value={plan.durationDays} />
                 <InfoItem 
-                    icon={plan.status === 'active' ? Edit3 : Edit3} // Placeholder, consider ShieldCheck / ShieldOff
+                    icon={plan.status === 'active' ? Edit3 : Edit3} 
                     label="Status" 
                     value={plan.status === 'active' ? 'Ativo' : 'Inativo'} />
             </CardContent>

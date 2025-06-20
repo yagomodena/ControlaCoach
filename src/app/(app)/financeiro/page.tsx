@@ -56,8 +56,9 @@ import {
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
-import { db } from '@/firebase';
+import { db, auth } from '@/firebase';
 import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { useRouter } from 'next/navigation';
 
 interface PaymentEntry extends Payment {
   studentName: string;
@@ -84,22 +85,44 @@ export default function FinanceiroPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [clientRendered, setClientRendered] = useState(false);
   const { toast } = useToast();
+  const router = useRouter();
+  const [userId, setUserId] = useState<string | null>(null);
   const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
   const [reportData, setReportData] = useState<MonthlyReportData | null>(null);
   const [selectedMonthDate, setSelectedMonthDate] = useState(new Date());
 
   useEffect(() => {
     setClientRendered(true);
+    const unsubscribeAuth = auth.onAuthStateChanged(user => {
+      if (user) {
+        setUserId(user.uid);
+      } else {
+        setUserId(null);
+        toast({ title: "Autenticação Necessária", variant: "destructive" });
+        router.push('/login');
+      }
+    });
+    return () => unsubscribeAuth();
+  }, [router, toast]);
+
+
+  useEffect(() => {
+    if (!userId) {
+      setIsLoading(false);
+      setPayments([]);
+      setAllPlans([]);
+      return;
+    }
     setIsLoading(true);
 
-    const plansCollectionRef = collection(db, 'plans');
+    const plansCollectionRef = collection(db, 'coaches', userId, 'plans');
     const qPlans = query(plansCollectionRef, orderBy('name'));
     const unsubscribePlans = onSnapshot(qPlans, (snapshot) => {
       const plansData = snapshot.docs.map(docSnap => ({ ...docSnap.data(), id: docSnap.id } as Plan));
       setAllPlans(plansData);
 
-      const studentsCollectionRef = collection(db, 'students');
-      const qStudents = query(studentsCollectionRef, orderBy('name')); // Fetch all students initially
+      const studentsCollectionRef = collection(db, 'coaches', userId, 'students');
+      const qStudents = query(studentsCollectionRef, orderBy('name')); 
       const unsubscribeStudents = onSnapshot(qStudents, (studentSnapshot) => {
         const studentsData = studentSnapshot.docs.map(docSnap => ({ ...docSnap.data(), id: docSnap.id } as Student));
         
@@ -117,45 +140,33 @@ export default function FinanceiroPage() {
                 return;
             }
 
-            let currentCycleStartDate = student.registrationDate ? startOfDay(parseISO(student.registrationDate)) : startOfDay(new Date(2000,0,1)); // Default for very old data
+            let currentCycleStartDate = student.registrationDate ? startOfDay(parseISO(student.registrationDate)) : startOfDay(new Date(2000,0,1)); 
             
-            // Loop to find relevant due dates for the selected month
-            // Continue as long as the cycle might overlap with the selected month or slightly after
-            while (isBefore(currentCycleStartDate, addMonths(monthEnd, 2))) { // Check a bit beyond monthEnd to catch all relevant cycles
+            while (isBefore(currentCycleStartDate, addMonths(monthEnd, 2))) { 
                 const currentCycleDueDate = startOfDay(addDays(currentCycleStartDate, planDetails.durationDays));
 
-                // Optimization: if current cycle start is already way past the selected month, break
                 if (isAfter(currentCycleStartDate, addDays(monthEnd, planDetails.durationDays * 2))) {
                      break;
                 }
                 
-                // Only create an entry if its DUE DATE is in the selected month
                 if (isWithinInterval(currentCycleDueDate, { start: monthStart, end: monthEnd })) {
                     let entryStatus: Payment['status'] = 'pendente';
                     let entryPaymentDate: string | undefined = undefined;
                     const studentOverallNextDueDate = student.dueDate ? startOfDay(parseISO(student.dueDate)) : null;
 
-                    // Determine status based on student's last payment and overall status
                     if (student.lastPaymentDate && student.paymentStatus === 'pago') {
                         const lastPaidActualDate = startOfDay(parseISO(student.lastPaymentDate));
-                        // A payment on lastPaidActualDate covers the cycle starting on lastPaidActualDate
-                        // The *next* due date after that payment would be addDays(lastPaidActualDate, planDetails.durationDays)
                         const nextDueDateAfterLastPayment = addDays(lastPaidActualDate, planDetails.durationDays);
 
                         if (isEqual(currentCycleDueDate, nextDueDateAfterLastPayment)) {
-                            // This currentCycleDueDate is the one that was effectively paid for by the last payment.
                             entryStatus = 'pago';
                             entryPaymentDate = student.lastPaymentDate;
                         } else if (isBefore(currentCycleDueDate, nextDueDateAfterLastPayment) && studentOverallNextDueDate && isAfter(studentOverallNextDueDate, currentCycleDueDate)) {
-                            // This is a past cycle relative to the student's *current* next due date, and student is 'pago' overall.
-                            // Implies this past cycle was also paid.
                              entryStatus = 'pago';
-                             // Infer payment date for this past cycle to be its start date for simplicity in report
                              entryPaymentDate = formatISO(currentCycleStartDate, {representation:'date'});
                         }
                     }
                     
-                    // If not determined as 'pago', check for 'vencido' or 'pendente'
                     if (entryStatus !== 'pago') {
                         if (isBefore(currentCycleDueDate, today)) {
                             entryStatus = 'vencido';
@@ -164,12 +175,9 @@ export default function FinanceiroPage() {
                         }
                     }
                     
-                    // If the student's main record has a specific status for this exact due date, honor it.
                     if (studentOverallNextDueDate && isEqual(currentCycleDueDate, studentOverallNextDueDate)) {
                         if (student.paymentStatus === 'vencido') entryStatus = 'vencido';
-                        // If student.paymentStatus is 'pendente' for this currentOverallDueDate, and we haven't marked it vencido, it's pendente.
                         else if (student.paymentStatus === 'pendente' && entryStatus !== 'vencido') entryStatus = 'pendente';
-                        // if student.paymentStatus is 'pago' for this studentOverallNextDueDate, it was handled by the 'pago' block above.
                     }
                     
                     derivedPayments.push({
@@ -187,7 +195,6 @@ export default function FinanceiroPage() {
                     });
                 }
                 
-                // Move to the start of the next cycle for this student
                 currentCycleStartDate = addDays(currentCycleStartDate, planDetails.durationDays);
             }
         });
@@ -216,11 +223,15 @@ export default function FinanceiroPage() {
     });
 
     return () => unsubscribePlans();
-  }, [toast, selectedMonthDate]); // Re-run when selectedMonthDate changes
+  }, [userId, toast, selectedMonthDate]);
 
 
   const handleMarkAsPaid = async (paymentEntryToUpdate: PaymentEntry) => {
-    const studentDocRef = doc(db, 'students', paymentEntryToUpdate.studentId);
+    if (!userId) {
+      toast({ title: "Erro", description: "Usuário não autenticado.", variant: "destructive" });
+      return;
+    }
+    const studentDocRef = doc(db, 'coaches', userId, 'students', paymentEntryToUpdate.studentId);
     try {
       const studentDocSnap = await getDoc(studentDocRef);
       if (!studentDocSnap.exists()) {
@@ -235,28 +246,20 @@ export default function FinanceiroPage() {
         return;
       }
 
-      // The date payment is considered made is the due date of the entry being marked.
       const paymentMadeForDueDate = startOfDay(parseISO(paymentEntryToUpdate.dueDate));
-      
-      // The actual payment date is today (or could be a date picker in a more complex form)
       const actualPaymentDate = startOfDay(new Date());
-
 
       let nextOverallDueDate: Date;
       if (planDetails.durationDays > 0) {
-         // Next due date is calculated from the due date that was just paid
         nextOverallDueDate = addDays(paymentMadeForDueDate, planDetails.durationDays);
       } else {
-        // Fallback: 5th of the month following the paymentMadeForDueDate date.
         nextOverallDueDate = setDate(addMonths(paymentMadeForDueDate, 1), 5);
       }
-      nextOverallDueDate.setHours(0,0,0,0); // Ensure start of day
+      nextOverallDueDate.setHours(0,0,0,0);
 
       const updatePayload: Partial<Student> = {
         paymentStatus: 'pago',
-        // lastPaymentDate is the date of this specific payment for this cycle
         lastPaymentDate: dateFnsFormatISO(actualPaymentDate, { representation: 'date' }),
-        // dueDate on student record is their *next* upcoming due date
         dueDate: dateFnsFormatISO(nextOverallDueDate, { representation: 'date' }),
         amountDue: planDetails.price, 
       };
@@ -267,7 +270,6 @@ export default function FinanceiroPage() {
         title: "Pagamento Confirmado!",
         description: `Pagamento de ${currentStudentData.name} (venc. ${format(paymentMadeForDueDate, 'dd/MM/yyyy')}) marcado como pago. Próximo vencimento geral do aluno: ${format(nextOverallDueDate, 'dd/MM/yyyy', { locale: ptBR })}`,
       });
-      // The onSnapshot listener will automatically refresh the payments list.
     } catch (error) {
       console.error("Error marking as paid: ", error);
       toast({ title: "Erro ao Marcar como Pago", variant: "destructive", description: (error as Error).message });
@@ -275,8 +277,6 @@ export default function FinanceiroPage() {
   };
 
   const filteredPayments = useMemo(() => {
-    // The `payments` state is already filtered by selectedMonthDate due to the useEffect logic.
-    // This `filteredPayments` can now just handle searchTerm and statusFilters.
     return payments.filter(payment => {
       const nameMatch = payment.studentName.toLowerCase().includes(searchTerm.toLowerCase());
       const statusMatch = statusFilters.size === 0 || statusFilters.has(payment.status);
@@ -306,7 +306,6 @@ export default function FinanceiroPage() {
   };
 
   const summaryStats = useMemo(() => {
-    // Calculate stats based on the `payments` state which is already for the selected month
     return {
       totalRecebidoMes: payments
         .filter(p => p.status === 'pago')
@@ -321,10 +320,6 @@ export default function FinanceiroPage() {
   }, [payments]);
 
   const handleGenerateReport = () => {
-    const reportMonthStart = startOfMonth(selectedMonthDate);
-    const reportMonthEnd = endOfMonth(selectedMonthDate);
-
-    // Use the `payments` state which is already filtered for the month and projected
     const paidInMonth = payments.filter(p => p.status === 'pago');
     const outstandingInMonth = payments.filter(p => p.status === 'pendente' || p.status === 'vencido');
     
@@ -386,6 +381,15 @@ export default function FinanceiroPage() {
       return dateString; 
     }
   };
+
+  if (isLoading || !userId) {
+    return (
+      <div className="container mx-auto py-8 flex flex-col items-center justify-center min-h-[calc(100vh-150px)]">
+        <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+        <p className="text-muted-foreground">Carregando...</p>
+      </div>
+    );
+  }
 
 
   return (
@@ -682,4 +686,3 @@ export default function FinanceiroPage() {
     </>
   );
 }
-

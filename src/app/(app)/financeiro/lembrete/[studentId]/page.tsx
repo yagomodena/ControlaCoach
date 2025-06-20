@@ -17,7 +17,7 @@ import { generateTuitionReminder, type GenerateTuitionReminderInput } from '@/ai
 import { type Student } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
-import { db } from '@/firebase';
+import { db, auth } from '@/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 
 
@@ -38,6 +38,7 @@ export default function GerarLembretePage() {
   const params = useParams();
   const { toast } = useToast();
   const studentId = params.studentId as string;
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   const [student, setStudent] = useState<Student | null>(null);
   const [generatedMessage, setGeneratedMessage] = useState<string | null>(null);
@@ -50,16 +51,30 @@ export default function GerarLembretePage() {
   });
 
   useEffect(() => {
-    if (!studentId) {
+    const unsubscribeAuth = auth.onAuthStateChanged(user => {
+      if (user) {
+        setCurrentUserId(user.uid);
+      } else {
+        setCurrentUserId(null);
+        toast({ title: "Autenticação Necessária", variant: "destructive" });
+        router.push('/login');
+      }
+    });
+    return () => unsubscribeAuth();
+  }, [router, toast]);
+
+  useEffect(() => {
+    if (!studentId || !currentUserId) {
         setIsLoadingStudent(false);
-        toast({ title: "Erro", description: "ID do aluno não fornecido.", variant: "destructive" });
+        if (!currentUserId) return; // Don't toast if auth is still loading
+        toast({ title: "Erro", description: "ID do aluno ou usuário não fornecido.", variant: "destructive" });
         router.push('/financeiro');
         return;
     }
     setIsLoadingStudent(true);
     const fetchStudentData = async () => {
         try {
-            const studentDocRef = doc(db, 'students', studentId);
+            const studentDocRef = doc(db, 'coaches', currentUserId, 'students', studentId);
             const studentDocSnap = await getDoc(studentDocRef);
 
             if (studentDocSnap.exists()) {
@@ -90,7 +105,7 @@ export default function GerarLembretePage() {
         }
     };
     fetchStudentData();
-  }, [studentId, reset, router, toast]);
+  }, [studentId, currentUserId, reset, router, toast]);
 
   const onSubmit = async (data: ReminderFormData) => {
     setIsGenerating(true);
@@ -139,7 +154,7 @@ export default function GerarLembretePage() {
     }
   };
 
-  if (isLoadingStudent) {
+  if (isLoadingStudent || !currentUserId) {
     return (
       <div className="container mx-auto py-8">
          <div className="flex items-center mb-8">

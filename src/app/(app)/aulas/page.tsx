@@ -7,20 +7,40 @@ import { Button } from "@/components/ui/button";
 import { PlusCircle, Settings2, Users, Clock, Trash2, Loader2, CalendarDays } from "lucide-react";
 import Link from "next/link";
 import type { ClassSession } from '@/types';
-import { db } from '@/firebase';
+import { db, auth } from '@/firebase';
 import { collection, onSnapshot, deleteDoc, doc, query, orderBy } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
+import { useRouter } from 'next/navigation';
 
 export default function AulasPage() {
   const [classSessions, setClassSessions] = React.useState<ClassSession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
   const { toast } = useToast();
+  const router = useRouter();
 
   useEffect(() => {
+    const unsubscribeAuth = auth.onAuthStateChanged(user => {
+      if (user) {
+        setUserId(user.uid);
+      } else {
+        setUserId(null);
+        toast({ title: "Autenticação Necessária", variant: "destructive" });
+        router.push('/login');
+      }
+    });
+    return () => unsubscribeAuth();
+  }, [router, toast]);
+
+  useEffect(() => {
+    if (!userId) {
+      setIsLoading(false);
+      setClassSessions([]);
+      return;
+    }
+
     setIsLoading(true);
-    const classSessionsCollectionRef = collection(db, 'classSessions');
-    // Order by startTime first, then by the first day of the week if needed (though complex for arrays)
-    // For simplicity, main ordering is by startTime, days are listed.
+    const classSessionsCollectionRef = collection(db, 'coaches', userId, 'classSessions');
     const q = query(classSessionsCollectionRef, orderBy('startTime')); 
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -38,17 +58,20 @@ export default function AulasPage() {
     });
 
     return () => unsubscribe(); 
-  }, [toast]);
+  }, [userId, toast]);
 
   const handleDeleteClassSession = async (sessionId: string, sessionTitle: string) => {
+    if (!userId) {
+        toast({ title: "Erro", description: "Usuário não autenticado.", variant: "destructive" });
+        return;
+    }
     if (window.confirm(`Tem certeza que deseja excluir a configuração de aula "${sessionTitle}"? Esta ação não pode ser desfeita.`)) {
       try {
-        await deleteDoc(doc(db, 'classSessions', sessionId));
+        await deleteDoc(doc(db, 'coaches', userId, 'classSessions', sessionId));
         toast({
           title: 'Configuração de Aula Excluída!',
           description: `A configuração "${sessionTitle}" foi removida com sucesso.`,
         });
-        // Real-time listener will update the list
       } catch (error) {
         console.error("Error deleting class session: ", error);
         toast({

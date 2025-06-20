@@ -1,42 +1,48 @@
 
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Save, ListChecks, BadgeDollarSign, CalendarClock } from 'lucide-react';
+import { ArrowLeft, Save, ListChecks, BadgeDollarSign, CalendarClock, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
-import { useForm, Controller } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { type Plan } from '@/types';
-import { db } from '@/firebase';
+import { db, auth } from '@/firebase';
 import { collection, addDoc } from 'firebase/firestore';
-import { PlanForm, type PlanFormData, planSchema } from '@/components/forms/plan-form';
+import { PlanForm, type PlanFormData } from '@/components/forms/plan-form';
 
 export default function NovoPlanoPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const [userId, setUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unsubscribeAuth = auth.onAuthStateChanged(user => {
+      if (user) {
+        setUserId(user.uid);
+      } else {
+        setUserId(null);
+        toast({ title: "Autenticação Necessária", variant: "destructive" });
+        router.push('/login');
+      }
+    });
+    return () => unsubscribeAuth();
+  }, [router, toast]);
 
   const onSubmit = async (data: PlanFormData) => {
+    if (!userId) {
+        toast({ title: "Erro", description: "Usuário não autenticado.", variant: "destructive" });
+        return;
+    }
     try {
-      const dataToSave: Plan = {
+      const dataToSave: Omit<Plan, 'id'> = { // Ensure ID is not part of what's saved
         ...data,
         price: data.price ?? 0, 
-        durationDays: data.durationDays, // durationDays is required by schema, so it will be a number
+        durationDays: data.durationDays, 
       };
-      await addDoc(collection(db, 'plans'), dataToSave);
+      await addDoc(collection(db, 'coaches', userId, 'plans'), dataToSave);
       toast({
         title: "Plano Adicionado!",
         description: `O plano "${data.name}" foi cadastrado com sucesso.`,
@@ -51,6 +57,16 @@ export default function NovoPlanoPage() {
         });
     }
   };
+  
+  if (!userId) {
+    return (
+        <div className="container mx-auto py-8 flex flex-col items-center justify-center min-h-[calc(100vh-150px)]">
+            <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+            <p className="text-muted-foreground">Verificando autenticação...</p>
+        </div>
+    );
+  }
+
 
   return (
     <div className="container mx-auto py-8">
@@ -77,7 +93,7 @@ export default function NovoPlanoPage() {
               initialData={{ 
                 name: '', 
                 price: undefined, 
-                durationDays: undefined, // Set initial durationDays to undefined
+                durationDays: undefined, 
                 status: 'active' 
               }} 
               submitButtonText="Salvar Plano"

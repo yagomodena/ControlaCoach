@@ -18,7 +18,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { type ClassSession, DAYS_OF_WEEK, type Location, type Student, DayOfWeek } from '@/types';
 import { useToast } from '@/hooks/use-toast';
-import { db } from '@/firebase';
+import { db, auth } from '@/firebase';
 import { doc, getDoc, updateDoc, collection, onSnapshot, query, where, orderBy } from 'firebase/firestore';
 
 const classSessionSchema = z.object({
@@ -38,6 +38,7 @@ export default function AulaDetalhePage() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const classId = params.classId as string;
+  const [userId, setUserId] = useState<string | null>(null);
   
   const [classSession, setClassSession] = useState<ClassSession | null>(null);
   const [isEditMode, setIsEditMode] = useState(searchParams.get('edit') === 'true');
@@ -48,8 +49,23 @@ export default function AulaDetalhePage() {
   const [isLoadingLocations, setIsLoadingLocations] = useState(true);
 
   useEffect(() => {
+    const unsubscribeAuth = auth.onAuthStateChanged(user => {
+      if (user) {
+        setUserId(user.uid);
+      } else {
+        setUserId(null);
+        toast({ title: "Autenticação Necessária", variant: "destructive" });
+        router.push('/login');
+      }
+    });
+    return () => unsubscribeAuth();
+  }, [router, toast]);
+
+  useEffect(() => {
+    if (!userId) return;
+
     setIsLoadingLocations(true);
-    const locationsCollectionRef = collection(db, 'locations');
+    const locationsCollectionRef = collection(db, 'coaches', userId, 'locations');
     const qLocations = query(locationsCollectionRef, where('status', '==', 'active'), orderBy('name', 'asc'));
     const unsubscribeLocations = onSnapshot(qLocations, (snapshot) => {
       const locationsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Location));
@@ -62,7 +78,7 @@ export default function AulaDetalhePage() {
     });
     
     setIsLoadingStudents(true);
-    const studentsCollectionRef = collection(db, 'students');
+    const studentsCollectionRef = collection(db, 'coaches', userId, 'students');
     const qStudents = query(studentsCollectionRef, where('status', '==', 'active'), orderBy('name', 'asc'));
     const unsubscribeStudents = onSnapshot(qStudents, (snapshot) => {
       const studentsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Student));
@@ -78,7 +94,7 @@ export default function AulaDetalhePage() {
       unsubscribeLocations();
       unsubscribeStudents();
     };
-  }, [toast]);
+  }, [userId, toast]);
 
   const { control, handleSubmit, reset, formState: { errors, isSubmitting }, watch } = useForm<ClassSessionFormData>({
     resolver: zodResolver(classSessionSchema),
@@ -87,11 +103,11 @@ export default function AulaDetalhePage() {
   const enrolledStudentIds = watch('enrolledStudentIds') || [];
 
   useEffect(() => {
-    if (!classId) return;
+    if (!classId || !userId) return;
     setIsLoading(true);
     const fetchClassSession = async () => {
       try {
-        const classSessionDocRef = doc(db, 'classSessions', classId);
+        const classSessionDocRef = doc(db, 'coaches', userId, 'classSessions', classId);
         const classSessionDocSnap = await getDoc(classSessionDocRef);
 
         if (classSessionDocSnap.exists()) {
@@ -110,14 +126,17 @@ export default function AulaDetalhePage() {
       }
     };
     fetchClassSession();
-  }, [classId, reset, router, toast]);
+  }, [classId, userId, reset, router, toast]);
 
   useEffect(() => {
     setIsEditMode(searchParams.get('edit') === 'true');
   }, [searchParams]);
 
   const onSubmit = async (data: ClassSessionFormData) => {
-    if (!classId) return;
+    if (!classId || !userId) {
+        toast({ title: "Erro", description: "Informações de usuário ou aula ausentes.", variant: "destructive" });
+        return;
+    }
     if (data.startTime >= data.endTime) {
       toast({
         title: "Erro de Validação",
@@ -128,7 +147,7 @@ export default function AulaDetalhePage() {
     }
     
     try {
-      const classSessionDocRef = doc(db, 'classSessions', classId);
+      const classSessionDocRef = doc(db, 'coaches', userId, 'classSessions', classId);
       const updatePayload: Omit<ClassSession, 'id'> = {
          ...data,
          daysOfWeek: data.daysOfWeek.sort((a, b) => DAYS_OF_WEEK.indexOf(a) - DAYS_OF_WEEK.indexOf(b)), 
@@ -156,7 +175,7 @@ export default function AulaDetalhePage() {
     }
   };
 
-  if (isLoading || isLoadingStudents || isLoadingLocations) {
+  if (isLoading || isLoadingStudents || isLoadingLocations || !userId) {
     return (
       <div className="container mx-auto py-8 flex flex-col items-center justify-center min-h-[calc(100vh-150px)]">
         <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />

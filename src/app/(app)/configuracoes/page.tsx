@@ -11,10 +11,11 @@ import { Switch } from "@/components/ui/switch";
 import { Save, Palette, Bell, Shield, CalendarClock, Loader2 } from "lucide-react";
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { db, auth } from '@/firebase'; // Import auth
+import { db, auth } from '@/firebase'; 
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { updateProfile } from 'firebase/auth'; // Import updateProfile
+import { updateProfile } from 'firebase/auth'; 
 import type { CoachAvailability, DailyAvailability, CoachProfileSettings } from '@/types';
+import { useRouter } from 'next/navigation';
 
 interface DailyScheduleState {
   name: string;
@@ -50,49 +51,58 @@ export default function ConfiguracoesPage() {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = React.useState(false);
   const { toast } = useToast();
+  const router = useRouter();
+  const [userId, setUserId] = useState<string | null>(null);
 
-  // Profile State
   const [coachName, setCoachName] = useState('');
   const [coachEmail, setCoachEmail] = useState('');
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
 
-  // Notifications State
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [defaultPaymentReminderDays, setDefaultPaymentReminderDays] = useState(3);
   const [isLoadingNotifications, setIsLoadingNotifications] = useState(true); 
   const [isSavingNotifications, setIsSavingNotifications] = useState(false);
 
-  // Availability State
   const [weekSchedule, setWeekSchedule] = useState<DailyScheduleState[]>(initialWeekScheduleState);
   const [isLoadingAvailability, setIsLoadingAvailability] = useState(true);
   const [isSavingAvailability, setIsSavingAvailability] = useState(false);
   
   useEffect(() => {
     setMounted(true);
+    const unsubscribeAuth = auth.onAuthStateChanged(currentUser => {
+      if (currentUser) {
+        setUserId(currentUser.uid);
+        setCoachName(currentUser.displayName || 'ControlaCoach User');
+        setCoachEmail(currentUser.email || 'seuemail@example.com');
+      } else {
+        setUserId(null);
+        toast({ title: "Autenticação Necessária", variant: "destructive" });
+        router.push('/login');
+      }
+    });
+    return () => unsubscribeAuth();
+  }, [router, toast]);
+  
+  useEffect(() => {
+    if (!userId) return;
+
     setIsLoadingProfile(true);
     setIsLoadingNotifications(true);
     setIsLoadingAvailability(true);
 
     const fetchAllSettings = async () => {
-      const user = auth.currentUser;
+      const currentUser = auth.currentUser; // Re-check current user within async context
 
       try {
-        // Fetch Profile & Notification Settings from Firestore
-        const profileSettingsDocRef = doc(db, 'settings', 'coachProfileAndNotifications');
+        // Fetch Profile & Notification Settings from Firestore for the current user
+        const profileSettingsDocRef = doc(db, 'coaches', userId, 'settings', 'profileAndNotifications');
         const profileDocSnap = await getDoc(profileSettingsDocRef);
         const firestoreData = profileDocSnap.exists() ? profileDocSnap.data() as CoachProfileSettings : null;
 
-        if (user) {
-          setCoachName(user.displayName || firestoreData?.coachName || 'ControlaCoach User');
-          setCoachEmail(user.email || firestoreData?.coachEmail || 'seuemail@example.com');
-        } else if (firestoreData) { // Fallback if user object not yet available (should be rare)
-          setCoachName(firestoreData.coachName || 'ControlaCoach User');
-          setCoachEmail(firestoreData.coachEmail || 'seuemail@example.com');
-        } else { // No user, no Firestore data
-          setCoachName('ControlaCoach User');
-          setCoachEmail('seuemail@example.com');
-        }
+        // Prioritize Firebase Auth for name and email, then Firestore, then defaults
+        setCoachName(currentUser?.displayName || firestoreData?.coachName || 'ControlaCoach User');
+        setCoachEmail(currentUser?.email || firestoreData?.coachEmail || 'seuemail@example.com');
         
         if (firestoreData) {
             setNotificationsEnabled(firestoreData.notificationsEnabled === undefined ? true : firestoreData.notificationsEnabled);
@@ -105,10 +115,9 @@ export default function ConfiguracoesPage() {
       } catch (error) {
         console.error("Error fetching profile/notification settings: ", error);
         toast({ title: "Erro ao carregar perfil/notificações", variant: "destructive" });
-         // Set defaults on error to avoid undefined states
-        if (user) {
-            setCoachName(user.displayName || 'ControlaCoach User');
-            setCoachEmail(user.email || 'seuemail@example.com');
+        if (currentUser) {
+            setCoachName(currentUser.displayName || 'ControlaCoach User');
+            setCoachEmail(currentUser.email || 'seuemail@example.com');
         } else {
             setCoachName('ControlaCoach User');
             setCoachEmail('seuemail@example.com');
@@ -120,9 +129,8 @@ export default function ConfiguracoesPage() {
         setIsLoadingNotifications(false);
       }
 
-      // Fetch Availability Settings
       try {
-        const availabilityDocRef = doc(db, 'settings', 'coachAvailability');
+        const availabilityDocRef = doc(db, 'coaches', userId, 'settings', 'coachAvailability');
         const availabilityDocSnap = await getDoc(availabilityDocRef);
         if (availabilityDocSnap.exists()) {
           const fetchedData = availabilityDocSnap.data() as CoachAvailability;
@@ -155,21 +163,9 @@ export default function ConfiguracoesPage() {
       }
     };
     
-    // Ensure Firebase auth is initialized before fetching settings
-    const unsubscribe = auth.onAuthStateChanged(user => {
-      if (user) {
-        fetchAllSettings();
-      } else {
-        // Handle user not logged in - potentially redirect or show limited view
-        // For now, settings page assumes user is logged in, so this might be an error state
-        setIsLoadingProfile(false);
-        setIsLoadingNotifications(false);
-        setIsLoadingAvailability(false);
-      }
-      unsubscribe(); // Unsubscribe after first check
-    });
+    fetchAllSettings();
 
-  }, [toast]);
+  }, [userId, toast]);
   
   const handleScheduleChange = (index: number, field: keyof DailyScheduleState, value: string | boolean) => {
     const newSchedule = [...weekSchedule];
@@ -178,34 +174,36 @@ export default function ConfiguracoesPage() {
   };
 
   const handleSaveProfileInfo = async () => {
-    setIsSavingProfile(true);
-    const user = auth.currentUser;
-
-    if (!user) {
+    if (!userId) {
       toast({ title: "Erro", description: "Usuário não autenticado.", variant: "destructive" });
+      return;
+    }
+    setIsSavingProfile(true);
+    const currentUser = auth.currentUser;
+
+    if (!currentUser) {
+      toast({ title: "Erro", description: "Sessão de usuário inválida.", variant: "destructive" });
       setIsSavingProfile(false);
       return;
     }
 
     try {
-      // Update Firebase Auth display name
-      if (user.displayName !== coachName) {
-        await updateProfile(user, { displayName: coachName });
+      if (currentUser.displayName !== coachName) {
+        await updateProfile(currentUser, { displayName: coachName });
       }
 
-      // Update Firestore document
-      const settingsDocRef = doc(db, 'settings', 'coachProfileAndNotifications');
+      const settingsDocRef = doc(db, 'coaches', userId, 'settings', 'profileAndNotifications');
       const docSnap = await getDoc(settingsDocRef);
       const existingData = docSnap.exists() ? docSnap.data() as Partial<CoachProfileSettings> : {};
       
       const dataToSave: CoachProfileSettings = {
         ...existingData,
         coachName: coachName,
-        coachEmail: user.email || existingData.coachEmail || '', // Ensure email from auth is stored
+        coachEmail: currentUser.email || existingData.coachEmail || '', 
         notificationsEnabled: existingData.notificationsEnabled === undefined ? true : existingData.notificationsEnabled,
         defaultPaymentReminderDays: existingData.defaultPaymentReminderDays || 3,
       };
-      await setDoc(settingsDocRef, dataToSave, { merge: true }); // Use merge to be safe
+      await setDoc(settingsDocRef, dataToSave, { merge: true }); 
 
       toast({ title: "Perfil Salvo!", description: "Suas informações de perfil foram atualizadas." });
     } catch (error) {
@@ -217,16 +215,20 @@ export default function ConfiguracoesPage() {
   };
 
   const handleSaveNotificationSettings = async () => {
+    if (!userId) {
+      toast({ title: "Erro", description: "Usuário não autenticado.", variant: "destructive" });
+      return;
+    }
     setIsSavingNotifications(true);
-    const user = auth.currentUser; 
+    const currentUser = auth.currentUser; 
     try {
-      const settingsDocRef = doc(db, 'settings', 'coachProfileAndNotifications');
+      const settingsDocRef = doc(db, 'coaches', userId, 'settings', 'profileAndNotifications');
       const docSnap = await getDoc(settingsDocRef);
       const existingData = docSnap.exists() ? docSnap.data() as Partial<CoachProfileSettings> : {};
 
       const dataToSave: CoachProfileSettings = {
-        coachName: user?.displayName || existingData.coachName || 'ControlaCoach User',
-        coachEmail: user?.email || existingData.coachEmail || 'seuemail@example.com',
+        coachName: currentUser?.displayName || existingData.coachName || 'ControlaCoach User',
+        coachEmail: currentUser?.email || existingData.coachEmail || 'seuemail@example.com',
         notificationsEnabled: notificationsEnabled,
         defaultPaymentReminderDays: Number(defaultPaymentReminderDays),
       };
@@ -241,6 +243,10 @@ export default function ConfiguracoesPage() {
   };
 
   const handleSaveAvailability = async () => {
+    if (!userId) {
+      toast({ title: "Erro", description: "Usuário não autenticado.", variant: "destructive" });
+      return;
+    }
     setIsSavingAvailability(true);
     try {
       const availabilityToSave: CoachAvailability = { 
@@ -264,7 +270,7 @@ export default function ConfiguracoesPage() {
         availabilityToSave.defaultDaily = mondaySettings;
       }
 
-      const availabilityDocRef = doc(db, 'settings', 'coachAvailability');
+      const availabilityDocRef = doc(db, 'coaches', userId, 'settings', 'coachAvailability');
       await setDoc(availabilityDocRef, availabilityToSave);
       toast({ title: "Disponibilidade Salva!", description: "Seus horários foram atualizados." });
     } catch (error) {
@@ -275,8 +281,13 @@ export default function ConfiguracoesPage() {
     }
   };
 
-  if (!mounted) {
-    return null; 
+  if (!mounted || !userId) {
+    return (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">
+            <Loader2 className="h-10 w-10 animate-spin text-primary" />
+            <p className="ml-3 text-lg text-foreground">Carregando...</p>
+        </div>
+    ); 
   }
 
   const isLoadingAny = isLoadingProfile || isLoadingNotifications || isLoadingAvailability;

@@ -1,7 +1,7 @@
 
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react'; // Added useState, useEffect
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,7 @@ import {
 import { PlanForm, type PlanFormData } from '@/components/forms/plan-form';
 import { type Plan } from '@/types';
 import { useToast } from '@/hooks/use-toast';
-import { db } from '@/firebase';
+import { db, auth } from '@/firebase'; // Added auth
 import { collection, addDoc } from 'firebase/firestore';
 
 interface AddPlanDialogProps {
@@ -23,10 +23,33 @@ interface AddPlanDialogProps {
 
 export function AddPlanDialog({ open, onOpenChange, onPlanAdded }: AddPlanDialogProps) {
   const { toast } = useToast();
+  const [userId, setUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unsubscribeAuth = auth.onAuthStateChanged(user => {
+      if (user) {
+        setUserId(user.uid);
+      } else {
+        setUserId(null);
+        // Optionally handle user not authenticated if dialog is opened somehow
+      }
+    });
+    return () => unsubscribeAuth();
+  }, []);
 
   const handleAddPlan = async (data: PlanFormData) => {
+    if (!userId) {
+      toast({ title: "Erro", description: "Usuário não autenticado.", variant: "destructive" });
+      return;
+    }
     try {
-      await addDoc(collection(db, 'plans'), data);
+      const planDataToSave: Omit<Plan, 'id'> = { // Ensure ID is not part of the data to save
+         name: data.name,
+         price: data.price ?? 0,
+         durationDays: data.durationDays,
+         status: data.status,
+      };
+      await addDoc(collection(db, 'coaches', userId, 'plans'), planDataToSave);
       toast({
         title: "Plano Adicionado!",
         description: `O plano "${data.name}" foi cadastrado com sucesso.`,
@@ -51,7 +74,11 @@ export function AddPlanDialog({ open, onOpenChange, onPlanAdded }: AddPlanDialog
           <DialogDescription>Preencha os dados do novo plano.</DialogDescription>
         </DialogHeader>
         <div className="py-4">
-          <PlanForm onSubmit={handleAddPlan} submitButtonText="Adicionar Plano" />
+          <PlanForm 
+            onSubmit={handleAddPlan} 
+            submitButtonText="Adicionar Plano" 
+            initialData={{ name: '', price: undefined, durationDays: undefined, status: 'active' }}
+          />
         </div>
       </DialogContent>
     </Dialog>

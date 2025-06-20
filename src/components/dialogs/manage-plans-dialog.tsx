@@ -27,27 +27,40 @@ import { type Plan } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { AddPlanDialog } from './add-plan-dialog';
 import { EditPlanDialog } from './edit-plan-dialog';
-import { db } from '@/firebase';
+import { db, auth } from '@/firebase'; // Added auth
 import { collection, onSnapshot, deleteDoc, doc, query, orderBy } from 'firebase/firestore';
 
 interface ManagePlansDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onPlansManaged: () => void; // Callback to refresh plans in parent
+  onPlansManaged: () => void; 
 }
 
 export function ManagePlansDialog({ open, onOpenChange, onPlansManaged }: ManagePlansDialogProps) {
   const { toast } = useToast();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
   const [isAddPlanDialogOpen, setIsAddPlanDialogOpen] = useState(false);
   const [isEditPlanDialogOpen, setIsEditPlanDialogOpen] = useState(false);
   const [planToEdit, setPlanToEdit] = useState<Plan | null>(null);
 
   useEffect(() => {
-    if (open) {
+    const unsubscribeAuth = auth.onAuthStateChanged(user => {
+      if (user) {
+        setUserId(user.uid);
+      } else {
+        setUserId(null);
+        // Optionally handle user not authenticated if dialog is opened
+      }
+    });
+    return () => unsubscribeAuth();
+  }, []);
+
+  useEffect(() => {
+    if (open && userId) {
       setIsLoading(true);
-      const plansCollectionRef = collection(db, 'plans');
+      const plansCollectionRef = collection(db, 'coaches', userId, 'plans');
       const q = query(plansCollectionRef, orderBy('name', 'asc'));
       const unsubscribe = onSnapshot(q, (snapshot) => {
         const plansData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Plan));
@@ -59,15 +72,23 @@ export function ManagePlansDialog({ open, onOpenChange, onPlansManaged }: Manage
         setIsLoading(false);
       });
       return () => unsubscribe();
+    } else if (!userId && open) {
+        // If dialog is open but no user, clear plans and stop loading
+        setPlans([]);
+        setIsLoading(false);
     }
-  }, [open, toast]);
+  }, [open, userId, toast]);
 
   const handleDeletePlan = async (planId: string, planName: string) => {
+    if (!userId) {
+      toast({ title: "Erro", description: "Usuário não autenticado.", variant: "destructive" });
+      return;
+    }
     if (window.confirm(`Tem certeza que deseja excluir o plano "${planName}"? Esta ação não pode ser desfeita.`)) {
       try {
-        await deleteDoc(doc(db, 'plans', planId));
+        await deleteDoc(doc(db, 'coaches', userId, 'plans', planId));
         toast({ title: 'Plano Excluído!', description: `O plano "${planName}" foi removido.` });
-        onPlansManaged(); // Notify parent
+        onPlansManaged(); 
       } catch (error) {
         toast({ title: "Erro ao Excluir Plano", variant: "destructive" });
       }
@@ -80,7 +101,7 @@ export function ManagePlansDialog({ open, onOpenChange, onPlansManaged }: Manage
   };
 
   const handlePlanAddedOrEdited = () => {
-    onPlansManaged(); // Notify parent, list will be refreshed by onSnapshot
+    onPlansManaged(); 
   };
 
   return (
@@ -92,7 +113,7 @@ export function ManagePlansDialog({ open, onOpenChange, onPlansManaged }: Manage
             <DialogDescription>Visualize, edite, adicione ou exclua planos.</DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-4">
-            <Button onClick={() => setIsAddPlanDialogOpen(true)} className="w-full sm:w-auto">
+            <Button onClick={() => setIsAddPlanDialogOpen(true)} className="w-full sm:w-auto" disabled={!userId}>
               <PlusCircle className="mr-2 h-4 w-4" /> Adicionar Novo Plano
             </Button>
             <ScrollArea className="h-[300px] w-full rounded-md border">
@@ -100,6 +121,10 @@ export function ManagePlansDialog({ open, onOpenChange, onPlansManaged }: Manage
                 <div className="flex justify-center items-center h-full">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 </div>
+              ) : !userId ? (
+                 <div className="flex justify-center items-center h-full">
+                    <p className="text-muted-foreground">Autenticação necessária para gerenciar planos.</p>
+                 </div>
               ) : (
                 <Table>
                   <TableHeader>

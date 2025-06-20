@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Save, PlusCircle, Search, Users, ClockIcon, Loader2, CalendarDays, MapPin } from 'lucide-react'; // Added MapPin
+import { ArrowLeft, Save, PlusCircle, Search, Users, ClockIcon, Loader2, CalendarDays, MapPin } from 'lucide-react'; 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -24,7 +24,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
 import { type ClassSession, DAYS_OF_WEEK, type Location, type Student, DayOfWeek } from '@/types';
-import { db } from '@/firebase';
+import { db, auth } from '@/firebase';
 import { collection, addDoc, onSnapshot, query, where, orderBy } from 'firebase/firestore';
 
 const classSessionSchema = z.object({
@@ -41,14 +41,30 @@ type ClassSessionFormData = z.infer<typeof classSessionSchema>;
 export default function NovaAulaConfigPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const [userId, setUserId] = useState<string | null>(null);
   const [activeLocations, setActiveLocations] = useState<Location[]>([]);
   const [activeStudents, setActiveStudents] = useState<Student[]>([]);
   const [isLoadingStudents, setIsLoadingStudents] = useState(true);
   const [isLoadingLocations, setIsLoadingLocations] = useState(true);
 
   useEffect(() => {
+    const unsubscribeAuth = auth.onAuthStateChanged(user => {
+      if (user) {
+        setUserId(user.uid);
+      } else {
+        setUserId(null);
+        toast({ title: "Autenticação Necessária", variant: "destructive" });
+        router.push('/login');
+      }
+    });
+    return () => unsubscribeAuth();
+  }, [router, toast]);
+
+  useEffect(() => {
+    if (!userId) return;
+
     setIsLoadingLocations(true);
-    const locationsCollectionRef = collection(db, 'locations');
+    const locationsCollectionRef = collection(db, 'coaches', userId, 'locations');
     const qLocations = query(locationsCollectionRef, where('status', '==', 'active'), orderBy('name', 'asc'));
     const unsubscribeLocations = onSnapshot(qLocations, (snapshot) => {
       const locationsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Location));
@@ -61,7 +77,7 @@ export default function NovaAulaConfigPage() {
     });
 
     setIsLoadingStudents(true);
-    const studentsCollectionRef = collection(db, 'students');
+    const studentsCollectionRef = collection(db, 'coaches', userId, 'students');
     const qStudents = query(studentsCollectionRef, where('status', '==', 'active'), orderBy('name', 'asc'));
     const unsubscribeStudents = onSnapshot(qStudents, (snapshot) => {
       const studentsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Student));
@@ -77,7 +93,7 @@ export default function NovaAulaConfigPage() {
       unsubscribeLocations();
       unsubscribeStudents();
     };
-  }, [toast]);
+  }, [userId, toast]);
 
   const { control, handleSubmit, formState: { errors, isSubmitting }, watch } = useForm<ClassSessionFormData>({
     resolver: zodResolver(classSessionSchema),
@@ -92,6 +108,10 @@ export default function NovaAulaConfigPage() {
   });
 
   const onSubmit = async (data: ClassSessionFormData) => {
+    if (!userId) {
+        toast({ title: "Erro", description: "Usuário não autenticado.", variant: "destructive" });
+        return;
+    }
     if (data.startTime >= data.endTime) {
       toast({
         title: "Erro de Validação",
@@ -107,7 +127,7 @@ export default function NovaAulaConfigPage() {
         daysOfWeek: data.daysOfWeek.sort((a, b) => DAYS_OF_WEEK.indexOf(a) - DAYS_OF_WEEK.indexOf(b)), 
         enrolledStudentIds: data.enrolledStudentIds || [],
       };
-      await addDoc(collection(db, 'classSessions'), classSessionData);
+      await addDoc(collection(db, 'coaches', userId, 'classSessions'), classSessionData);
       
       toast({
         title: "Configuração de Aula Adicionada!",
@@ -123,6 +143,15 @@ export default function NovaAulaConfigPage() {
       });
     }
   };
+
+  if (isLoadingLocations || isLoadingStudents || !userId) {
+    return (
+      <div className="container mx-auto py-8 flex flex-col items-center justify-center min-h-[calc(100vh-150px)]">
+        <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+        <p className="text-muted-foreground">Carregando dados...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto py-8">

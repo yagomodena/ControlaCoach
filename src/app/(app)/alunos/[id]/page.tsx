@@ -24,7 +24,7 @@ import { DAYS_OF_WEEK } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { AddPlanDialog } from '@/components/dialogs/add-plan-dialog';
 import { ManagePlansDialog } from '@/components/dialogs/manage-plans-dialog';
-import { db } from '@/firebase';
+import { db, auth } from '@/firebase';
 import { doc, getDoc, updateDoc, collection, onSnapshot, query, where, orderBy } from 'firebase/firestore';
 
 const NO_LOCATION_VALUE = "__NO_LOCATION__";
@@ -57,6 +57,7 @@ export default function AlunoDetailPage() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const studentId = params.id as string;
+  const [userId, setUserId] = useState<string | null>(null);
 
   const [student, setStudent] = useState<Student | null>(null);
   const [isEditMode, setIsEditMode] = useState(searchParams.get('edit') === 'true');
@@ -68,9 +69,22 @@ export default function AlunoDetailPage() {
   const [isAddPlanDialogOpen, setIsAddPlanDialogOpen] = useState(false);
   const [isManagePlansDialogOpen, setIsManagePlansDialogOpen] = useState(false);
   
-  const fetchActivePlans = () => {
+  useEffect(() => {
+    const unsubscribeAuth = auth.onAuthStateChanged(user => {
+      if (user) {
+        setUserId(user.uid);
+      } else {
+        setUserId(null);
+        toast({ title: "Autenticação Necessária", variant: "destructive" });
+        router.push('/login');
+      }
+    });
+    return () => unsubscribeAuth();
+  }, [router, toast]);
+
+  const fetchActivePlans = (currentUserId: string) => {
     setIsLoadingPlans(true);
-    const plansCollectionRef = collection(db, 'plans');
+    const plansCollectionRef = collection(db, 'coaches', currentUserId, 'plans');
     const qPlans = query(plansCollectionRef, where('status', '==', 'active'), orderBy('name', 'asc'));
     const unsubscribePlans = onSnapshot(qPlans, (snapshot) => {
       const plansData = snapshot.docs.map(docSnap => ({ ...docSnap.data(), id: docSnap.id } as Plan));
@@ -85,10 +99,12 @@ export default function AlunoDetailPage() {
   };
 
   useEffect(() => {
-    const unsubscribePlans = fetchActivePlans();
+    if (!userId) return;
+
+    const unsubscribePlans = fetchActivePlans(userId);
 
     setIsLoadingLocations(true);
-    const locationsCollectionRef = collection(db, 'locations');
+    const locationsCollectionRef = collection(db, 'coaches', userId, 'locations');
     const qLocations = query(locationsCollectionRef, where('status', '==', 'active'), orderBy('name', 'asc'));
     const unsubscribeLocations = onSnapshot(qLocations, (snapshot) => {
       const locationsData = snapshot.docs.map(docSnap => ({ ...docSnap.data(), id: docSnap.id } as Location));
@@ -103,18 +119,18 @@ export default function AlunoDetailPage() {
         unsubscribePlans();
         unsubscribeLocations();
     };
-  }, [toast]);
+  }, [userId, toast]);
 
   const { control, handleSubmit, reset, formState: { errors, isSubmitting }, watch, setValue } = useForm<StudentFormData>({
     resolver: zodResolver(studentSchema),
   });
 
   useEffect(() => {
-    if (!studentId) return;
+    if (!studentId || !userId) return;
     setIsLoading(true);
     const fetchStudent = async () => {
       try {
-        const studentDocRef = doc(db, 'students', studentId);
+        const studentDocRef = doc(db, 'coaches', userId, 'students', studentId);
         const studentDocSnap = await getDoc(studentDocRef);
 
         if (studentDocSnap.exists()) {
@@ -145,16 +161,19 @@ export default function AlunoDetailPage() {
       }
     };
     fetchStudent();
-  }, [studentId, reset, router, toast]);
+  }, [studentId, userId, reset, router, toast]);
 
   useEffect(() => {
     setIsEditMode(searchParams.get('edit') === 'true');
   }, [searchParams]);
 
   const onSubmit = async (data: StudentFormData) => {
-    if (!studentId) return;
+    if (!studentId || !userId) {
+         toast({ title: "Erro", description: "Informações de usuário ou aluno ausentes.", variant: "destructive" });
+        return;
+    }
     try {
-      const studentDocRef = doc(db, 'students', studentId);
+      const studentDocRef = doc(db, 'coaches', userId, 'students', studentId);
 
       const updatePayload: Record<string, any> = {
         name: data.name,
@@ -204,17 +223,18 @@ export default function AlunoDetailPage() {
   };
 
   const handlePlansManaged = () => {
+    if (!userId) return;
     const currentPlanValue = watch('plan');
-    fetchActivePlans(); // Re-fetch active plans
+    fetchActivePlans(userId); 
     const currentPlanExistsAndIsActive = activePlans.some(p => p.name === currentPlanValue && p.status === 'active');
     if (!currentPlanExistsAndIsActive && activePlans.length > 0) {
       // Optional: Select first active plan or clear
     } else if (!currentPlanExistsAndIsActive) {
-       setValue('plan', ''); // Clear if current plan no longer active or no active plans
+       setValue('plan', '');
     }
   };
 
-  if (isLoading || isLoadingLocations || isLoadingPlans) {
+  if (isLoading || isLoadingLocations || isLoadingPlans || !userId) {
     return (
       <div className="container mx-auto py-8 flex flex-col items-center justify-center min-h-[calc(100vh-150px)]">
         <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />

@@ -26,7 +26,7 @@ import { useToast } from '@/hooks/use-toast';
 import { type Plan, type Location, type DayOfWeek, DAYS_OF_WEEK } from '@/types';
 import { AddPlanDialog } from '@/components/dialogs/add-plan-dialog';
 import { ManagePlansDialog } from '@/components/dialogs/manage-plans-dialog';
-import { db } from '@/firebase';
+import { db, auth } from '@/firebase';
 import { collection, addDoc, onSnapshot, query, where, orderBy } from 'firebase/firestore';
 
 const NO_LOCATION_VALUE = "__NO_LOCATION__";
@@ -56,6 +56,7 @@ type StudentFormData = z.infer<typeof studentSchema>;
 export default function NovoAlunoPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const [userId, setUserId] = useState<string | null>(null);
   const [activePlans, setActivePlans] = useState<Plan[]>([]);
   const [isLoadingPlans, setIsLoadingPlans] = useState(true);
   const [activeLocations, setActiveLocations] = useState<Location[]>([]);
@@ -63,9 +64,22 @@ export default function NovoAlunoPage() {
   const [isAddPlanDialogOpen, setIsAddPlanDialogOpen] = useState(false);
   const [isManagePlansDialogOpen, setIsManagePlansDialogOpen] = useState(false);
 
-  const fetchActivePlans = () => {
+  useEffect(() => {
+    const unsubscribeAuth = auth.onAuthStateChanged(user => {
+      if (user) {
+        setUserId(user.uid);
+      } else {
+        setUserId(null);
+        toast({ title: "Autenticação Necessária", variant: "destructive" });
+        router.push('/login');
+      }
+    });
+    return () => unsubscribeAuth();
+  }, [router, toast]);
+
+  const fetchActivePlans = (currentUserId: string) => {
     setIsLoadingPlans(true);
-    const plansCollectionRef = collection(db, 'plans');
+    const plansCollectionRef = collection(db, 'coaches', currentUserId, 'plans');
     const qPlans = query(plansCollectionRef, where('status', '==', 'active'), orderBy('name', 'asc'));
     const unsubscribePlans = onSnapshot(qPlans, (snapshot) => {
       const plansData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Plan));
@@ -80,10 +94,12 @@ export default function NovoAlunoPage() {
   };
 
   useEffect(() => {
-    const unsubscribePlans = fetchActivePlans();
+    if (!userId) return;
+
+    const unsubscribePlans = fetchActivePlans(userId);
     
     setIsLoadingLocations(true);
-    const locationsCollectionRef = collection(db, 'locations');
+    const locationsCollectionRef = collection(db, 'coaches', userId, 'locations');
     const qLocations = query(locationsCollectionRef, where('status', '==', 'active'), orderBy('name', 'asc'));
     const unsubscribeLocations = onSnapshot(qLocations, (snapshot) => {
       const locationsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Location));
@@ -98,7 +114,7 @@ export default function NovoAlunoPage() {
         unsubscribePlans();
         unsubscribeLocations();
     };
-  }, [toast]);
+  }, [userId, toast]);
 
   const { control, handleSubmit, formState: { errors, isSubmitting }, setValue, watch } = useForm<StudentFormData>({
     resolver: zodResolver(studentSchema),
@@ -121,6 +137,10 @@ export default function NovoAlunoPage() {
   });
 
   const onSubmit = async (data: StudentFormData) => {
+    if (!userId) {
+        toast({ title: "Erro", description: "Usuário não autenticado.", variant: "destructive" });
+        return;
+    }
     try {
       const studentDataToSave: Record<string, any> = {
         name: data.name,
@@ -160,7 +180,7 @@ export default function NovoAlunoPage() {
       if (data.lastPaymentDate && data.lastPaymentDate.trim() !== '') studentDataToSave.lastPaymentDate = data.lastPaymentDate;
       else studentDataToSave.lastPaymentDate = null;
 
-      await addDoc(collection(db, 'students'), studentDataToSave);
+      await addDoc(collection(db, 'coaches', userId, 'students'), studentDataToSave);
 
       toast({
         title: "Aluno Adicionado!",
@@ -178,19 +198,24 @@ export default function NovoAlunoPage() {
   };
 
   const handlePlansManaged = () => {
+    if (!userId) return;
     const currentPlanValue = watch('plan');
-    // Re-fetch or rely on onSnapshot to update activePlans
-    // For simplicity, if using onSnapshot, this might just ensure UI re-renders if needed
-    // Or explicitly call fetchActivePlans if not using onSnapshot for activePlans state here
-    fetchActivePlans(); // Re-fetch to update the dropdown
+    fetchActivePlans(userId);
     const currentPlanExistsAndIsActive = activePlans.some(p => p.name === currentPlanValue && p.status === 'active');
     if (!currentPlanExistsAndIsActive && activePlans.length > 0) {
-      // Optionally set to first active plan or leave as is
     } else if (!currentPlanExistsAndIsActive) {
-      setValue('plan', ''); // Clear if no active plans or current one became inactive
+      setValue('plan', ''); 
     }
   };
 
+  if (isLoadingPlans || isLoadingLocations || !userId) {
+    return (
+      <div className="container mx-auto py-8 flex flex-col items-center justify-center min-h-[calc(100vh-150px)]">
+        <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+        <p className="text-muted-foreground">Carregando dados...</p>
+      </div>
+    );
+  }
 
   return (
     <>
