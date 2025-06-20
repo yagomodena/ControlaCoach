@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
-import { ChevronLeft, ChevronRight, Users, Edit, PlusCircle, Clock, Trash2, Search, UserCircle, Loader2, MapPin, CalendarIcon } from "lucide-react";
+import { ChevronLeft, ChevronRight, Users, Edit, PlusCircle, Clock, Trash2, Search, UserCircle, Loader2, MapPin, CalendarIcon, Settings } from "lucide-react";
 import Link from 'next/link';
 import { 
   Dialog,
@@ -41,10 +41,10 @@ import {
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { BookedClass, DailyAvailability, Student, Location, DayOfWeek, CoachAvailability, ClassSession } from '@/types';
-import { INITIAL_MOCK_BOOKED_CLASSES, getDayOfWeekName, DAYS_OF_WEEK } from '@/types';
+import { getDayOfWeekName, DAYS_OF_WEEK } from '@/types'; // Removed INITIAL_MOCK_BOOKED_CLASSES
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/firebase';
-import { collection, onSnapshot, query, orderBy, where, doc, getDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, where, doc, getDoc, addDoc, updateDoc, deleteDoc } from 'firebase/firestore'; // Added addDoc, updateDoc, deleteDoc
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 const generateHourIntervals = (startHour: number, endHour: number, intervalMinutes: number = 60): string[] => {
@@ -64,11 +64,11 @@ const generateHourIntervals = (startHour: number, endHour: number, intervalMinut
 
 export default function AgendaPage() {
   const [currentWeekStartDate, setCurrentWeekStartDate] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
-  const [bookedClasses, setBookedClasses] = useState<BookedClass[]>(INITIAL_MOCK_BOOKED_CLASSES);
+  const [bookedClasses, setBookedClasses] = useState<BookedClass[]>([]); // Now fetched from Firestore
   const { toast } = useToast();
 
   const [isStudentSelectionDialogOpen, setIsStudentSelectionDialogOpen] = useState(false);
-  const [slotBeingBooked, setSlotBeingBooked] = useState<{ date: Date, time: string } | null>(null);
+  const [slotBeingBooked, setSlotBeingBooked] = useState<{ date: Date, time: string, location?: string } | null>(null);
   const [selectedStudentIdsForBooking, setSelectedStudentIdsForBooking] = useState<string[]>([]);
   
   const [isEditClassDialogOpen, setIsEditClassDialogOpen] = useState(false);
@@ -87,6 +87,8 @@ export default function AgendaPage() {
   const [isLoadingLocations, setIsLoadingLocations] = useState(true);
   const [isLoadingAvailability, setIsLoadingAvailability] = useState(true);
   const [isLoadingClassSessions, setIsLoadingClassSessions] = useState(true);
+  const [isLoadingBookedClasses, setIsLoadingBookedClasses] = useState(true);
+
 
   useEffect(() => {
     setIsLoadingStudents(true);
@@ -124,8 +126,7 @@ export default function AgendaPage() {
             if (docSnap.exists()) {
                 setCoachAvailability(docSnap.data() as CoachAvailability);
             } else {
-                toast({ title: "Disponibilidade não configurada", description: "Por favor, configure sua disponibilidade semanal em Configurações.", variant: "default" });
-                setCoachAvailability({ defaultDaily: { workRanges: [], breaks: [] } });
+                setCoachAvailability({ defaultDaily: { workRanges: [], breaks: [] } }); 
             }
         } catch (error) {
             console.error("Error fetching coach availability: ", error);
@@ -149,10 +150,25 @@ export default function AgendaPage() {
         setIsLoadingClassSessions(false);
     });
 
+    setIsLoadingBookedClasses(true);
+    const bookedClassesCollectionRef = collection(db, 'bookedClasses');
+    const qBookedClasses = query(bookedClassesCollectionRef, orderBy('date'), orderBy('time'));
+    const unsubBookedClasses = onSnapshot(qBookedClasses, (snapshot) => {
+      const bookedData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as BookedClass));
+      setBookedClasses(bookedData);
+      setIsLoadingBookedClasses(false);
+    }, (error) => {
+      console.error("Error fetching booked classes: ", error);
+      toast({ title: "Erro ao Carregar Aulas Agendadas", variant: "destructive" });
+      setIsLoadingBookedClasses(false);
+    });
+
+
     return () => {
         unsubStudents();
         unsubLocations();
         unsubClassSessions();
+        unsubBookedClasses();
     };
   }, [toast]);
 
@@ -167,13 +183,12 @@ export default function AgendaPage() {
     });
   }, [currentWeekStartDate]);
 
-  const timeIntervals = useMemo(() => generateHourIntervals(6, 23), []); // 6 AM to 10 PM
+  const timeIntervals = useMemo(() => generateHourIntervals(6, 23), []); 
 
   const getSlotContent = (day: Date, time: string) => {
     const currentSlotDateTime = parse(time, 'HH:mm', day);
     currentSlotDateTime.setSeconds(0,0);
 
-    // 1. Check for one-off booked class
     const oneOffClass = bookedClasses.find(c => 
         isSameDay(parseISO(c.date), day) && c.time === time
     );
@@ -189,7 +204,6 @@ export default function AgendaPage() {
       );
     }
 
-    // 2. Check for recurring student class
     const dayOfWeekName = getDayOfWeekName(getDay(day));
     const recurringStudent = allStudents.find(s => 
         s.status === 'active' &&
@@ -208,8 +222,10 @@ export default function AgendaPage() {
       );
     }
     
-    // 3. Check coach availability
-    if (!coachAvailability) return <div className="bg-muted/30 h-full rounded-md"></div>;
+    if (!coachAvailability) { // Should be handled by outer isLoading check
+        return <div className="bg-muted/30 h-full rounded-md"></div>; 
+    }
+
     const numericDayOfWeek = getDay(day);
     const dailySchedule: DailyAvailability = coachAvailability[numericDayOfWeek] || coachAvailability.defaultDaily;
 
@@ -234,13 +250,11 @@ export default function AgendaPage() {
             if (!breakRange.start || !breakRange.end) continue;
             const breakStartDateTime = parse(breakRange.start, 'HH:mm', day);
             const breakEndDateTime = parse(breakRange.end, 'HH:mm', day);
-
-            // Check if the slot start or end falls within a break
             const slotEndDateTime = addMinutes(currentSlotDateTime, 59);
             if (
-              (isAfter(currentSlotDateTime, breakStartDateTime) || isEqual(currentSlotDateTime, breakStartDateTime)) && isBefore(currentSlotDateTime, breakEndDateTime) || // Slot starts during break
-              (isAfter(slotEndDateTime, breakStartDateTime)) && (isBefore(slotEndDateTime, breakEndDateTime) || isEqual(slotEndDateTime, breakEndDateTime)) || // Slot ends during break
-              (isBefore(currentSlotDateTime, breakStartDateTime) && isAfter(slotEndDateTime, breakEndDateTime)) // Slot encapsulates break
+              (isAfter(currentSlotDateTime, breakStartDateTime) || isEqual(currentSlotDateTime, breakStartDateTime)) && isBefore(currentSlotDateTime, breakEndDateTime) ||
+              (isAfter(slotEndDateTime, breakStartDateTime)) && (isBefore(slotEndDateTime, breakEndDateTime) || isEqual(slotEndDateTime, breakEndDateTime)) ||
+              (isBefore(currentSlotDateTime, breakStartDateTime) && isAfter(slotEndDateTime, breakEndDateTime))
             ) {
                 isCoachOnBreak = true;
                 break;
@@ -249,10 +263,13 @@ export default function AgendaPage() {
     }
 
     if (!isCoachWorking || isCoachOnBreak) {
-        return <div className="bg-muted/30 h-full rounded-md"></div>; // Not working or on break
+        return (
+            <div className="bg-slate-100 dark:bg-slate-800/50 h-full rounded-md flex items-center justify-center text-center text-xs text-slate-500 dark:text-slate-400 p-1 cursor-not-allowed">
+                Indisponível
+            </div>
+        );
     }
 
-    // 4. Check for regular class configurations (ClassSession)
     const configuredSession = classSessions.find(cs => 
       cs.daysOfWeek.includes(dayOfWeekName as DayOfWeek) &&
       time >= cs.startTime && time < cs.endTime 
@@ -260,7 +277,7 @@ export default function AgendaPage() {
 
     if (configuredSession) {
       return (
-        <div className="bg-green-500/10 border border-green-500/30 p-1.5 rounded-md h-full flex flex-col justify-center items-center text-xs text-green-700 hover:bg-green-500/20 transition-colors cursor-pointer" onClick={() => openStudentSelectionDialog(day, time)}>
+        <div className="bg-green-500/10 border border-green-500/30 p-1.5 rounded-md h-full flex flex-col justify-center items-center text-xs text-green-700 hover:bg-green-500/20 transition-colors cursor-pointer" onClick={() => openStudentSelectionDialog(day, time, configuredSession.location)}>
             <p className="font-medium text-center truncate">Disponível</p>
             <p className="text-[10px] text-center truncate">({configuredSession.location})</p>
              <PlusCircle className="h-3.5 w-3.5 mt-1 opacity-70"/>
@@ -268,7 +285,6 @@ export default function AgendaPage() {
       );
     }
     
-    // 5. Available slot
     return (
       <div className="bg-background hover:bg-muted p-1.5 rounded-md h-full flex justify-center items-center cursor-pointer border border-transparent hover:border-primary/50 transition-colors" onClick={() => openStudentSelectionDialog(day, time)}>
         <PlusCircle className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
@@ -276,8 +292,8 @@ export default function AgendaPage() {
     );
   };
 
-  const openStudentSelectionDialog = (date: Date, time: string) => {
-    setSlotBeingBooked({ date, time });
+  const openStudentSelectionDialog = (date: Date, time: string, defaultLocation?: string) => {
+    setSlotBeingBooked({ date, time, location: defaultLocation || activeLocations[0]?.name || 'A definir' });
     setSelectedStudentIdsForBooking([]); 
     setIsStudentSelectionDialogOpen(true);
   };
@@ -292,7 +308,7 @@ export default function AgendaPage() {
     });
   };
 
-  const handleConfirmBooking = () => {
+  const handleConfirmBooking = async () => {
     if (!slotBeingBooked || selectedStudentIdsForBooking.length === 0) {
       toast({
         title: "Erro ao Agendar",
@@ -303,29 +319,32 @@ export default function AgendaPage() {
     }
 
     let classTitle = "Aula em Grupo";
-    let toastDescription = `Aula em grupo às ${slotBeingBooked.time} no dia ${format(slotBeingBooked.date, 'dd/MM/yyyy')} foi agendada com ${selectedStudentIdsForBooking.length} aluno(s).`;
-
     if (selectedStudentIdsForBooking.length === 1) {
       const student = allStudents.find(s => s.id === selectedStudentIdsForBooking[0]);
       classTitle = student ? `Aula Particular - ${student.name}` : `Aula Agendada`;
-      toastDescription = `Aula com ${student?.name || 'aluno'} às ${slotBeingBooked.time} no dia ${format(slotBeingBooked.date, 'dd/MM/yyyy')} foi agendada.`;
     }
+    
+    const locationForBooking = slotBeingBooked.location || 'A definir';
 
-    const newBookedClass: BookedClass = {
-      id: crypto.randomUUID(),
+    const newBookedClassData: Omit<BookedClass, 'id'> = {
       date: format(slotBeingBooked.date, 'yyyy-MM-dd'),
       time: slotBeingBooked.time,
       title: classTitle, 
-      location: 'A definir', 
+      location: locationForBooking,
       studentIds: selectedStudentIdsForBooking,
-      durationMinutes: 60,
+      durationMinutes: 60, 
     };
 
-    setBookedClasses(prevClasses => [...prevClasses, newBookedClass]);
-    toast({ title: "Aula Agendada!", description: toastDescription });
-    setIsStudentSelectionDialogOpen(false);
-    setSlotBeingBooked(null);
-    setSelectedStudentIdsForBooking([]);
+    try {
+      await addDoc(collection(db, 'bookedClasses'), newBookedClassData);
+      toast({ title: "Aula Agendada!", description: `Aula às ${slotBeingBooked.time} foi agendada em ${locationForBooking}.` });
+      setIsStudentSelectionDialogOpen(false);
+      setSlotBeingBooked(null);
+      setSelectedStudentIdsForBooking([]);
+    } catch (error) {
+      console.error("Error booking class: ", error);
+      toast({ title: "Erro ao Agendar Aula", description: "Não foi possível salvar o agendamento.", variant: "destructive" });
+    }
   };
 
   const openEditClassDialog = (classId: string) => {
@@ -343,34 +362,46 @@ export default function AgendaPage() {
     setEditedClassStudentIds(prevSelectedIds => checked ? [...prevSelectedIds, studentId] : prevSelectedIds.filter(id => id !== studentId));
   };
 
-  const handleSaveChangesToClass = () => {
+  const handleSaveChangesToClass = async () => {
     if (!classBeingEdited || editedClassStudentIds.length === 0 || !editedClassTitle || !editedClassLocation) {
       toast({ title: "Erro ao Salvar", description: "Título, local e ao menos um aluno são necessários.", variant: "destructive" });
       return;
     }
-    setBookedClasses(prevClasses => 
-      prevClasses.map(c => 
-        c.id === classBeingEdited.id 
-          ? { ...c, title: editedClassTitle, location: editedClassLocation, studentIds: editedClassStudentIds } 
-          : c
-      )
-    );
-    toast({ title: "Aula Atualizada!", description: `A aula às ${classBeingEdited.time} foi atualizada.` });
-    setIsEditClassDialogOpen(false);
-    setClassBeingEdited(null);
-  };
 
-  const handleDeleteClass = () => {
-    if (!classBeingEdited) return;
-    if (window.confirm(`Tem certeza que deseja excluir a aula "${classBeingEdited.title}"?`)) {
-        setBookedClasses(prevClasses => prevClasses.filter(c => c.id !== classBeingEdited!.id));
-        toast({ title: "Aula Excluída!", description: `A aula "${classBeingEdited.title}" foi excluída.` });
-        setIsEditClassDialogOpen(false);
-        setClassBeingEdited(null);
+    const classDocRef = doc(db, 'bookedClasses', classBeingEdited.id);
+    const updatedData = { 
+      title: editedClassTitle, 
+      location: editedClassLocation, 
+      studentIds: editedClassStudentIds 
+    };
+
+    try {
+      await updateDoc(classDocRef, updatedData);
+      toast({ title: "Aula Atualizada!", description: `A aula às ${classBeingEdited.time} foi atualizada.` });
+      setIsEditClassDialogOpen(false);
+      setClassBeingEdited(null);
+    } catch (error) {
+      console.error("Error updating class: ", error);
+      toast({ title: "Erro ao Atualizar Aula", variant: "destructive" });
     }
   };
 
-  const isLoading = isLoadingStudents || isLoadingLocations || isLoadingAvailability || isLoadingClassSessions;
+  const handleDeleteClass = async () => {
+    if (!classBeingEdited) return;
+    if (window.confirm(`Tem certeza que deseja excluir a aula "${classBeingEdited.title}"?`)) {
+        try {
+            await deleteDoc(doc(db, 'bookedClasses', classBeingEdited.id));
+            toast({ title: "Aula Excluída!", description: `A aula "${classBeingEdited.title}" foi excluída.` });
+            setIsEditClassDialogOpen(false);
+            setClassBeingEdited(null);
+        } catch (error) {
+            console.error("Error deleting class: ", error);
+            toast({ title: "Erro ao Excluir Aula", variant: "destructive" });
+        }
+    }
+  };
+
+  const isLoading = isLoadingStudents || isLoadingLocations || isLoadingAvailability || isLoadingClassSessions || isLoadingBookedClasses;
 
   return (
     <div className="container mx-auto py-8">
@@ -399,7 +430,7 @@ export default function AgendaPage() {
           <Loader2 className="h-12 w-12 animate-spin text-primary" />
           <p className="ml-3 text-xl text-muted-foreground">Carregando dados da agenda...</p>
         </div>
-      ) : !coachAvailability || coachAvailability.defaultDaily.workRanges.length === 0 && Object.values(coachAvailability).every(d => d?.workRanges?.length === 0) ? (
+      ) : !coachAvailability || (coachAvailability.defaultDaily.workRanges.length === 0 && Object.values(coachAvailability).every(d => d === null || d === undefined || (d as DailyAvailability).workRanges?.length === 0)) ? (
          <Card className="mt-8 text-center py-12">
             <CardHeader>
                 <CardTitle className="text-2xl">Disponibilidade Não Configurada</CardTitle>
@@ -447,13 +478,12 @@ export default function AgendaPage() {
         </div>
       )}
 
-      {/* Dialogs for booking and editing - unchanged */}
       <Dialog open={isStudentSelectionDialogOpen} onOpenChange={setIsStudentSelectionDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Agendar Aula para {slotBeingBooked?.time}</DialogTitle>
             <DialogDescription>
-              Selecione o(s) aluno(s) para o horário de {slotBeingBooked?.time} em {slotBeingBooked ? format(slotBeingBooked.date, 'dd/MM/yyyy', { locale: ptBR }) : ''}.
+              Selecione o(s) aluno(s) para o horário de {slotBeingBooked?.time} em {slotBeingBooked ? format(slotBeingBooked.date, 'dd/MM/yyyy', { locale: ptBR }) : ''} no local "{slotBeingBooked?.location || 'A definir'}".
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
@@ -583,5 +613,3 @@ export default function AgendaPage() {
     </div>
   );
 }
-
-    
