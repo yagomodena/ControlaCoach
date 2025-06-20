@@ -23,7 +23,7 @@ import { useToast } from '@/hooks/use-toast';
 import { type Plan } from '@/types';
 import { db } from '@/firebase';
 import { collection, addDoc } from 'firebase/firestore';
-import { PlanForm, type PlanFormData, planSchema } from '@/components/forms/plan-form'; // Import PlanForm and its schema
+import { PlanForm, type PlanFormData, planSchema } from '@/components/forms/plan-form';
 
 export default function NovoPlanoPage() {
   const router = useRouter();
@@ -33,7 +33,8 @@ export default function NovoPlanoPage() {
     try {
       const dataToSave: Plan = {
         ...data,
-        price: data.price ?? 0, // Coerce to 0 if undefined for saving
+        price: data.price ?? 0, 
+        durationDays: data.durationDays, // durationDays is required by schema, so it will be a number
       };
       await addDoc(collection(db, 'plans'), dataToSave);
       toast({
@@ -75,14 +76,13 @@ export default function NovoPlanoPage() {
               onSubmit={onSubmit} 
               initialData={{ 
                 name: '', 
-                price: undefined, // Set initial price to undefined for empty field
-                durationDays: 30, 
+                price: undefined, 
+                durationDays: undefined, // Set initial durationDays to undefined
                 status: 'active' 
               }} 
               submitButtonText="Salvar Plano"
             />
           </CardContent>
-          {/* CardFooter is removed as the submit button is now part of PlanForm */}
       </Card>
     </div>
   );

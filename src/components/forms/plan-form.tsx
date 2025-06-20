@@ -14,7 +14,7 @@ import { BadgeDollarSign, CalendarClock, ListChecks, Save } from 'lucide-react';
 
 export const planSchema = z.object({
   name: z.string().min(3, { message: 'Nome do plano deve ter pelo menos 3 caracteres.' }),
-  price: z.coerce.number().min(0, { message: 'Preço deve ser positivo ou zero.' }).optional(), // Made optional for empty initial state
+  price: z.coerce.number().min(0, { message: 'Preço deve ser positivo ou zero.' }).optional(),
   durationDays: z.coerce.number().int().positive({ message: 'Duração deve ser um número inteiro positivo.' }),
   status: z.enum(['active', 'inactive'], { required_error: 'Selecione o status.' }),
 });
@@ -32,8 +32,8 @@ export function PlanForm({ onSubmit, initialData, submitButtonText = 'Salvar Pla
     resolver: zodResolver(planSchema),
     defaultValues: {
       name: initialData?.name || '',
-      price: initialData?.price ?? undefined, // Changed default to undefined
-      durationDays: initialData?.durationDays || 30,
+      price: initialData?.price ?? undefined,
+      durationDays: initialData?.durationDays ?? undefined, // Changed default to undefined
       status: initialData?.status || 'active',
     },
   });
@@ -63,10 +63,10 @@ export function PlanForm({ onSubmit, initialData, submitButtonText = 'Salvar Pla
                 step="0.01" 
                 placeholder="Ex: 150.00" 
                 {...field} 
-                value={field.value ?? ''} // Display empty string if undefined
+                value={field.value ?? ''}
                 onChange={e => {
                   const val = e.target.value;
-                  field.onChange(val === '' ? undefined : parseFloat(val)); // Pass undefined if empty
+                  field.onChange(val === '' ? undefined : parseFloat(val));
                 }}
               />
             )}
@@ -78,7 +78,19 @@ export function PlanForm({ onSubmit, initialData, submitButtonText = 'Salvar Pla
           <Controller
             name="durationDays"
             control={control}
-            render={({ field }) => <Input id="durationDays" type="number" placeholder="Ex: 30" {...field} onChange={e => field.onChange(parseInt(e.target.value,10))} />}
+            render={({ field }) => (
+              <Input 
+                id="durationDays" 
+                type="number" 
+                placeholder="Ex: 30" 
+                {...field} 
+                value={field.value ?? ''}
+                onChange={e => {
+                  const val = e.target.value;
+                  field.onChange(val === '' ? undefined : parseInt(val, 10));
+                }}
+              />
+            )}
           />
           {errors.durationDays && <p className="text-sm text-destructive">{errors.durationDays.message}</p>}
         </div>
