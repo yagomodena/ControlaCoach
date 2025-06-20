@@ -35,7 +35,7 @@ export interface Plan {
 
 export interface ClassSession {
   id: string; // Firestore document ID
-  dayOfWeek: DayOfWeek;
+  daysOfWeek: DayOfWeek[]; // Changed from dayOfWeek: DayOfWeek
   startTime: string; 
   endTime: string;   
   location: string; 

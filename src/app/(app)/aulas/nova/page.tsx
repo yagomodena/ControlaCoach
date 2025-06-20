@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Save, PlusCircle, Search, Users, ClockIcon, Loader2 } from 'lucide-react';
+import { ArrowLeft, Save, PlusCircle, Search, Users, ClockIcon, Loader2, CalendarDays } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -23,12 +23,12 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
-import { type ClassSession, DAYS_OF_WEEK, MOCK_LOCATIONS, type Location, type Student } from '@/types';
+import { type ClassSession, DAYS_OF_WEEK, MOCK_LOCATIONS, type Location, type Student, DayOfWeek } from '@/types';
 import { db } from '@/firebase';
 import { collection, addDoc, onSnapshot, query, where, orderBy } from 'firebase/firestore';
 
 const classSessionSchema = z.object({
-  dayOfWeek: z.enum(DAYS_OF_WEEK, { required_error: 'Selecione o dia da semana.' }),
+  daysOfWeek: z.array(z.enum(DAYS_OF_WEEK)).min(1, { message: "Selecione pelo menos um dia da semana." }),
   startTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Formato de hora inválido (HH:MM)." }),
   endTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Formato de hora inválido (HH:MM)." }),
   location: z.string().min(1, { message: 'Selecione um local.' }), 
@@ -72,7 +72,7 @@ export default function NovaAulaConfigPage() {
   const { control, handleSubmit, formState: { errors, isSubmitting }, watch } = useForm<ClassSessionFormData>({
     resolver: zodResolver(classSessionSchema),
     defaultValues: {
-      dayOfWeek: undefined,
+      daysOfWeek: [],
       startTime: '',
       endTime: '',
       location: undefined, 
@@ -96,13 +96,14 @@ export default function NovaAulaConfigPage() {
     try {
       const classSessionData: Omit<ClassSession, 'id'> = {
         ...data,
+        daysOfWeek: data.daysOfWeek.sort((a, b) => DAYS_OF_WEEK.indexOf(a) - DAYS_OF_WEEK.indexOf(b)), // Ensure consistent order
         enrolledStudentIds: data.enrolledStudentIds || [],
       };
       await addDoc(collection(db, 'classSessions'), classSessionData);
       
       toast({
         title: "Configuração de Aula Adicionada!",
-        description: `Aula de ${data.dayOfWeek} das ${data.startTime} às ${data.endTime} em ${data.location} configurada.`,
+        description: `Aula de ${data.daysOfWeek.join(', ')} das ${data.startTime} às ${data.endTime} em ${data.location} configurada.`,
       });
       router.push('/aulas'); 
     } catch (error) {
@@ -137,24 +138,36 @@ export default function NovaAulaConfigPage() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-2">
-                <Label htmlFor="dayOfWeek">Dia da Semana</Label>
-                <Controller
-                  name="dayOfWeek"
-                  control={control}
-                  render={({ field }) => (
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <SelectTrigger id="dayOfWeek">
-                        <SelectValue placeholder="Selecione o dia" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {DAYS_OF_WEEK.map(day => (
-                          <SelectItem key={day} value={day}>{day}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
-                {errors.dayOfWeek && <p className="text-sm text-destructive">{errors.dayOfWeek.message}</p>}
+                <Label className="flex items-center"><CalendarDays className="mr-1 h-4 w-4"/>Dias da Semana</Label>
+                 <Controller
+                    name="daysOfWeek"
+                    control={control}
+                    render={({ field }) => (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 pt-2">
+                        {DAYS_OF_WEEK.map((day) => {
+                          const currentDays = field.value || [];
+                          return (
+                            <div key={day} className="flex items-center space-x-2">
+                              <Checkbox
+                                id={`day-new-${day}`}
+                                checked={currentDays.includes(day)}
+                                onCheckedChange={(checked) => {
+                                  const newDays = checked
+                                    ? [...currentDays, day]
+                                    : currentDays.filter((d) => d !== day);
+                                  field.onChange(newDays);
+                                }}
+                              />
+                              <Label htmlFor={`day-new-${day}`} className="font-normal">
+                                {day}
+                              </Label>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  />
+                {errors.daysOfWeek && <p className="text-sm text-destructive">{errors.daysOfWeek.message}</p>}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

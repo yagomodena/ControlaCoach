@@ -16,13 +16,13 @@ import { Separator } from '@/components/ui/separator';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { type ClassSession, DAYS_OF_WEEK, MOCK_LOCATIONS, type Location, type Student } from '@/types';
+import { type ClassSession, DAYS_OF_WEEK, MOCK_LOCATIONS, type Location, type Student, DayOfWeek } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/firebase';
 import { doc, getDoc, updateDoc, collection, onSnapshot, query, where, orderBy } from 'firebase/firestore';
 
 const classSessionSchema = z.object({
-  dayOfWeek: z.enum(DAYS_OF_WEEK, { required_error: 'Selecione o dia da semana.' }),
+  daysOfWeek: z.array(z.enum(DAYS_OF_WEEK)).min(1, { message: "Selecione pelo menos um dia da semana." }),
   startTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Formato de hora inválido (HH:MM)." }),
   endTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Formato de hora inválido (HH:MM)." }),
   location: z.string().min(1, { message: 'Selecione um local.' }), 
@@ -87,7 +87,7 @@ export default function AulaDetalhePage() {
         if (classSessionDocSnap.exists()) {
           const sessionData = { ...classSessionDocSnap.data(), id: classSessionDocSnap.id } as ClassSession;
           setClassSession(sessionData);
-          reset({...sessionData, enrolledStudentIds: sessionData.enrolledStudentIds || []}); 
+          reset({...sessionData, daysOfWeek: sessionData.daysOfWeek || [], enrolledStudentIds: sessionData.enrolledStudentIds || []}); 
         } else {
           toast({ title: "Erro", description: "Configuração de aula não encontrada.", variant: "destructive" });
           router.push('/aulas');
@@ -121,6 +121,7 @@ export default function AulaDetalhePage() {
       const classSessionDocRef = doc(db, 'classSessions', classId);
       const updatePayload: Omit<ClassSession, 'id'> = {
          ...data,
+         daysOfWeek: data.daysOfWeek.sort((a, b) => DAYS_OF_WEEK.indexOf(a) - DAYS_OF_WEEK.indexOf(b)), // Ensure consistent order
          maxStudents: Number(data.maxStudents),
          enrolledStudentIds: data.enrolledStudentIds || [],
       };
@@ -131,7 +132,7 @@ export default function AulaDetalhePage() {
 
       toast({
         title: "Configuração Atualizada!",
-        description: `Aula de ${data.dayOfWeek} das ${data.startTime} às ${data.endTime} foi atualizada.`,
+        description: `Aula de ${data.daysOfWeek.join(', ')} das ${data.startTime} às ${data.endTime} foi atualizada.`,
       });
       setIsEditMode(false);
       router.replace(`/aulas/${classId}`); 
@@ -158,12 +159,16 @@ export default function AulaDetalhePage() {
     return <div className="container mx-auto py-8 text-center text-destructive">Configuração de aula não encontrada.</div>;
   }
 
-  const InfoItem = ({ icon: Icon, label, value, children }: { icon: React.ElementType, label: string, value?: string | number | null, children?: React.ReactNode }) => (
+  const InfoItem = ({ icon: Icon, label, value, children }: { icon: React.ElementType, label: string, value?: string | number | string[] | null, children?: React.ReactNode }) => (
     <div className="flex items-start space-x-3">
       <Icon className="h-5 w-5 text-primary mt-1 flex-shrink-0" />
       <div>
         <p className="text-sm text-muted-foreground">{label}</p>
-        {children ? children : <p className="font-medium text-foreground">{value || 'N/A'}</p>}
+        {children ? children : (
+          Array.isArray(value) ? 
+          <p className="font-medium text-foreground">{value.join(', ') || 'N/A'}</p> :
+          <p className="font-medium text-foreground">{value || 'N/A'}</p>
+        )}
       </div>
     </div>
   );
@@ -190,7 +195,7 @@ export default function AulaDetalhePage() {
             {isEditMode ? 'Editar Configuração de Aula' : 'Detalhes da Configuração de Aula'}
           </h1>
           <p className="text-muted-foreground">
-            {isEditMode ? `Modificando aula de ${classSession.dayOfWeek}, ${classSession.startTime} - ${classSession.endTime}` : `Visualizando aula de ${classSession.dayOfWeek}, ${classSession.startTime} - ${classSession.endTime}`}
+            {isEditMode ? `Modificando aula de ${classSession.daysOfWeek.join(', ')}, ${classSession.startTime} - ${classSession.endTime}` : `Visualizando aula de ${classSession.daysOfWeek.join(', ')}, ${classSession.startTime} - ${classSession.endTime}`}
           </p>
         </div>
         {!isEditMode && (
@@ -208,22 +213,36 @@ export default function AulaDetalhePage() {
             </CardHeader>
             <CardContent className="space-y-6">
                 <div className="space-y-2">
-                    <Label htmlFor="dayOfWeek">Dia da Semana</Label>
+                    <Label className="flex items-center"><CalendarDays className="mr-1 h-4 w-4"/>Dias da Semana</Label>
                     <Controller
-                    name="dayOfWeek"
-                    control={control}
-                    render={({ field }) => (
-                        <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger id="dayOfWeek"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                            {DAYS_OF_WEEK.map(day => (
-                            <SelectItem key={day} value={day}>{day}</SelectItem>
-                            ))}
-                        </SelectContent>
-                        </Select>
-                    )}
+                        name="daysOfWeek"
+                        control={control}
+                        render={({ field }) => (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 pt-2">
+                            {DAYS_OF_WEEK.map((day) => {
+                            const currentDays = field.value || [];
+                            return (
+                                <div key={day} className="flex items-center space-x-2">
+                                <Checkbox
+                                    id={`day-edit-${day}`}
+                                    checked={currentDays.includes(day)}
+                                    onCheckedChange={(checked) => {
+                                    const newDays = checked
+                                        ? [...currentDays, day]
+                                        : currentDays.filter((d) => d !== day);
+                                    field.onChange(newDays);
+                                    }}
+                                />
+                                <Label htmlFor={`day-edit-${day}`} className="font-normal">
+                                    {day}
+                                </Label>
+                                </div>
+                            );
+                            })}
+                        </div>
+                        )}
                     />
-                    {errors.dayOfWeek && <p className="text-sm text-destructive">{errors.dayOfWeek.message}</p>}
+                    {errors.daysOfWeek && <p className="text-sm text-destructive">{errors.daysOfWeek.message}</p>}
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
@@ -335,7 +354,7 @@ export default function AulaDetalhePage() {
 
             </CardContent>
             <CardFooter className="flex justify-end gap-2">
-              <Button variant="outline" type="button" onClick={() => { setIsEditMode(false); router.replace(`/aulas/${classId}`); reset({...classSession, enrolledStudentIds: classSession?.enrolledStudentIds || [] }); }}>Cancelar</Button>
+              <Button variant="outline" type="button" onClick={() => { setIsEditMode(false); router.replace(`/aulas/${classId}`); reset({...classSession, daysOfWeek: classSession?.daysOfWeek || [], enrolledStudentIds: classSession?.enrolledStudentIds || [] }); }}>Cancelar</Button>
               <Button type="submit" disabled={isSubmitting || isLoadingStudents} className="bg-primary hover:bg-primary/90 text-primary-foreground">
                 <Save className="mr-2 h-4 w-4" />{isSubmitting ? 'Salvando...' : 'Salvar Alterações'}
               </Button>
@@ -345,11 +364,11 @@ export default function AulaDetalhePage() {
       ) : (
         <Card className="shadow-lg max-w-2xl mx-auto">
             <CardHeader>
-                <CardTitle className="text-2xl font-headline">{classSession.dayOfWeek} - {classSession.startTime} às {classSession.endTime}</CardTitle>
+                <CardTitle className="text-2xl font-headline">{classSession.daysOfWeek.join(', ')} - {classSession.startTime} às {classSession.endTime}</CardTitle>
                 <CardDescription>ID da Configuração: {classSession.id}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6 pt-6">
-                <InfoItem icon={CalendarDays} label="Dia da Semana" value={classSession.dayOfWeek} />
+                <InfoItem icon={CalendarDays} label="Dias da Semana" value={classSession.daysOfWeek} />
                 <InfoItem icon={Clock} label="Horário de Início" value={classSession.startTime} />
                 <InfoItem icon={Clock} label="Horário de Término" value={classSession.endTime} />
                 <InfoItem icon={MapPin} label="Local" value={classSession.location} />
