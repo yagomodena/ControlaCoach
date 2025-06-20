@@ -133,69 +133,82 @@ export default function FinanceiroPage() {
         const derivedPayments: PaymentEntry[] = [];
 
         studentsData.forEach(student => {
-            if (student.status !== 'active') return;
+            if (student.status !== 'active' || !student.registrationDate) return;
 
             const planDetails = plansData.find(p => p.name === student.plan);
             if (!planDetails || !planDetails.durationDays || planDetails.durationDays <= 0) {
                 return;
             }
 
-            let currentCycleStartDate = student.registrationDate ? startOfDay(parseISO(student.registrationDate)) : startOfDay(new Date(2000,0,1)); 
+            let currentCycleEffectiveDueDate = startOfDay(parseISO(student.registrationDate));
             
-            while (isBefore(currentCycleStartDate, addMonths(monthEnd, 2))) { 
-                const currentCycleDueDate = startOfDay(addDays(currentCycleStartDate, planDetails.durationDays));
-
-                if (isAfter(currentCycleStartDate, addDays(monthEnd, planDetails.durationDays * 2))) {
-                     break;
-                }
+            // Loop to generate payment entries for cycles
+            while (isBefore(currentCycleEffectiveDueDate, addMonths(monthEnd, 2))) { // Check a bit beyond to catch cycles ending in the month
                 
-                if (isWithinInterval(currentCycleDueDate, { start: monthStart, end: monthEnd })) {
+                if (isAfter(currentCycleEffectiveDueDate, addDays(monthEnd, planDetails.durationDays * 2))) {
+                     break; // Safety break
+                }
+
+                if (isWithinInterval(currentCycleEffectiveDueDate, { start: monthStart, end: monthEnd })) {
                     let entryStatus: Payment['status'] = 'pendente';
                     let entryPaymentDate: string | undefined = undefined;
-                    const studentOverallNextDueDate = student.dueDate ? startOfDay(parseISO(student.dueDate)) : null;
 
-                    if (student.lastPaymentDate && student.paymentStatus === 'pago') {
-                        const lastPaidActualDate = startOfDay(parseISO(student.lastPaymentDate));
-                        const nextDueDateAfterLastPayment = addDays(lastPaidActualDate, planDetails.durationDays);
-
-                        if (isEqual(currentCycleDueDate, nextDueDateAfterLastPayment)) {
-                            entryStatus = 'pago';
-                            entryPaymentDate = student.lastPaymentDate;
-                        } else if (isBefore(currentCycleDueDate, nextDueDateAfterLastPayment) && studentOverallNextDueDate && isAfter(studentOverallNextDueDate, currentCycleDueDate)) {
-                             entryStatus = 'pago';
-                             entryPaymentDate = formatISO(currentCycleStartDate, {representation:'date'});
+                    const studentLastPaymentDate = student.lastPaymentDate ? startOfDay(parseISO(student.lastPaymentDate)) : null;
+                    
+                    if (student.paymentStatus === 'pago' && studentLastPaymentDate) {
+                        // Check if the last payment covers this specific cycle
+                        // A cycle is covered if lastPaymentDate is on or after currentCycleEffectiveDueDate
+                        // AND before currentCycleEffectiveDueDate + durationDays
+                        const nextCycleStartDateFromLastPayment = addDays(studentLastPaymentDate, planDetails.durationDays);
+                        if (isEqual(studentLastPaymentDate, currentCycleEffectiveDueDate) || 
+                            (isAfter(studentLastPaymentDate, currentCycleEffectiveDueDate) && isBefore(studentLastPaymentDate, addDays(currentCycleEffectiveDueDate, planDetails.durationDays))) || // Paid during this cycle
+                            (isEqual(currentCycleEffectiveDueDate, studentLastPaymentDate) && isBefore(currentCycleEffectiveDueDate, student.dueDate ? parseISO(student.dueDate) : addDays(today,1) )) // Paid for this cycle and overall due date is in future
+                           ) {
+                             // This logic means: if the student's general payment status is 'pago',
+                             // and their lastPaymentDate is such that it "covers" this currentCycleEffectiveDueDate.
+                             // More specifically: if lastPaymentDate is >= currentCycleEffectiveDueDate and the student's overall NEXT due date is AFTER currentCycleEffectiveDueDate
+                             if (student.dueDate && isAfter(parseISO(student.dueDate), currentCycleEffectiveDueDate)){
+                                entryStatus = 'pago';
+                                entryPaymentDate = student.lastPaymentDate;
+                             } else if (isEqual(studentLastPaymentDate, currentCycleEffectiveDueDate)) {
+                                entryStatus = 'pago';
+                                entryPaymentDate = student.lastPaymentDate;
+                             }
                         }
                     }
                     
-                    if (entryStatus !== 'pago') {
-                        if (isBefore(currentCycleDueDate, today)) {
+                    if (entryStatus !== 'pago') { // If not determined as paid by the above
+                        if (isBefore(currentCycleEffectiveDueDate, today)) {
                             entryStatus = 'vencido';
                         } else {
                             entryStatus = 'pendente';
                         }
                     }
                     
-                    if (studentOverallNextDueDate && isEqual(currentCycleDueDate, studentOverallNextDueDate)) {
+                    // If this entry's due date matches the student's overall next due date,
+                    // the student's main paymentStatus can override if it's more severe (e.g. student explicitly marked vencido)
+                    const studentOverallDueDate = student.dueDate ? startOfDay(parseISO(student.dueDate)) : null;
+                    if (studentOverallDueDate && isEqual(currentCycleEffectiveDueDate, studentOverallDueDate)) {
                         if (student.paymentStatus === 'vencido') entryStatus = 'vencido';
                         else if (student.paymentStatus === 'pendente' && entryStatus !== 'vencido') entryStatus = 'pendente';
                     }
-                    
+
                     derivedPayments.push({
-                        id: `pay-${student.id}-${dateFnsFormatISO(currentCycleDueDate, { representation: 'date' })}`,
+                        id: `pay-${student.id}-${dateFnsFormatISO(currentCycleEffectiveDueDate, { representation: 'date' })}`,
                         studentId: student.id,
                         studentName: student.name,
                         studentPhone: student.phone,
                         studentPlanName: student.plan,
                         amount: planDetails.price, 
                         paymentDate: entryPaymentDate,
-                        dueDate: dateFnsFormatISO(currentCycleDueDate, { representation: 'date' }),
+                        dueDate: dateFnsFormatISO(currentCycleEffectiveDueDate, { representation: 'date' }),
                         status: entryStatus,
                         method: student.paymentMethod || 'PIX',
-                        referenceMonth: format(currentCycleDueDate, 'yyyy-MM'),
+                        referenceMonth: format(currentCycleEffectiveDueDate, 'yyyy-MM'),
                     });
                 }
                 
-                currentCycleStartDate = addDays(currentCycleStartDate, planDetails.durationDays);
+                currentCycleEffectiveDueDate = addDays(currentCycleEffectiveDueDate, planDetails.durationDays);
             }
         });
         
@@ -247,19 +260,17 @@ export default function FinanceiroPage() {
       }
 
       const paymentMadeForDueDate = startOfDay(parseISO(paymentEntryToUpdate.dueDate));
-      const actualPaymentDate = startOfDay(new Date());
-
+      
       let nextOverallDueDate: Date;
       if (planDetails.durationDays > 0) {
         nextOverallDueDate = addDays(paymentMadeForDueDate, planDetails.durationDays);
-      } else {
-        nextOverallDueDate = setDate(addMonths(paymentMadeForDueDate, 1), 5);
+      } else { // Should not happen if durationDays is positive, but as a fallback
+        nextOverallDueDate = setDate(addMonths(paymentMadeForDueDate, 1), 5); 
       }
-      nextOverallDueDate.setHours(0,0,0,0);
-
+      
       const updatePayload: Partial<Student> = {
         paymentStatus: 'pago',
-        lastPaymentDate: dateFnsFormatISO(actualPaymentDate, { representation: 'date' }),
+        lastPaymentDate: dateFnsFormatISO(paymentMadeForDueDate, { representation: 'date' }), // Payment is for the cycle STARTING on this due date
         dueDate: dateFnsFormatISO(nextOverallDueDate, { representation: 'date' }),
         amountDue: planDetails.price, 
       };
@@ -268,7 +279,7 @@ export default function FinanceiroPage() {
 
       toast({
         title: "Pagamento Confirmado!",
-        description: `Pagamento de ${currentStudentData.name} (venc. ${format(paymentMadeForDueDate, 'dd/MM/yyyy')}) marcado como pago. Próximo vencimento geral do aluno: ${format(nextOverallDueDate, 'dd/MM/yyyy', { locale: ptBR })}`,
+        description: `Pagamento de ${currentStudentData.name} (ref. ${format(paymentMadeForDueDate, 'dd/MM/yyyy')}) marcado como pago. Próximo vencimento: ${format(nextOverallDueDate, 'dd/MM/yyyy', { locale: ptBR })}`,
       });
     } catch (error) {
       console.error("Error marking as paid: ", error);
@@ -686,3 +697,4 @@ export default function FinanceiroPage() {
     </>
   );
 }
+

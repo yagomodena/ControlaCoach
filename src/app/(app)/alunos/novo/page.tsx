@@ -28,6 +28,7 @@ import { AddPlanDialog } from '@/components/dialogs/add-plan-dialog';
 import { ManagePlansDialog } from '@/components/dialogs/manage-plans-dialog';
 import { db, auth } from '@/firebase';
 import { collection, addDoc, onSnapshot, query, where, orderBy } from 'firebase/firestore';
+import { formatISO } from 'date-fns';
 
 const NO_LOCATION_VALUE = "__NO_LOCATION__";
 
@@ -142,14 +143,21 @@ export default function NovoAlunoPage() {
         return;
     }
     try {
+      const registrationDateISO = new Date().toISOString();
+      const selectedPlanDetails = activePlans.find(p => p.name === data.plan);
+
       const studentDataToSave: Record<string, any> = {
         name: data.name,
         phone: data.phone,
         plan: data.plan,
         technicalLevel: data.technicalLevel,
         status: data.status,
-        registrationDate: new Date().toISOString(),
+        registrationDate: registrationDateISO,
         attendanceHistory: [],
+        paymentStatus: 'pendente',
+        dueDate: registrationDateISO.split('T')[0], // Initial due date is registration date
+        lastPaymentDate: null,
+        amountDue: selectedPlanDetails?.price ?? 0,
       };
       
       if (data.objective && data.objective.trim() !== '') studentDataToSave.objective = data.objective.trim();
@@ -166,19 +174,15 @@ export default function NovoAlunoPage() {
       } else {
         studentDataToSave.recurringClassLocation = null; 
       }
-
-      studentDataToSave.paymentStatus = data.paymentStatus || 'pendente';
-      if (data.dueDate && data.dueDate.trim() !== '') studentDataToSave.dueDate = data.dueDate;
-      else studentDataToSave.dueDate = null;
-
-      if (typeof data.amountDue === 'number' && !isNaN(data.amountDue)) studentDataToSave.amountDue = data.amountDue;
-      else studentDataToSave.amountDue = null;
-
+      
+      // Payment fields from form (if different from initial logic)
+      if (data.paymentStatus && data.paymentStatus !== 'pendente') studentDataToSave.paymentStatus = data.paymentStatus;
+      if (data.dueDate && data.dueDate.trim() !== '' && data.dueDate !== registrationDateISO.split('T')[0]) studentDataToSave.dueDate = data.dueDate;
+      if (typeof data.amountDue === 'number' && !isNaN(data.amountDue) && data.amountDue !== (selectedPlanDetails?.price ?? 0)) studentDataToSave.amountDue = data.amountDue;
       if (data.paymentMethod) studentDataToSave.paymentMethod = data.paymentMethod;
       else studentDataToSave.paymentMethod = null;
-      
       if (data.lastPaymentDate && data.lastPaymentDate.trim() !== '') studentDataToSave.lastPaymentDate = data.lastPaymentDate;
-      else studentDataToSave.lastPaymentDate = null;
+      
 
       await addDoc(collection(db, 'coaches', userId, 'students'), studentDataToSave);
 
@@ -268,7 +272,19 @@ export default function NovoAlunoPage() {
                         name="plan"
                         control={control}
                         render={({ field }) => (
-                          <Select onValueChange={field.onChange} value={field.value ?? ''} disabled={isLoadingPlans}>
+                          <Select 
+                            onValueChange={(value) => {
+                                field.onChange(value);
+                                const selectedPlan = activePlans.find(p => p.name === value);
+                                if (selectedPlan) {
+                                    setValue('amountDue', selectedPlan.price);
+                                } else {
+                                    setValue('amountDue', undefined);
+                                }
+                            }} 
+                            value={field.value ?? ''} 
+                            disabled={isLoadingPlans}
+                          >
                             <SelectTrigger id="plan">
                               <SelectValue placeholder={isLoadingPlans ? "Carregando..." : "Selecione o plano"} />
                             </SelectTrigger>
@@ -433,10 +449,10 @@ export default function NovoAlunoPage() {
             <CardContent className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
-                        <Label htmlFor="paymentStatus">Status do Pagamento</Label>
+                        <Label htmlFor="paymentStatus">Status do Pagamento (Inicial)</Label>
                         <Controller name="paymentStatus" control={control} render={({ field }) => (
-                            <Select onValueChange={field.onChange} value={field.value || ''}>
-                            <SelectTrigger id="paymentStatus"><SelectValue placeholder="Selecione"/></SelectTrigger>
+                            <Select onValueChange={field.onChange} value={field.value || 'pendente'}>
+                            <SelectTrigger id="paymentStatus"><SelectValue placeholder="Pendente"/></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="pago">Pago</SelectItem>
                                 <SelectItem value="pendente">Pendente</SelectItem>
@@ -447,8 +463,9 @@ export default function NovoAlunoPage() {
                         {errors.paymentStatus && <p className="text-sm text-destructive">{errors.paymentStatus.message}</p>}
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="dueDate">Data de Vencimento</Label>
-                        <Controller name="dueDate" control={control} render={({ field }) => <Input id="dueDate" type="date" {...field} value={field.value ?? ''} />} />
+                        <Label htmlFor="dueDate">Data de Vencimento (Inicial)</Label>
+                        <Controller name="dueDate" control={control} render={({ field }) => <Input id="dueDate" type="date" {...field} value={field.value ?? ''} placeholder={formatISO(new Date(), { representation: 'date' })} />} />
+                         <p className="text-xs text-muted-foreground">Será o dia do cadastro se não preenchido.</p>
                         {errors.dueDate && <p className="text-sm text-destructive">{errors.dueDate.message}</p>}
                     </div>
                 </div>
@@ -456,6 +473,7 @@ export default function NovoAlunoPage() {
                     <div className="space-y-2">
                         <Label htmlFor="amountDue">Valor Devido (R$)</Label>
                         <Controller name="amountDue" control={control} render={({ field }) => <Input id="amountDue" type="number" step="0.01" {...field} value={field.value ?? ''}  onChange={e => { const val = e.target.value; field.onChange(val === '' ? undefined : parseFloat(val)); }} />} />
+                        <p className="text-xs text-muted-foreground">Será o valor do plano se não preenchido.</p>
                         {errors.amountDue && <p className="text-sm text-destructive">{errors.amountDue.message}</p>}
                     </div>
                     <div className="space-y-2">
@@ -474,7 +492,7 @@ export default function NovoAlunoPage() {
                     </div>
                 </div>
                  <div className="space-y-2 md:max-w-[calc(50%-0.75rem)]">
-                    <Label htmlFor="lastPaymentDate">Data do Último Pagamento</Label>
+                    <Label htmlFor="lastPaymentDate">Data do Último Pagamento (se houver)</Label>
                     <Controller name="lastPaymentDate" control={control} render={({ field }) => <Input id="lastPaymentDate" type="date" {...field} value={field.value ?? ''} />} />
                     {errors.lastPaymentDate && <p className="text-sm text-destructive">{errors.lastPaymentDate.message}</p>}
                 </div>
@@ -507,3 +525,4 @@ export default function NovoAlunoPage() {
     </>
   );
 }
+
