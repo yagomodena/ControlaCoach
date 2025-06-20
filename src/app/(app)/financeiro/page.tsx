@@ -35,11 +35,26 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { Student, Payment, Plan } from '@/types';
-import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval, getMonth, getYear, addMonths, subMonths, setDate, getDay } from 'date-fns';
+import { 
+  format, 
+  parseISO, 
+  startOfMonth, 
+  endOfMonth, 
+  isWithinInterval, 
+  getMonth, 
+  getYear, 
+  addMonths, 
+  subMonths, 
+  setDate, 
+  addDays, 
+  isBefore,
+  isEqual,
+  formatISO as dateFnsFormatISO 
+} from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/firebase';
-import { collection, onSnapshot, query, where, orderBy, doc, updateDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, getDoc } from 'firebase/firestore';
 
 interface PaymentEntry extends Payment {
   studentName: string;
@@ -74,52 +89,84 @@ export default function FinanceiroPage() {
     setClientRendered(true);
     setIsLoading(true);
 
-    // Fetch all plans first
     const plansCollectionRef = collection(db, 'plans');
     const qPlans = query(plansCollectionRef, orderBy('name'));
     const unsubscribePlans = onSnapshot(qPlans, (snapshot) => {
       const plansData = snapshot.docs.map(docSnap => ({ ...docSnap.data(), id: docSnap.id } as Plan));
       setAllPlans(plansData);
 
-      // Then fetch students and derive payments
       const studentsCollectionRef = collection(db, 'students');
       const qStudents = query(studentsCollectionRef, orderBy('name'));
       const unsubscribeStudents = onSnapshot(qStudents, (studentSnapshot) => {
         const studentsData = studentSnapshot.docs.map(docSnap => ({ ...docSnap.data(), id: docSnap.id } as Student));
         
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
         const derivedPayments: PaymentEntry[] = studentsData.map(student => {
-          const planDetails: Plan | undefined = plansData.find(p => p.name === student.plan);
-          let effectiveDueDate = student.dueDate;
-          let amount = student.amountDue ?? planDetails?.price ?? 0;
+            const planDetails = plansData.find(p => p.name === student.plan);
+            let effectiveDueDate: Date;
+            let currentStatus = student.paymentStatus || 'pendente';
+            const amount = student.amountDue ?? planDetails?.price ?? 0;
 
-          if (!effectiveDueDate) {
-              const today = new Date();
-              let baseDateForDefault = student.lastPaymentDate ? parseISO(student.lastPaymentDate) : today;
-              if (student.paymentStatus === 'pago' && student.lastPaymentDate) {
-                 baseDateForDefault = addMonths(parseISO(student.lastPaymentDate), 1); 
-              }
-              // Default due date to the 5th of the month, or current day if plan is daily (duration 1)
-              effectiveDueDate = setDate(baseDateForDefault, planDetails?.durationDays === 1 ? getDay(baseDateForDefault) : 5).toISOString();
-          }
+            if (student.dueDate) {
+                effectiveDueDate = parseISO(student.dueDate);
+            } else {
+                let baseDate = student.registrationDate ? parseISO(student.registrationDate) : today;
+                if (planDetails && planDetails.durationDays > 0) {
+                    effectiveDueDate = addDays(baseDate, planDetails.durationDays);
+                } else {
+                    effectiveDueDate = setDate(addMonths(baseDate, 1), 5); // Default to 5th of next month
+                }
+            }
+            effectiveDueDate.setHours(0, 0, 0, 0);
 
-          return {
-            id: `pay-${student.id}-${new Date(effectiveDueDate).toISOString().substring(0,7)}`, // Potential for non-unique IDs if multiple payments in month
-            studentId: student.id,
-            studentName: student.name,
-            studentPhone: student.phone,
-            studentPlanName: student.plan,
-            amount: amount,
-            paymentDate: student.paymentStatus === 'pago' ? (student.lastPaymentDate || effectiveDueDate) : '',
-            dueDate: effectiveDueDate,
-            status: student.paymentStatus || 'pendente',
-            method: student.paymentMethod || 'PIX',
-            referenceMonth: new Date(effectiveDueDate).toISOString().substring(0,7),
-          };
+            if (currentStatus === 'pago' && student.lastPaymentDate) {
+                const lastPaidDate = parseISO(student.lastPaymentDate);
+                lastPaidDate.setHours(0,0,0,0);
+                
+                let nextExpectedDueDateAfterPayment: Date;
+                if (planDetails && planDetails.durationDays > 0) {
+                    nextExpectedDueDateAfterPayment = addDays(lastPaidDate, planDetails.durationDays);
+                } else {
+                    nextExpectedDueDateAfterPayment = setDate(addMonths(lastPaidDate, 1), 5);
+                }
+                nextExpectedDueDateAfterPayment.setHours(0,0,0,0);
+
+                effectiveDueDate = nextExpectedDueDateAfterPayment; // This is the due date for the *next* cycle
+
+                if (isBefore(today, nextExpectedDueDateAfterPayment) || isEqual(today, nextExpectedDueDateAfterPayment)) {
+                    // Still within the paid period, status remains 'pago' for display logic related to *this* due date
+                } else {
+                    // Paid period has ended, next cycle is now active
+                    currentStatus = 'vencido'; // Or 'pendente' if preferred before due date passes
+                }
+
+            } else if (currentStatus === 'pendente') {
+                 if (isBefore(effectiveDueDate, today)) {
+                    currentStatus = 'vencido';
+                }
+            }
+
+
+            return {
+              id: `pay-${student.id}-${dateFnsFormatISO(effectiveDueDate, { representation: 'date' })}-${student.status}`,
+              studentId: student.id,
+              studentName: student.name,
+              studentPhone: student.phone,
+              studentPlanName: student.plan,
+              amount: amount,
+              paymentDate: student.lastPaymentDate && student.paymentStatus === 'pago' ? student.lastPaymentDate : '',
+              dueDate: dateFnsFormatISO(effectiveDueDate, { representation: 'date' }),
+              status: currentStatus,
+              method: student.paymentMethod || 'PIX',
+              referenceMonth: dateFnsFormatISO(effectiveDueDate, { representation: 'date' }).substring(0,7),
+            };
         });
         setPayments(derivedPayments);
         setIsLoading(false);
       }, (error) => {
-        console.error("Error fetching students: ", error);
+        console.error("Error fetching students for Financeiro: ", error);
         toast({ title: "Erro ao Carregar Alunos para Financeiro", variant: "destructive" });
         setIsLoading(false);
       });
@@ -138,32 +185,52 @@ export default function FinanceiroPage() {
   const handleMarkAsPaid = async (studentIdToUpdate: string) => {
     const studentDocRef = doc(db, 'students', studentIdToUpdate);
     try {
-        const studentToUpdate = payments.find(p => p.studentId === studentIdToUpdate);
-        if (!studentToUpdate) {
-            toast({ title: "Erro", description: "Aluno não encontrado para marcar como pago.", variant: "destructive" });
-            return;
-        }
-        const planDetails = allPlans.find(p => p.name === studentToUpdate.studentPlanName);
-        const paymentDate = new Date();
-        const currentDueDate = studentToUpdate.dueDate ? parseISO(studentToUpdate.dueDate) : paymentDate;
-        const nextMonthForDueDate = addMonths(currentDueDate, 1);
-        const nextDueDateDay = planDetails?.durationDays === 1 ? getDay(nextMonthForDueDate) : 5; // 5th or same day of week for daily
-        const nextDueDate = setDate(nextMonthForDueDate, nextDueDateDay);
+      const studentDocSnap = await getDoc(studentDocRef);
+      if (!studentDocSnap.exists()) {
+        toast({ title: "Erro", description: "Aluno não encontrado para marcar como pago.", variant: "destructive" });
+        return;
+      }
+      const currentStudentData = studentDocSnap.data() as Student;
+      
+      const planDetails = allPlans.find(p => p.name === currentStudentData.plan);
+      const paymentDate = new Date(); // Payment is made today
+      paymentDate.setHours(0,0,0,0);
 
-        await updateDoc(studentDocRef, {
-            paymentStatus: 'pago',
-            lastPaymentDate: paymentDate.toISOString(),
-            dueDate: nextDueDate.toISOString(),
-            amountDue: planDetails?.price || studentToUpdate.amount // Keep current amount or update to plan price
-        });
-        toast({
-            title: "Pagamento Confirmado!",
-            description: `O pagamento de ${studentToUpdate.studentName} foi marcado como pago.`,
-        });
-        // Data will refresh via onSnapshot
+      let nextDueDate: Date;
+      if (planDetails && typeof planDetails.durationDays === 'number' && planDetails.durationDays > 0) {
+        nextDueDate = addDays(paymentDate, planDetails.durationDays);
+      } else {
+        // Default to 5th of next month from payment date
+        const currentMonth = getMonth(paymentDate);
+        const currentYear = getYear(paymentDate);
+        if (getDay(paymentDate) < 5) { // If paid before 5th, next due is 5th of current month if plan is monthly like
+           if (getMonth(setDate(paymentDate, 5)) === currentMonth) {
+             nextDueDate = setDate(paymentDate, 5);
+           } else {
+             nextDueDate = setDate(addMonths(paymentDate, 1), 5);
+           }
+        } else {
+           nextDueDate = setDate(addMonths(paymentDate, 1), 5);
+        }
+      }
+      nextDueDate.setHours(0,0,0,0);
+
+      const updatePayload: Partial<Student> = {
+        paymentStatus: 'pago',
+        lastPaymentDate: dateFnsFormatISO(paymentDate, { representation: 'date' }), 
+        dueDate: dateFnsFormatISO(nextDueDate, { representation: 'date' }), 
+        amountDue: planDetails ? planDetails.price : currentStudentData.amountDue, 
+      };
+
+      await updateDoc(studentDocRef, updatePayload);
+
+      toast({
+        title: "Pagamento Confirmado!",
+        description: `O pagamento de ${currentStudentData.name} foi marcado como pago. Próximo vencimento: ${format(nextDueDate, 'dd/MM/yyyy', { locale: ptBR })}`,
+      });
     } catch (error) {
-        console.error("Error marking as paid: ", error);
-        toast({ title: "Erro ao Marcar como Pago", variant: "destructive" });
+      console.error("Error marking as paid: ", error);
+      toast({ title: "Erro ao Marcar como Pago", variant: "destructive", description: (error as Error).message });
     }
   };
 
@@ -177,8 +244,13 @@ export default function FinanceiroPage() {
       
       let monthMatch = false;
       if (payment.dueDate) {
-        const dueDateObj = parseISO(payment.dueDate);
-        monthMatch = getYear(dueDateObj) === targetYear && getMonth(dueDateObj) === targetMonth;
+        try {
+            const dueDateObj = parseISO(payment.dueDate); 
+            monthMatch = getYear(dueDateObj) === targetYear && getMonth(dueDateObj) === targetMonth;
+        } catch (e) {
+            console.warn("Invalid due date for filtering:", payment.dueDate, payment.studentName);
+            monthMatch = false; 
+        }
       }
       return nameMatch && statusMatch && monthMatch;
     });
@@ -211,13 +283,37 @@ export default function FinanceiroPage() {
 
     return {
       totalRecebidoMes: payments
-        .filter(p => p.status === 'pago' && p.paymentDate && getYear(parseISO(p.paymentDate)) === targetYear && getMonth(parseISO(p.paymentDate)) === targetMonth)
+        .filter(p => {
+            if (p.status === 'pago' && p.paymentDate) {
+                try {
+                    const paymentDateObj = parseISO(p.paymentDate);
+                    return getYear(paymentDateObj) === targetYear && getMonth(paymentDateObj) === targetMonth;
+                } catch (e) { return false; }
+            }
+            return false;
+        })
         .reduce((sum, p) => sum + p.amount, 0),
       totalPendente: payments
-        .filter(p => p.status === 'pendente' && p.dueDate && getYear(parseISO(p.dueDate)) === targetYear && getMonth(parseISO(p.dueDate)) === targetMonth)
+        .filter(p => {
+             if (p.status === 'pendente' && p.dueDate) {
+                try {
+                    const dueDateObj = parseISO(p.dueDate);
+                    return getYear(dueDateObj) === targetYear && getMonth(dueDateObj) === targetMonth;
+                } catch (e) { return false; }
+            }
+            return false;
+        })
         .reduce((sum, p) => sum + p.amount, 0),
       totalVencido: payments
-        .filter(p => p.status === 'vencido' && p.dueDate && getYear(parseISO(p.dueDate)) === targetYear && getMonth(parseISO(p.dueDate)) === targetMonth)
+        .filter(p => {
+            if (p.status === 'vencido' && p.dueDate) {
+                try {
+                    const dueDateObj = parseISO(p.dueDate);
+                    return getYear(dueDateObj) === targetYear && getMonth(dueDateObj) === targetMonth;
+                } catch (e) { return false; }
+            }
+            return false;
+        })
         .reduce((sum, p) => sum + p.amount, 0),
     }
   }, [payments, selectedMonthDate]);
@@ -226,17 +322,24 @@ export default function FinanceiroPage() {
     const reportMonthStart = startOfMonth(selectedMonthDate);
     const reportMonthEnd = endOfMonth(selectedMonthDate);
 
-    const paidInMonth = payments.filter(p => 
-      p.status === 'pago' && 
-      p.paymentDate && 
-      isWithinInterval(parseISO(p.paymentDate), { start: reportMonthStart, end: reportMonthEnd })
-    );
+    const paidInMonth = payments.filter(p => {
+        if (p.status === 'pago' && p.paymentDate) {
+            try {
+                return isWithinInterval(parseISO(p.paymentDate), { start: reportMonthStart, end: reportMonthEnd });
+            } catch(e) { return false; }
+        }
+        return false;
+    });
 
     const outstandingInMonth = payments.filter(p => 
       (p.status === 'pendente' || p.status === 'vencido') &&
       p.dueDate &&
-      getYear(parseISO(p.dueDate)) === getYear(selectedMonthDate) &&
-      getMonth(parseISO(p.dueDate)) === getMonth(selectedMonthDate)
+      ( () => {
+          try {
+            return getYear(parseISO(p.dueDate)) === getYear(selectedMonthDate) &&
+                   getMonth(parseISO(p.dueDate)) === getMonth(selectedMonthDate)
+          } catch(e) { return false; }
+      })()
     );
     
     const totalReceived = paidInMonth.reduce((sum, p) => sum + p.amount, 0);
@@ -259,19 +362,19 @@ export default function FinanceiroPage() {
     if (printableContent) {
       const printWindow = window.open('', '_blank');
       printWindow?.document.write('<html><head><title>Relatório Financeiro Mensal</title>');
-      printWindow?.document.write(`
-        <style>
-          body { font-family: sans-serif; margin: 20px; }
-          table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-          th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-          th { background-color: #f2f2f2; }
-          h1, h2, h3 { color: #333; }
-          .report-header { margin-bottom: 20px; text-align: center;}
-          .summary-section, .details-section { margin-bottom: 30px; }
-          .summary-item { margin-bottom: 5px; }
-          .no-print { display: none !important; }
-        </style>
-      `);
+      printWindow?.document.write(
+        '<style>' +
+        'body { font-family: sans-serif; margin: 20px; }\n' +
+        'table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }\n' +
+        'th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }\n' +
+        'th { background-color: #f2f2f2; }\n' +
+        'h1, h2, h3 { color: #333; }\n' +
+        '.report-header { margin-bottom: 20px; text-align: center;}\n' +
+        '.summary-section, .details-section { margin-bottom: 30px; }\n' +
+        '.summary-item { margin-bottom: 5px; }\n' +
+        '.no-print { display: none !important; }\n' +
+        '</style>'
+      );
       printWindow?.document.write('</head><body>');
       printWindow?.document.write(printableContent.innerHTML);
       printWindow?.document.write('</body></html>');
@@ -287,6 +390,17 @@ export default function FinanceiroPage() {
   const handleNextMonth = () => {
     setSelectedMonthDate(prev => addMonths(prev, 1));
   };
+
+  const safeFormatDate = (dateString?: string) => {
+    if (!dateString) return 'N/A';
+    try {
+      return format(parseISO(dateString), 'dd/MM/yyyy');
+    } catch (e) {
+      console.warn("Invalid date for formatting in table:", dateString);
+      return dateString; 
+    }
+  };
+
 
   return (
     <>
@@ -411,11 +525,7 @@ export default function FinanceiroPage() {
                       </TableCell>
                       <TableCell className="hidden lg:table-cell p-2 sm:p-4">R$ {payment.amount.toFixed(2)}</TableCell>
                       <TableCell className="p-2 sm:p-4">
-                        {clientRendered && payment.dueDate ? (
-                          format(parseISO(payment.dueDate), 'dd/MM/yyyy')
-                        ) : (
-                          payment.dueDate?.split('T')[0] || 'N/A'
-                        )}
+                        {safeFormatDate(payment.dueDate)}
                       </TableCell>
                       <TableCell className="p-2 sm:p-4">{getPaymentStatusBadge(payment.status)}</TableCell>
                       <TableCell className="hidden md:table-cell p-2 sm:p-4">{payment.method}</TableCell>
@@ -523,7 +633,7 @@ export default function FinanceiroPage() {
                               <TableRow key={`paid-${p.id}`}>
                                 <TableCell>{p.studentName}</TableCell>
                                 <TableCell>{p.amount.toFixed(2)}</TableCell>
-                                <TableCell>{p.paymentDate ? format(parseISO(p.paymentDate), 'dd/MM/yy') : '-'}</TableCell>
+                                <TableCell>{p.paymentDate ? safeFormatDate(p.paymentDate) : '-'}</TableCell>
                                 <TableCell>{p.method}</TableCell>
                               </TableRow>
                             ))}
@@ -555,7 +665,7 @@ export default function FinanceiroPage() {
                               <TableRow key={`out-${p.id}`}>
                                 <TableCell>{p.studentName}</TableCell>
                                 <TableCell>{p.amount.toFixed(2)}</TableCell>
-                                <TableCell>{p.dueDate ? format(parseISO(p.dueDate), 'dd/MM/yy') : '-'}</TableCell>
+                                <TableCell>{p.dueDate ? safeFormatDate(p.dueDate) : '-'}</TableCell>
                                 <TableCell>{getPaymentStatusBadge(p.status)}</TableCell>
                               </TableRow>
                             ))}
