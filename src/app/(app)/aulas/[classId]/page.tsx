@@ -4,7 +4,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Edit3, Save, Clock, MapPin, Users, CalendarDays, PlusCircle, Search, ClockIcon } from 'lucide-react';
+import { ArrowLeft, Edit3, Save, Clock, MapPin, Users, CalendarDays, PlusCircle, Search, ClockIcon, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,8 +16,10 @@ import { Separator } from '@/components/ui/separator';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { MOCK_CLASS_SESSIONS, type ClassSession, DAYS_OF_WEEK, MOCK_LOCATIONS, type Location, MOCK_STUDENTS, type Student } from '@/types';
+import { MOCK_CLASS_SESSIONS, type ClassSession, DAYS_OF_WEEK, MOCK_LOCATIONS, type Location, type Student } from '@/types';
 import { useToast } from '@/hooks/use-toast';
+import { db } from '@/firebase';
+import { collection, onSnapshot, query, where, orderBy } from 'firebase/firestore';
 
 const classSessionSchema = z.object({
   dayOfWeek: z.enum(DAYS_OF_WEEK, { required_error: 'Selecione o dia da semana.' }),
@@ -42,11 +44,31 @@ export default function AulaDetalhePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeLocations, setActiveLocations] = useState<Location[]>([]);
   const [activeStudents, setActiveStudents] = useState<Student[]>([]);
+  const [isLoadingStudents, setIsLoadingStudents] = useState(true);
 
   useEffect(() => {
     setActiveLocations(MOCK_LOCATIONS.filter(loc => loc.status === 'active'));
-    setActiveStudents(MOCK_STUDENTS.filter(s => s.status === 'active'));
-  }, []);
+    
+    setIsLoadingStudents(true);
+    const studentsCollectionRef = collection(db, 'students');
+    const q = query(studentsCollectionRef, where('status', '==', 'active'), orderBy('name', 'asc'));
+
+    const unsubscribeStudents = onSnapshot(q, (snapshot) => {
+      const studentsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Student));
+      setActiveStudents(studentsData);
+      setIsLoadingStudents(false);
+    }, (error) => {
+      console.error("Error fetching active students: ", error);
+      toast({
+        title: "Erro ao Carregar Alunos",
+        description: "Não foi possível buscar os dados dos alunos ativos.",
+        variant: "destructive",
+      });
+      setIsLoadingStudents(false);
+    });
+
+    return () => unsubscribeStudents();
+  }, [toast]);
 
   const { control, handleSubmit, reset, formState: { errors, isSubmitting }, watch } = useForm<ClassSessionFormData>({
     resolver: zodResolver(classSessionSchema),
@@ -102,8 +124,13 @@ export default function AulaDetalhePage() {
     router.replace(`/aulas/${classId}`); 
   };
 
-  if (isLoading) {
-    return <div className="container mx-auto py-8 text-center">Carregando dados da aula...</div>;
+  if (isLoading || isLoadingStudents) {
+    return (
+      <div className="container mx-auto py-8 flex flex-col items-center justify-center min-h-[calc(100vh-150px)]">
+        <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+        <p className="text-muted-foreground">Carregando dados da aula...</p>
+      </div>
+    );
   }
 
   if (!classSession) {
@@ -123,7 +150,7 @@ export default function AulaDetalhePage() {
   const getEnrolledStudentNames = () => {
     if (!classSession || !classSession.enrolledStudentIds || classSession.enrolledStudentIds.length === 0) return 'Nenhum aluno inscrito.';
     return classSession.enrolledStudentIds
-      .map(id => MOCK_STUDENTS.find(s => s.id === id)?.name)
+      .map(id => activeStudents.find(s => s.id === id)?.name) // Use activeStudents from state
       .filter(name => !!name)
       .join(', ');
   };
@@ -242,6 +269,11 @@ export default function AulaDetalhePage() {
                 <div>
                     <Label className="text-base font-medium flex items-center"><Users className="mr-2 h-5 w-5 text-primary"/>Alunos Inscritos (Padrão)</Label>
                     <p className="text-sm text-muted-foreground mb-3">Selecione os alunos que tipicamente participam desta configuração de aula.</p>
+                    {isLoadingStudents ? (
+                         <div className="flex justify-center items-center h-[200px] w-full rounded-md border p-4">
+                            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                         </div>
+                    ): (
                     <ScrollArea className="h-[200px] w-full rounded-md border p-4">
                         {activeStudents.length > 0 ? (
                             activeStudents.map(student => (
@@ -275,6 +307,7 @@ export default function AulaDetalhePage() {
                             <p className="text-sm text-muted-foreground text-center py-4">Nenhum aluno ativo encontrado para inscrição.</p>
                         )}
                     </ScrollArea>
+                    )}
                     {errors.enrolledStudentIds && <p className="text-sm text-destructive mt-1">{errors.enrolledStudentIds.message}</p>}
                 </div>
 
@@ -282,7 +315,7 @@ export default function AulaDetalhePage() {
             </CardContent>
             <CardFooter className="flex justify-end gap-2">
               <Button variant="outline" type="button" onClick={() => { setIsEditMode(false); router.replace(`/aulas/${classId}`); reset({...classSession, enrolledStudentIds: classSession?.enrolledStudentIds || [] }); }}>Cancelar</Button>
-              <Button type="submit" disabled={isSubmitting} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+              <Button type="submit" disabled={isSubmitting || isLoadingStudents} className="bg-primary hover:bg-primary/90 text-primary-foreground">
                 <Save className="mr-2 h-4 w-4" />{isSubmitting ? 'Salvando...' : 'Salvar Alterações'}
               </Button>
             </CardFooter>
