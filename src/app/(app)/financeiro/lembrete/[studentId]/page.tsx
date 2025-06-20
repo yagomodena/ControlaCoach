@@ -4,9 +4,9 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, MessageSquareDashed, Send, Wand2, Copy, Check } from 'lucide-react';
+import { ArrowLeft, MessageSquareDashed, Send, Wand2, Copy, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input'; // Added missing import
+import { Input } from '@/components/ui/input'; 
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
@@ -14,9 +14,12 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { generateTuitionReminder, type GenerateTuitionReminderInput } from '@/ai/flows/generate-tuition-reminder';
-import { MOCK_STUDENTS, type Student } from '@/types';
+import { type Student } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
+import { db } from '@/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+
 
 const reminderSchema = z.object({
   studentName: z.string(),
@@ -47,29 +50,46 @@ export default function GerarLembretePage() {
   });
 
   useEffect(() => {
-    setIsLoadingStudent(true);
-    const foundStudent = MOCK_STUDENTS.find(s => s.id === studentId);
-    if (foundStudent) {
-      setStudent(foundStudent);
-      // Pre-fill form based on student data
-      const defaultValues: Partial<ReminderFormData> = {
-        studentName: foundStudent.name,
-        planName: foundStudent.plan,
-        paymentStatus: foundStudent.paymentStatus === 'pago' ? 'paid' : foundStudent.paymentStatus === 'vencido' ? 'overdue' : 'pending',
-        dueDate: foundStudent.dueDate ? new Date(foundStudent.dueDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-        amountDue: foundStudent.amountDue || 0,
-        paymentMethod: foundStudent.paymentMethod || 'PIX',
-        // A simple mock attendance summary
-        attendanceHistory: foundStudent.attendanceHistory && foundStudent.attendanceHistory.length > 0 
-          ? `Frequentou ${foundStudent.attendanceHistory.filter(a => a.status === 'present').length} de ${foundStudent.attendanceHistory.length} aulas recentes.`
-          : 'Sem histórico de presença recente.',
-      };
-      reset(defaultValues as ReminderFormData); // Zod requires all fields if not optional
-    } else {
-      toast({ title: "Erro", description: "Aluno não encontrado.", variant: "destructive" });
-      router.push('/financeiro');
+    if (!studentId) {
+        setIsLoadingStudent(false);
+        toast({ title: "Erro", description: "ID do aluno não fornecido.", variant: "destructive" });
+        router.push('/financeiro');
+        return;
     }
-    setIsLoadingStudent(false);
+    setIsLoadingStudent(true);
+    const fetchStudentData = async () => {
+        try {
+            const studentDocRef = doc(db, 'students', studentId);
+            const studentDocSnap = await getDoc(studentDocRef);
+
+            if (studentDocSnap.exists()) {
+                const foundStudent = { ...studentDocSnap.data(), id: studentDocSnap.id } as Student;
+                setStudent(foundStudent);
+                const defaultValues: Partial<ReminderFormData> = {
+                    studentName: foundStudent.name,
+                    planName: foundStudent.plan,
+                    paymentStatus: foundStudent.paymentStatus === 'pago' ? 'paid' : foundStudent.paymentStatus === 'vencido' ? 'overdue' : 'pending',
+                    dueDate: foundStudent.dueDate ? new Date(foundStudent.dueDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+                    amountDue: foundStudent.amountDue || 0,
+                    paymentMethod: foundStudent.paymentMethod || 'PIX',
+                    attendanceHistory: foundStudent.attendanceHistory && foundStudent.attendanceHistory.length > 0 
+                      ? `Frequentou ${foundStudent.attendanceHistory.filter(a => a.status === 'present').length} de ${foundStudent.attendanceHistory.length} aulas recentes.`
+                      : 'Sem histórico de presença recente.',
+                };
+                 reset(defaultValues as ReminderFormData);
+            } else {
+                toast({ title: "Erro", description: "Aluno não encontrado.", variant: "destructive" });
+                router.push('/financeiro');
+            }
+        } catch (error) {
+            console.error("Error fetching student for reminder: ", error);
+            toast({ title: "Erro ao buscar aluno", variant: "destructive" });
+            router.push('/financeiro');
+        } finally {
+            setIsLoadingStudent(false);
+        }
+    };
+    fetchStudentData();
   }, [studentId, reset, router, toast]);
 
   const onSubmit = async (data: ReminderFormData) => {
@@ -78,7 +98,7 @@ export default function GerarLembretePage() {
     try {
       const input: GenerateTuitionReminderInput = {
         ...data,
-        amountDue: Number(data.amountDue) // Ensure amountDue is a number
+        amountDue: Number(data.amountDue) 
       };
       const result = await generateTuitionReminder(input);
       setGeneratedMessage(result.reminderMessage);
@@ -107,7 +127,7 @@ export default function GerarLembretePage() {
   
   const openWhatsApp = () => {
     if (generatedMessage && student?.phone) {
-      const whatsappNumber = student.phone.replace(/\D/g, ''); // Remove non-digits
+      const whatsappNumber = student.phone.replace(/\D/g, ''); 
       const whatsappUrl = `https://wa.me/55${whatsappNumber}?text=${encodeURIComponent(generatedMessage)}`;
       window.open(whatsappUrl, '_blank');
     } else {
@@ -122,25 +142,42 @@ export default function GerarLembretePage() {
   if (isLoadingStudent) {
     return (
       <div className="container mx-auto py-8">
-        <Skeleton className="h-8 w-48 mb-2" />
-        <Skeleton className="h-4 w-64 mb-8" />
-        <Card className="max-w-2xl mx-auto shadow-lg">
-          <CardHeader>
-            <Skeleton className="h-6 w-1/2 mb-1" />
-            <Skeleton className="h-4 w-3/4" />
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="space-y-2">
-                <Skeleton className="h-4 w-1/4" />
-                <Skeleton className="h-10 w-full" />
-              </div>
-            ))}
-          </CardContent>
-          <CardFooter>
-            <Skeleton className="h-10 w-24 ml-auto" />
-          </CardFooter>
-        </Card>
+         <div className="flex items-center mb-8">
+            <Skeleton className="h-10 w-10 mr-4 rounded-md" />
+            <div>
+                <Skeleton className="h-8 w-48 mb-2" />
+                <Skeleton className="h-4 w-64" />
+            </div>
+        </div>
+        <div className="grid md:grid-cols-2 gap-8">
+            <Card className="shadow-lg">
+                <CardHeader>
+                    <Skeleton className="h-6 w-1/2 mb-1" />
+                    <Skeleton className="h-4 w-3/4" />
+                </CardHeader>
+                <CardContent className="space-y-6">
+                    {[...Array(5)].map((_, i) => (
+                    <div key={i} className="space-y-2">
+                        <Skeleton className="h-4 w-1/4" />
+                        <Skeleton className="h-10 w-full" />
+                    </div>
+                    ))}
+                </CardContent>
+                <CardFooter>
+                    <Skeleton className="h-10 w-full" />
+                </CardFooter>
+            </Card>
+            <Card className="shadow-lg">
+                <CardHeader>
+                    <Skeleton className="h-6 w-1/3 mb-1" />
+                    <Skeleton className="h-4 w-1/2" />
+                </CardHeader>
+                <CardContent className="min-h-[200px] flex flex-col items-center justify-center">
+                     <Loader2 className="h-12 w-12 text-muted-foreground animate-spin mb-3" />
+                     <p className="text-muted-foreground">Carregando dados do aluno...</p>
+                </CardContent>
+            </Card>
+        </div>
       </div>
     );
   }
@@ -167,7 +204,6 @@ export default function GerarLembretePage() {
               <CardDescription>Confirme ou edite os dados abaixo antes de gerar.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Simplified form fields, as they are mostly pre-filled */}
               <div className="space-y-1">
                 <Label htmlFor="studentName">Nome do Aluno</Label>
                 <Controller name="studentName" control={control} render={({ field }) => <Input id="studentName" {...field} readOnly className="bg-muted/50" />} />
@@ -196,7 +232,7 @@ export default function GerarLembretePage() {
               </div>
               <div className="space-y-1">
                 <Label htmlFor="attendanceHistory">Resumo da Presença (Opcional)</Label>
-                <Controller name="attendanceHistory" control={control} render={({ field }) => <Textarea id="attendanceHistory" placeholder="Ex: Ótima frequência nas últimas semanas!" {...field} />} />
+                <Controller name="attendanceHistory" control={control} render={({ field }) => <Textarea id="attendanceHistory" placeholder="Ex: Ótima frequência nas últimas semanas!" {...field} value={field.value ?? ''} />} />
               </div>
             </CardContent>
             <CardFooter>
@@ -247,5 +283,3 @@ export default function GerarLembretePage() {
     </div>
   );
 }
-
-    

@@ -4,7 +4,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Edit3, Save, ListChecks, BadgeDollarSign, CalendarClock } from 'lucide-react';
+import { ArrowLeft, Edit3, Save, ListChecks, BadgeDollarSign, CalendarClock, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,8 +15,9 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import type { Plan } from '@/types';
-import { MOCK_PLANS } from '@/types'; 
 import { useToast } from '@/hooks/use-toast';
+import { db } from '@/firebase';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 
 const planSchema = z.object({
   name: z.string().min(3, { message: 'Nome do plano deve ter pelo menos 3 caracteres.' }),
@@ -43,16 +44,29 @@ export default function PlanoDetailPage() {
   });
 
   useEffect(() => {
+    if (!planId) return;
     setIsLoading(true);
-    const foundPlan = MOCK_PLANS.find(p => p.id === planId);
-    if (foundPlan) {
-      setPlan(foundPlan);
-      reset(foundPlan); 
-    } else {
-      toast({ title: "Erro", description: "Plano não encontrado.", variant: "destructive" });
-      router.push('/planos');
-    }
-    setIsLoading(false);
+    const fetchPlan = async () => {
+      try {
+        const planDocRef = doc(db, 'plans', planId);
+        const planDocSnap = await getDoc(planDocRef);
+
+        if (planDocSnap.exists()) {
+          const planData = { ...planDocSnap.data(), id: planDocSnap.id } as Plan;
+          setPlan(planData);
+          reset(planData); 
+        } else {
+          toast({ title: "Erro", description: "Plano não encontrado.", variant: "destructive" });
+          router.push('/planos');
+        }
+      } catch (error) {
+        console.error("Error fetching plan details: ", error);
+        toast({ title: "Erro ao Carregar", description: "Não foi possível buscar os dados do plano.", variant: "destructive" });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchPlan();
   }, [planId, reset, router, toast]);
 
   useEffect(() => {
@@ -60,25 +74,37 @@ export default function PlanoDetailPage() {
   }, [searchParams]);
 
   const onSubmit = async (data: PlanFormData) => {
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    const planIndex = MOCK_PLANS.findIndex(p => p.id === planId);
-    if (planIndex !== -1 && plan) {
-        const updatedPlan = { ...plan, ...data };
-        MOCK_PLANS[planIndex] = updatedPlan;
-        setPlan(updatedPlan);
-    }
+    if (!planId || !plan) return;
+    try {
+      const planDocRef = doc(db, 'plans', planId);
+      await updateDoc(planDocRef, data);
+      
+      const updatedPlan = { ...plan, ...data };
+      setPlan(updatedPlan);
 
-    toast({
-      title: "Plano Atualizado!",
-      description: `O plano "${data.name}" foi atualizado com sucesso.`,
-    });
-    setIsEditMode(false);
-    router.replace(`/planos/${planId}`); 
+      toast({
+        title: "Plano Atualizado!",
+        description: `O plano "${data.name}" foi atualizado com sucesso.`,
+      });
+      setIsEditMode(false);
+      router.replace(`/planos/${planId}`); 
+    } catch (error) {
+        console.error("Error updating plan: ", error);
+        toast({
+            title: "Erro ao Atualizar",
+            description: "Não foi possível atualizar os dados do plano. Tente novamente.",
+            variant: "destructive",
+        });
+    }
   };
 
   if (isLoading) {
-    return <div className="container mx-auto py-8 text-center">Carregando dados do plano...</div>;
+    return (
+        <div className="container mx-auto py-8 flex flex-col items-center justify-center min-h-[calc(100vh-150px)]">
+            <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+            <p className="text-muted-foreground">Carregando dados do plano...</p>
+        </div>
+    );
   }
 
   if (!plan) {

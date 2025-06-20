@@ -10,8 +10,10 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { PlanForm, type PlanFormData } from '@/components/forms/plan-form';
-import { MOCK_PLANS, type Plan } from '@/types';
+import { type Plan } from '@/types';
 import { useToast } from '@/hooks/use-toast';
+import { db } from '@/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
 
 interface EditPlanDialogProps {
   open: boolean;
@@ -24,20 +26,28 @@ export function EditPlanDialog({ open, onOpenChange, plan, onPlanEdited }: EditP
   const { toast } = useToast();
 
   const handleEditPlan = async (data: PlanFormData) => {
-    if (!plan) return;
-    await new Promise(resolve => setTimeout(resolve, 500)); // Simulate API call
-    
-    const planIndex = MOCK_PLANS.findIndex(p => p.id === plan.id);
-    if (planIndex !== -1) {
-      MOCK_PLANS[planIndex] = { ...MOCK_PLANS[planIndex], ...data };
+    if (!plan?.id) {
+        toast({ title: "Erro", description: "ID do plano inválido.", variant: "destructive" });
+        return;
     }
-    
-    toast({
-      title: "Plano Atualizado!",
-      description: `O plano "${data.name}" foi atualizado com sucesso.`,
-    });
-    onPlanEdited(); // Callback to refresh parent component's plan list
-    onOpenChange(false); // Close dialog
+    try {
+      const planDocRef = doc(db, 'plans', plan.id);
+      await updateDoc(planDocRef, data);
+      
+      toast({
+        title: "Plano Atualizado!",
+        description: `O plano "${data.name}" foi atualizado com sucesso.`,
+      });
+      onPlanEdited(); 
+      onOpenChange(false);
+    } catch (error) {
+        console.error("Error updating plan: ", error);
+        toast({
+            title: "Erro ao Atualizar Plano",
+            description: "Não foi possível atualizar o plano. Tente novamente.",
+            variant: "destructive",
+        });
+    }
   };
 
   if (!plan) return null;

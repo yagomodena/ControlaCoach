@@ -3,50 +3,41 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Allow public read access to a 'publicContent' collection
-    match /publicContent/{docId} {
-      allow read: if true;
-      allow write: if false; // No public writes
-    }
-
-    // Rules for the 'users' collection (user profiles)
+    // Allow read/write access to the 'users' collection for authenticated users,
+    // restricted to their own user document.
     match /users/{userId} {
-      // A user can create their own profile
-      allow create: if request.auth != null && request.auth.uid == userId;
-      // A user can read, update, and delete their own profile
-      allow read, update, delete: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Rules for the 'students' collection
+    // Allow authenticated users to read/write their own student data
+    // And allow admin/owner to read all student data (example, adjust if needed)
     match /students/{studentId} {
-      // Authenticated users can create, read, update, and delete students
-      // (Assuming any authenticated app user is a coach managing their students)
-      allow read, write: if request.auth != null;
-      // Consider more granular rules in a multi-coach scenario, e.g.,
-      // allow write: if request.auth != null && resource.data.coachId == request.auth.uid;
+      allow read: if request.auth != null; // Or more restrictive: request.auth.uid == resource.data.coachId;
+      allow create, update, delete: if request.auth != null; // Typically, only the coach/admin should write.
     }
 
-    // Rules for the 'classSessions' collection
+    // Allow authenticated users to read/write their own class session configurations
     match /classSessions/{sessionId} {
-      // Authenticated users can manage class configurations
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null;
+      allow create, update, delete: if request.auth != null; // Assuming coach owns these
     }
 
-    // Rules for the 'locations' collection
+    // Allow authenticated users to read/write locations
     match /locations/{locationId} {
-      // Authenticated users can manage locations
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null;
+      allow create, update, delete: if request.auth != null; // Assuming coach owns these
     }
 
-    // Example: Allow admin access to everything (use with caution)
-    // match /{document=**} {
-    //   allow read, write: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    // Allow authenticated users to read/write plans
+    match /plans/{planId} {
+      allow read: if request.auth != null;
+      allow create, update, delete: if request.auth != null; // Assuming coach owns these
+    }
+
+    // Example: Allow only admins to write to a 'settings' collection.
+    // match /settings/{settingId} {
+    //   allow read: if request.auth != null;
+    //   allow write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
     // }
-
-    // Default: Deny all other access
-    match /{document=**} {
-      allow read, write: if false;
-    }
   }
 }

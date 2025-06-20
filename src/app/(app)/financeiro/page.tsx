@@ -3,7 +3,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
-import { DollarSign, Search, Filter, FileText, Users, AlertTriangle, CheckCircle, Clock, Printer, ChevronLeft, ChevronRight } from 'lucide-react';
+import { DollarSign, Search, Filter, FileText, Users, AlertTriangle, CheckCircle, Clock, Printer, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -35,14 +35,16 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { Student, Payment, Plan } from '@/types';
-import { MOCK_STUDENTS, MOCK_PLANS } from '@/types'; 
-import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval, getMonth, getYear, addMonths, subMonths, setDate } from 'date-fns';
+import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval, getMonth, getYear, addMonths, subMonths, setDate, getDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
+import { db } from '@/firebase';
+import { collection, onSnapshot, query, where, orderBy, doc, updateDoc } from 'firebase/firestore';
 
 interface PaymentEntry extends Payment {
   studentName: string;
   studentPhone?: string;
+  studentPlanName?: string;
 }
 
 interface MonthlyReportData {
@@ -60,73 +62,108 @@ export default function FinanceiroPage() {
     new Set(['pago', 'pendente', 'vencido']) 
   );
   const [payments, setPayments] = useState<PaymentEntry[]>([]);
+  const [allPlans, setAllPlans] = useState<Plan[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [clientRendered, setClientRendered] = useState(false);
   const { toast } = useToast();
   const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
   const [reportData, setReportData] = useState<MonthlyReportData | null>(null);
   const [selectedMonthDate, setSelectedMonthDate] = useState(new Date());
 
-
-  const loadAndSetPayments = () => {
-    const derivedPayments: PaymentEntry[] = MOCK_STUDENTS.map(student => {
-      const planDetails: Plan | undefined = MOCK_PLANS.find(p => p.name === student.plan);
-      let effectiveDueDate = student.dueDate;
-      if (!effectiveDueDate) {
-          const today = new Date();
-          let baseDateForDefault = student.lastPaymentDate ? parseISO(student.lastPaymentDate) : today;
-          if (student.paymentStatus === 'pago' && student.lastPaymentDate) {
-             // If paid, next due date is based on last payment + plan duration approx.
-             baseDateForDefault = addMonths(parseISO(student.lastPaymentDate), 1); // Simplified: assume next month
-          }
-          effectiveDueDate = setDate(baseDateForDefault, MOCK_PLANS.find(p => p.name === student.plan)?.durationDays === 1 ? getDay(baseDateForDefault) : 5).toISOString();
-      }
-
-
-      return {
-        id: `pay-${student.id}-${new Date(effectiveDueDate).toISOString().substring(0,7)}`,
-        studentId: student.id,
-        studentName: student.name,
-        studentPhone: student.phone,
-        amount: student.amountDue || planDetails?.price || 0,
-        paymentDate: student.paymentStatus === 'pago' ? (student.lastPaymentDate || effectiveDueDate) : '',
-        dueDate: effectiveDueDate,
-        status: student.paymentStatus || 'pendente',
-        method: student.paymentMethod || 'PIX',
-        referenceMonth: new Date(effectiveDueDate).toISOString().substring(0,7),
-      };
-    });
-    setPayments(derivedPayments);
-  };
-
   useEffect(() => {
     setClientRendered(true);
-    loadAndSetPayments();
-  }, []);
+    setIsLoading(true);
 
-  const handleMarkAsPaid = (studentIdToUpdate: string) => {
-    const studentIndex = MOCK_STUDENTS.findIndex(s => s.id === studentIdToUpdate);
-    if (studentIndex !== -1) {
-      const studentName = MOCK_STUDENTS[studentIndex].name;
-      MOCK_STUDENTS[studentIndex].paymentStatus = 'pago';
-      const paymentDate = new Date();
-      MOCK_STUDENTS[studentIndex].lastPaymentDate = paymentDate.toISOString();
-      
-      const planDetails = MOCK_PLANS.find(p => p.name === MOCK_STUDENTS[studentIndex].plan);
-      MOCK_STUDENTS[studentIndex].amountDue = planDetails?.price || 0;
+    // Fetch all plans first
+    const plansCollectionRef = collection(db, 'plans');
+    const qPlans = query(plansCollectionRef, orderBy('name'));
+    const unsubscribePlans = onSnapshot(qPlans, (snapshot) => {
+      const plansData = snapshot.docs.map(docSnap => ({ ...docSnap.data(), id: docSnap.id } as Plan));
+      setAllPlans(plansData);
 
-      const currentDueDate = MOCK_STUDENTS[studentIndex].dueDate ? parseISO(MOCK_STUDENTS[studentIndex].dueDate!) : paymentDate;
-      // Set next due date to the 5th of the month following the current due date's month, or payment month if no due date
-      const nextMonthForDueDate = addMonths(currentDueDate, 1);
-      const nextDueDate = setDate(nextMonthForDueDate, 5); // Default to 5th of next month
-      
-      MOCK_STUDENTS[studentIndex].dueDate = nextDueDate.toISOString();
-      
-      loadAndSetPayments(); 
+      // Then fetch students and derive payments
+      const studentsCollectionRef = collection(db, 'students');
+      const qStudents = query(studentsCollectionRef, orderBy('name'));
+      const unsubscribeStudents = onSnapshot(qStudents, (studentSnapshot) => {
+        const studentsData = studentSnapshot.docs.map(docSnap => ({ ...docSnap.data(), id: docSnap.id } as Student));
+        
+        const derivedPayments: PaymentEntry[] = studentsData.map(student => {
+          const planDetails: Plan | undefined = plansData.find(p => p.name === student.plan);
+          let effectiveDueDate = student.dueDate;
+          let amount = student.amountDue ?? planDetails?.price ?? 0;
 
-      toast({
-        title: "Pagamento Confirmado!",
-        description: `O pagamento de ${studentName} foi marcado como pago.`,
+          if (!effectiveDueDate) {
+              const today = new Date();
+              let baseDateForDefault = student.lastPaymentDate ? parseISO(student.lastPaymentDate) : today;
+              if (student.paymentStatus === 'pago' && student.lastPaymentDate) {
+                 baseDateForDefault = addMonths(parseISO(student.lastPaymentDate), 1); 
+              }
+              // Default due date to the 5th of the month, or current day if plan is daily (duration 1)
+              effectiveDueDate = setDate(baseDateForDefault, planDetails?.durationDays === 1 ? getDay(baseDateForDefault) : 5).toISOString();
+          }
+
+          return {
+            id: `pay-${student.id}-${new Date(effectiveDueDate).toISOString().substring(0,7)}`, // Potential for non-unique IDs if multiple payments in month
+            studentId: student.id,
+            studentName: student.name,
+            studentPhone: student.phone,
+            studentPlanName: student.plan,
+            amount: amount,
+            paymentDate: student.paymentStatus === 'pago' ? (student.lastPaymentDate || effectiveDueDate) : '',
+            dueDate: effectiveDueDate,
+            status: student.paymentStatus || 'pendente',
+            method: student.paymentMethod || 'PIX',
+            referenceMonth: new Date(effectiveDueDate).toISOString().substring(0,7),
+          };
+        });
+        setPayments(derivedPayments);
+        setIsLoading(false);
+      }, (error) => {
+        console.error("Error fetching students: ", error);
+        toast({ title: "Erro ao Carregar Alunos para Financeiro", variant: "destructive" });
+        setIsLoading(false);
       });
+      return () => unsubscribeStudents();
+
+    }, (error) => {
+      console.error("Error fetching plans: ", error);
+      toast({ title: "Erro ao Carregar Planos", variant: "destructive" });
+      setIsLoading(false);
+    });
+
+    return () => unsubscribePlans();
+  }, [toast]);
+
+
+  const handleMarkAsPaid = async (studentIdToUpdate: string) => {
+    const studentDocRef = doc(db, 'students', studentIdToUpdate);
+    try {
+        const studentToUpdate = payments.find(p => p.studentId === studentIdToUpdate);
+        if (!studentToUpdate) {
+            toast({ title: "Erro", description: "Aluno não encontrado para marcar como pago.", variant: "destructive" });
+            return;
+        }
+        const planDetails = allPlans.find(p => p.name === studentToUpdate.studentPlanName);
+        const paymentDate = new Date();
+        const currentDueDate = studentToUpdate.dueDate ? parseISO(studentToUpdate.dueDate) : paymentDate;
+        const nextMonthForDueDate = addMonths(currentDueDate, 1);
+        const nextDueDateDay = planDetails?.durationDays === 1 ? getDay(nextMonthForDueDate) : 5; // 5th or same day of week for daily
+        const nextDueDate = setDate(nextMonthForDueDate, nextDueDateDay);
+
+        await updateDoc(studentDocRef, {
+            paymentStatus: 'pago',
+            lastPaymentDate: paymentDate.toISOString(),
+            dueDate: nextDueDate.toISOString(),
+            amountDue: planDetails?.price || studentToUpdate.amount // Keep current amount or update to plan price
+        });
+        toast({
+            title: "Pagamento Confirmado!",
+            description: `O pagamento de ${studentToUpdate.studentName} foi marcado como pago.`,
+        });
+        // Data will refresh via onSnapshot
+    } catch (error) {
+        console.error("Error marking as paid: ", error);
+        toast({ title: "Erro ao Marcar como Pago", variant: "destructive" });
     }
   };
 
@@ -348,6 +385,12 @@ export default function FinanceiroPage() {
             </div>
           </CardHeader>
           <CardContent className="px-0 xxs:px-2 sm:px-6">
+            {isLoading ? (
+                <div className="flex justify-center items-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  <p className="ml-2 text-muted-foreground">Carregando pagamentos...</p>
+                </div>
+            ) : (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -422,6 +465,7 @@ export default function FinanceiroPage() {
                 )}
               </TableBody>
             </Table>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -542,4 +586,3 @@ export default function FinanceiroPage() {
     </>
   );
 }
-

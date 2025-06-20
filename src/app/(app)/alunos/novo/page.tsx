@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Save, PlusCircle, Search, CalendarClock, MapPinIcon, ClockIcon, DollarSign, Loader2 } from 'lucide-react'; // Added Loader2
+import { ArrowLeft, Save, PlusCircle, Search, CalendarClock, MapPinIcon, ClockIcon, DollarSign, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -23,7 +23,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
-import { MOCK_PLANS, type Plan, type Location, type DayOfWeek, DAYS_OF_WEEK } from '@/types'; // Removed MOCK_LOCATIONS
+import { type Plan, type Location, type DayOfWeek, DAYS_OF_WEEK } from '@/types';
 import { AddPlanDialog } from '@/components/dialogs/add-plan-dialog';
 import { ManagePlansDialog } from '@/components/dialogs/manage-plans-dialog';
 import { db } from '@/firebase';
@@ -57,17 +57,30 @@ export default function NovoAlunoPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [activePlans, setActivePlans] = useState<Plan[]>([]);
+  const [isLoadingPlans, setIsLoadingPlans] = useState(true);
   const [activeLocations, setActiveLocations] = useState<Location[]>([]);
   const [isLoadingLocations, setIsLoadingLocations] = useState(true);
   const [isAddPlanDialogOpen, setIsAddPlanDialogOpen] = useState(false);
   const [isManagePlansDialogOpen, setIsManagePlansDialogOpen] = useState(false);
 
-  const refreshActivePlans = () => {
-    setActivePlans(MOCK_PLANS.filter(p => p.status === 'active'));
+  const fetchActivePlans = () => {
+    setIsLoadingPlans(true);
+    const plansCollectionRef = collection(db, 'plans');
+    const qPlans = query(plansCollectionRef, where('status', '==', 'active'), orderBy('name', 'asc'));
+    const unsubscribePlans = onSnapshot(qPlans, (snapshot) => {
+      const plansData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Plan));
+      setActivePlans(plansData);
+      setIsLoadingPlans(false);
+    }, (error) => {
+      console.error("Error fetching active plans: ", error);
+      toast({ title: "Erro ao Carregar Planos", variant: "destructive" });
+      setIsLoadingPlans(false);
+    });
+    return unsubscribePlans;
   };
 
   useEffect(() => {
-    refreshActivePlans();
+    const unsubscribePlans = fetchActivePlans();
     
     setIsLoadingLocations(true);
     const locationsCollectionRef = collection(db, 'locations');
@@ -81,7 +94,10 @@ export default function NovoAlunoPage() {
       toast({ title: "Erro ao Carregar Locais", variant: "destructive" });
       setIsLoadingLocations(false);
     });
-    return () => unsubscribeLocations();
+    return () => {
+        unsubscribePlans();
+        unsubscribeLocations();
+    };
   }, [toast]);
 
   const { control, handleSubmit, formState: { errors, isSubmitting }, setValue, watch } = useForm<StudentFormData>({
@@ -95,7 +111,7 @@ export default function NovoAlunoPage() {
       objective: '',
       recurringClassTime: '',
       recurringClassDays: [],
-      recurringClassLocation: NO_LOCATION_VALUE, // Default to "no location"
+      recurringClassLocation: NO_LOCATION_VALUE, 
       paymentStatus: 'pendente',
       dueDate: '',
       amountDue: undefined,
@@ -117,8 +133,13 @@ export default function NovoAlunoPage() {
       };
       
       if (data.objective && data.objective.trim() !== '') studentDataToSave.objective = data.objective.trim();
+      else studentDataToSave.objective = null;
+
       if (data.recurringClassTime && data.recurringClassTime.trim() !== '') studentDataToSave.recurringClassTime = data.recurringClassTime.trim();
+      else studentDataToSave.recurringClassTime = null;
+      
       if (data.recurringClassDays && data.recurringClassDays.length > 0) studentDataToSave.recurringClassDays = data.recurringClassDays;
+      else studentDataToSave.recurringClassDays = null;
       
       if (data.recurringClassLocation && data.recurringClassLocation !== NO_LOCATION_VALUE && data.recurringClassLocation.trim() !== '') {
         studentDataToSave.recurringClassLocation = data.recurringClassLocation;
@@ -128,9 +149,16 @@ export default function NovoAlunoPage() {
 
       studentDataToSave.paymentStatus = data.paymentStatus || 'pendente';
       if (data.dueDate && data.dueDate.trim() !== '') studentDataToSave.dueDate = data.dueDate;
+      else studentDataToSave.dueDate = null;
+
       if (typeof data.amountDue === 'number' && !isNaN(data.amountDue)) studentDataToSave.amountDue = data.amountDue;
+      else studentDataToSave.amountDue = null;
+
       if (data.paymentMethod) studentDataToSave.paymentMethod = data.paymentMethod;
+      else studentDataToSave.paymentMethod = null;
+      
       if (data.lastPaymentDate && data.lastPaymentDate.trim() !== '') studentDataToSave.lastPaymentDate = data.lastPaymentDate;
+      else studentDataToSave.lastPaymentDate = null;
 
       await addDoc(collection(db, 'students'), studentDataToSave);
 
@@ -151,11 +179,15 @@ export default function NovoAlunoPage() {
 
   const handlePlansManaged = () => {
     const currentPlanValue = watch('plan');
-    refreshActivePlans();
-    const currentPlanExistsAndIsActive = MOCK_PLANS.some(p => p.name === currentPlanValue && p.status === 'active');
+    // Re-fetch or rely on onSnapshot to update activePlans
+    // For simplicity, if using onSnapshot, this might just ensure UI re-renders if needed
+    // Or explicitly call fetchActivePlans if not using onSnapshot for activePlans state here
+    fetchActivePlans(); // Re-fetch to update the dropdown
+    const currentPlanExistsAndIsActive = activePlans.some(p => p.name === currentPlanValue && p.status === 'active');
     if (!currentPlanExistsAndIsActive && activePlans.length > 0) {
+      // Optionally set to first active plan or leave as is
     } else if (!currentPlanExistsAndIsActive) {
-      setValue('plan', '');
+      setValue('plan', ''); // Clear if no active plans or current one became inactive
     }
   };
 
@@ -211,9 +243,9 @@ export default function NovoAlunoPage() {
                         name="plan"
                         control={control}
                         render={({ field }) => (
-                          <Select onValueChange={field.onChange} value={field.value ?? ''}>
+                          <Select onValueChange={field.onChange} value={field.value ?? ''} disabled={isLoadingPlans}>
                             <SelectTrigger id="plan">
-                              <SelectValue placeholder="Selecione o plano" />
+                              <SelectValue placeholder={isLoadingPlans ? "Carregando..." : "Selecione o plano"} />
                             </SelectTrigger>
                             <SelectContent>
                               {activePlans.length > 0 ? (
@@ -221,7 +253,7 @@ export default function NovoAlunoPage() {
                                   <SelectItem key={p.id} value={p.name}>{p.name} - R$ {p.price.toFixed(2)}</SelectItem>
                                 ))
                               ) : (
-                                <SelectItem value="no-plans" disabled>Nenhum plano ativo</SelectItem>
+                                <SelectItem value="no-plans" disabled>{isLoadingPlans ? "Carregando..." : "Nenhum plano ativo"}</SelectItem>
                               )}
                             </SelectContent>
                           </Select>
@@ -428,7 +460,7 @@ export default function NovoAlunoPage() {
               <Button variant="outline" type="button" onClick={() => router.back()}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={isSubmitting || isLoadingLocations} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+              <Button type="submit" disabled={isSubmitting || isLoadingLocations || isLoadingPlans} className="bg-primary hover:bg-primary/90 text-primary-foreground">
                 <Save className="mr-2 h-4 w-4" />
                 {isSubmitting ? 'Salvando...' : 'Salvar Aluno'}
               </Button>

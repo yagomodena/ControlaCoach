@@ -1,9 +1,9 @@
 
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
-import { PlusCircle, Search, Edit3, Trash2, MoreVertical, ListChecks, BadgeDollarSign, CalendarClock } from 'lucide-react';
+import { PlusCircle, Search, Edit3, Trash2, MoreVertical, ListChecks, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -23,13 +23,37 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import type { Plan } from '@/types';
-import { MOCK_PLANS } from '@/types'; 
 import { useToast } from '@/hooks/use-toast';
+import { db } from '@/firebase';
+import { collection, onSnapshot, deleteDoc, doc, query, orderBy } from 'firebase/firestore';
 
 export default function PlanosPage() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [plans, setPlans] = useState<Plan[]>(MOCK_PLANS);
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+
+  useEffect(() => {
+    setIsLoading(true);
+    const plansCollectionRef = collection(db, 'plans');
+    const q = query(plansCollectionRef, orderBy('name', 'asc'));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const plansData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Plan));
+      setPlans(plansData);
+      setIsLoading(false);
+    }, (error) => {
+      console.error("Error fetching plans: ", error);
+      toast({
+        title: "Erro ao Carregar Planos",
+        description: "Não foi possível buscar os dados dos planos. Tente novamente.",
+        variant: "destructive",
+      });
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [toast]);
 
   const filteredPlans = useMemo(() => {
     return plans.filter(plan =>
@@ -37,19 +61,23 @@ export default function PlanosPage() {
     );
   }, [plans, searchTerm]);
 
-  const handleDeletePlan = (planId: string) => {
-    if (window.confirm('Tem certeza que deseja excluir este plano? Esta ação não pode ser desfeita.')) {
-      const updatedPlans = plans.filter(p => p.id !== planId);
-      setPlans(updatedPlans);
-      // Update MOCK_PLANS directly for demo purposes
-      const index = MOCK_PLANS.findIndex(p => p.id === planId);
-      if (index > -1) {
-        MOCK_PLANS.splice(index, 1);
+  const handleDeletePlan = async (planId: string, planName: string) => {
+    if (window.confirm(`Tem certeza que deseja excluir o plano "${planName}"? Esta ação não pode ser desfeita.`)) {
+      try {
+        await deleteDoc(doc(db, 'plans', planId));
+        toast({
+          title: 'Plano Excluído!',
+          description: `O plano "${planName}" foi removido com sucesso.`,
+        });
+        // Real-time listener will update the list
+      } catch (error) {
+        console.error("Error deleting plan: ", error);
+        toast({
+          title: "Erro ao Excluir",
+          description: "Não foi possível excluir o plano. Tente novamente.",
+          variant: "destructive",
+        });
       }
-      toast({
-        title: 'Plano Excluído!',
-        description: 'O plano foi removido com sucesso.',
-      });
     }
   };
 
@@ -86,71 +114,77 @@ export default function PlanosPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nome do Plano</TableHead>
-                <TableHead className="hidden md:table-cell">Preço (R$)</TableHead>
-                <TableHead className="hidden sm:table-cell">Duração (dias)</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredPlans.length > 0 ? (
-                filteredPlans.map((plan) => (
-                  <TableRow key={plan.id}>
-                    <TableCell className="font-medium flex items-center">
-                        <ListChecks className="h-4 w-4 mr-2 text-primary" />
-                        {plan.name}
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell text-muted-foreground">
-                        {plan.price.toFixed(2)}
-                    </TableCell>
-                     <TableCell className="hidden sm:table-cell text-muted-foreground">
-                        {plan.durationDays}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={plan.status === 'active' ? 'default' : 'secondary'}
-                       className={plan.status === 'active' ? 'bg-green-500/20 text-green-700 border-green-500/30' : 'bg-red-500/20 text-red-700 border-red-500/30'}
-                      >
-                        {plan.status === 'active' ? 'Ativo' : 'Inativo'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
-                            <MoreVertical className="h-4 w-4" />
-                            <span className="sr-only">Mais ações</span>
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem asChild>
-                            <Link href={`/planos/${plan.id}?edit=true`} className="flex items-center">
-                              <Edit3 className="mr-2 h-4 w-4" /> Editar
-                            </Link>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleDeletePlan(plan.id)} className="text-destructive focus:text-destructive focus:bg-destructive/10 flex items-center">
-                            <Trash2 className="mr-2 h-4 w-4" /> Excluir
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+          {isLoading ? (
+             <div className="flex justify-center items-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="ml-2 text-muted-foreground">Carregando planos...</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nome do Plano</TableHead>
+                  <TableHead className="hidden md:table-cell">Preço (R$)</TableHead>
+                  <TableHead className="hidden sm:table-cell">Duração (dias)</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredPlans.length > 0 ? (
+                  filteredPlans.map((plan) => (
+                    <TableRow key={plan.id}>
+                      <TableCell className="font-medium flex items-center">
+                          <ListChecks className="h-4 w-4 mr-2 text-primary" />
+                          {plan.name}
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell text-muted-foreground">
+                          {plan.price.toFixed(2)}
+                      </TableCell>
+                       <TableCell className="hidden sm:table-cell text-muted-foreground">
+                          {plan.durationDays}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={plan.status === 'active' ? 'default' : 'secondary'}
+                         className={plan.status === 'active' ? 'bg-green-500/20 text-green-700 border-green-500/30' : 'bg-red-500/20 text-red-700 border-red-500/30'}
+                        >
+                          {plan.status === 'active' ? 'Ativo' : 'Inativo'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <MoreVertical className="h-4 w-4" />
+                              <span className="sr-only">Mais ações</span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem asChild>
+                              <Link href={`/planos/${plan.id}?edit=true`} className="flex items-center">
+                                <Edit3 className="mr-2 h-4 w-4" /> Editar
+                              </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDeletePlan(plan.id, plan.name)} className="text-destructive focus:text-destructive focus:bg-destructive/10 flex items-center">
+                              <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                      Nenhum plano encontrado.
                     </TableCell>
                   </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                    Nenhum plano encontrado.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>
   );
 }
-

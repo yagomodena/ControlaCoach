@@ -8,12 +8,12 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogClose,
 } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
 import { PlanForm, type PlanFormData } from '@/components/forms/plan-form';
-import { MOCK_PLANS, type Plan } from '@/types';
+import { type Plan } from '@/types';
 import { useToast } from '@/hooks/use-toast';
+import { db } from '@/firebase';
+import { collection, addDoc } from 'firebase/firestore';
 
 interface AddPlanDialogProps {
   open: boolean;
@@ -25,18 +25,22 @@ export function AddPlanDialog({ open, onOpenChange, onPlanAdded }: AddPlanDialog
   const { toast } = useToast();
 
   const handleAddPlan = async (data: PlanFormData) => {
-    await new Promise(resolve => setTimeout(resolve, 500)); // Simulate API call
-    const newPlan: Plan = {
-      id: crypto.randomUUID(),
-      ...data,
-    };
-    MOCK_PLANS.push(newPlan);
-    toast({
-      title: "Plano Adicionado!",
-      description: `O plano "${data.name}" foi cadastrado com sucesso.`,
-    });
-    onPlanAdded(); // Callback to refresh parent component's plan list
-    onOpenChange(false); // Close dialog
+    try {
+      await addDoc(collection(db, 'plans'), data);
+      toast({
+        title: "Plano Adicionado!",
+        description: `O plano "${data.name}" foi cadastrado com sucesso.`,
+      });
+      onPlanAdded(); 
+      onOpenChange(false); 
+    } catch (error) {
+      console.error("Error adding plan: ", error);
+      toast({
+        title: "Erro ao Adicionar Plano",
+        description: "Não foi possível cadastrar o plano. Tente novamente.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (

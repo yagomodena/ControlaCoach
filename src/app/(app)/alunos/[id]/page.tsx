@@ -20,7 +20,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import type { Student, Plan, Location, DayOfWeek } from '@/types';
-import { MOCK_PLANS, DAYS_OF_WEEK } from '@/types'; // Removed MOCK_LOCATIONS
+import { DAYS_OF_WEEK } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { AddPlanDialog } from '@/components/dialogs/add-plan-dialog';
 import { ManagePlansDialog } from '@/components/dialogs/manage-plans-dialog';
@@ -62,21 +62,36 @@ export default function AlunoDetailPage() {
   const [isEditMode, setIsEditMode] = useState(searchParams.get('edit') === 'true');
   const [isLoading, setIsLoading] = useState(true);
   const [activePlans, setActivePlans] = useState<Plan[]>([]);
+  const [isLoadingPlans, setIsLoadingPlans] = useState(true);
   const [activeLocations, setActiveLocations] = useState<Location[]>([]);
   const [isLoadingLocations, setIsLoadingLocations] = useState(true);
   const [isAddPlanDialogOpen, setIsAddPlanDialogOpen] = useState(false);
   const [isManagePlansDialogOpen, setIsManagePlansDialogOpen] = useState(false);
-
-  const refreshActivePlans = () => setActivePlans(MOCK_PLANS.filter(p => p.status === 'active'));
   
+  const fetchActivePlans = () => {
+    setIsLoadingPlans(true);
+    const plansCollectionRef = collection(db, 'plans');
+    const qPlans = query(plansCollectionRef, where('status', '==', 'active'), orderBy('name', 'asc'));
+    const unsubscribePlans = onSnapshot(qPlans, (snapshot) => {
+      const plansData = snapshot.docs.map(docSnap => ({ ...docSnap.data(), id: docSnap.id } as Plan));
+      setActivePlans(plansData);
+      setIsLoadingPlans(false);
+    }, (error) => {
+      console.error("Error fetching active plans: ", error);
+      toast({ title: "Erro ao Carregar Planos", variant: "destructive" });
+      setIsLoadingPlans(false);
+    });
+    return unsubscribePlans;
+  };
+
   useEffect(() => {
-    refreshActivePlans();
+    const unsubscribePlans = fetchActivePlans();
 
     setIsLoadingLocations(true);
     const locationsCollectionRef = collection(db, 'locations');
     const qLocations = query(locationsCollectionRef, where('status', '==', 'active'), orderBy('name', 'asc'));
     const unsubscribeLocations = onSnapshot(qLocations, (snapshot) => {
-      const locationsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Location));
+      const locationsData = snapshot.docs.map(docSnap => ({ ...docSnap.data(), id: docSnap.id } as Location));
       setActiveLocations(locationsData);
       setIsLoadingLocations(false);
     }, (error) => {
@@ -84,7 +99,10 @@ export default function AlunoDetailPage() {
       toast({ title: "Erro ao Carregar Locais", variant: "destructive" });
       setIsLoadingLocations(false);
     });
-    return () => unsubscribeLocations();
+    return () => {
+        unsubscribePlans();
+        unsubscribeLocations();
+    };
   }, [toast]);
 
   const { control, handleSubmit, reset, formState: { errors, isSubmitting }, watch, setValue } = useForm<StudentFormData>({
@@ -187,15 +205,16 @@ export default function AlunoDetailPage() {
 
   const handlePlansManaged = () => {
     const currentPlanValue = watch('plan');
-    refreshActivePlans();
-    const currentPlanExistsAndIsActive = MOCK_PLANS.some(p => p.name === currentPlanValue && p.status === 'active');
+    fetchActivePlans(); // Re-fetch active plans
+    const currentPlanExistsAndIsActive = activePlans.some(p => p.name === currentPlanValue && p.status === 'active');
     if (!currentPlanExistsAndIsActive && activePlans.length > 0) {
+      // Optional: Select first active plan or clear
     } else if (!currentPlanExistsAndIsActive) {
-       setValue('plan', '');
+       setValue('plan', ''); // Clear if current plan no longer active or no active plans
     }
   };
 
-  if (isLoading || isLoadingLocations) {
+  if (isLoading || isLoadingLocations || isLoadingPlans) {
     return (
       <div className="container mx-auto py-8 flex flex-col items-center justify-center min-h-[calc(100vh-150px)]">
         <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
@@ -295,15 +314,15 @@ export default function AlunoDetailPage() {
                     <div className="flex items-center gap-2">
                       <div className="flex-grow">
                         <Controller name="plan" control={control} render={({ field }) => (
-                          <Select onValueChange={field.onChange} value={field.value ?? ''}>
-                            <SelectTrigger id="plan"><SelectValue placeholder="Selecione o plano" /></SelectTrigger>
+                          <Select onValueChange={field.onChange} value={field.value ?? ''} disabled={isLoadingPlans}>
+                            <SelectTrigger id="plan"><SelectValue placeholder={isLoadingPlans ? "Carregando..." : "Selecione o plano"} /></SelectTrigger>
                             <SelectContent>
                               {activePlans.length > 0 ? (
                                 activePlans.map(p => (
                                   <SelectItem key={p.id} value={p.name}>{p.name} - R$ {p.price.toFixed(2)}</SelectItem>
                                 ))
                               ) : (
-                                <SelectItem value="no-plans" disabled>Nenhum plano ativo</SelectItem>
+                                <SelectItem value="no-plans" disabled>{isLoadingPlans ? "Carregando..." : "Nenhum plano ativo"}</SelectItem>
                               )}
                             </SelectContent>
                           </Select>
@@ -479,7 +498,7 @@ export default function AlunoDetailPage() {
 
               <CardFooter className="flex justify-end gap-2 pt-6">
                 <Button variant="outline" type="button" onClick={() => { setIsEditMode(false); router.replace(`/alunos/${studentId}`); reset({...student, objective: student?.objective || '', recurringClassTime: student?.recurringClassTime || '', recurringClassDays: student?.recurringClassDays || [], recurringClassLocation: student?.recurringClassLocation || NO_LOCATION_VALUE, dueDate: student?.dueDate?.split('T')[0] || '', lastPaymentDate: student?.lastPaymentDate?.split('T')[0] || '', amountDue: student?.amountDue === null || student?.amountDue === undefined ? undefined : student.amountDue, paymentStatus: student?.paymentStatus || undefined, paymentMethod: student?.paymentMethod || undefined  } as StudentFormData); }}>Cancelar</Button>
-                <Button type="submit" disabled={isSubmitting || isLoadingLocations} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                <Button type="submit" disabled={isSubmitting || isLoadingLocations || isLoadingPlans} className="bg-primary hover:bg-primary/90 text-primary-foreground">
                   <Save className="mr-2 h-4 w-4" />{isSubmitting ? 'Salvando...' : 'Salvar Alterações'}
                 </Button>
               </CardFooter>

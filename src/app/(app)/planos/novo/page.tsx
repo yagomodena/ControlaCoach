@@ -20,7 +20,9 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
-import { MOCK_PLANS, type Plan } from '@/types';
+import { type Plan } from '@/types';
+import { db } from '@/firebase';
+import { collection, addDoc } from 'firebase/firestore';
 
 const planSchema = z.object({
   name: z.string().min(3, { message: 'Nome do plano deve ter pelo menos 3 caracteres.' }),
@@ -45,19 +47,21 @@ export default function NovoPlanoPage() {
   });
 
   const onSubmit = async (data: PlanFormData) => {
-    await new Promise(resolve => setTimeout(resolve, 1000)); 
-
-    const newPlan: Plan = {
-      id: crypto.randomUUID(), 
-      ...data,
-    };
-    MOCK_PLANS.push(newPlan); 
-    
-    toast({
-      title: "Plano Adicionado!",
-      description: `O plano "${data.name}" foi cadastrado com sucesso.`,
-    });
-    router.push('/planos'); 
+    try {
+      await addDoc(collection(db, 'plans'), data);
+      toast({
+        title: "Plano Adicionado!",
+        description: `O plano "${data.name}" foi cadastrado com sucesso.`,
+      });
+      router.push('/planos'); 
+    } catch (error) {
+        console.error("Error adding plan: ", error);
+        toast({
+            title: "Erro ao Adicionar Plano",
+            description: "Não foi possível cadastrar o plano. Tente novamente.",
+            variant: "destructive",
+        });
+    }
   };
 
   return (

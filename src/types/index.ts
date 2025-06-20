@@ -26,7 +26,7 @@ export interface Student {
 }
 
 export interface Plan {
-  id: string;
+  id: string; // Firestore document ID
   name: string;
   price: number;
   durationDays: number; 
@@ -140,14 +140,6 @@ export const MOCK_COACH_AVAILABILITY: CoachAvailability = {
 };
 
 
-export let MOCK_PLANS: Plan[] = [
-  { id: 'plan1', name: 'Mensal', price: 150, durationDays: 30, status: 'active' },
-  { id: 'plan2', name: 'Trimestral', price: 400, durationDays: 90, status: 'active' },
-  { id: 'plan3', name: 'Avulso', price: 50, durationDays: 1, status: 'active' },
-  { id: 'plan4', name: 'Anual VIP', price: 1500, durationDays: 365, status: 'active' },
-  { id: 'plan5', name: 'Experimental (Inativo)', price: 0, durationDays: 7, status: 'inactive' },
-];
-
 export const getDayOfWeekName = (dayNumber: number): DayOfWeek | undefined => {
   const map: Record<number, DayOfWeek> = {
     0: 'Domingo',
@@ -160,3 +152,8 @@ export const getDayOfWeekName = (dayNumber: number): DayOfWeek | undefined => {
   };
   return map[dayNumber];
 };
+
+// MOCK_PLANS is removed as plans will be fetched from Firestore
+// MOCK_LOCATIONS is removed as locations will be fetched from Firestore
+// MOCK_STUDENTS is removed as students will be fetched from Firestore
+// MOCK_CLASS_SESSIONS is removed as class sessions will be fetched from Firestore
