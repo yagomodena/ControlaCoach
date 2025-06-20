@@ -94,6 +94,7 @@ export default function AlunosPage() {
     if (window.confirm(`Tem certeza que deseja excluir o aluno "${studentName}"? Esta ação não pode ser desfeita.`)) {
       try {
         await deleteDoc(doc(db, 'coaches', userId, 'students', studentIdToDelete));
+        setStudents(prevStudents => prevStudents.filter(s => s.id !== studentIdToDelete)); // Update local state
         toast({
           title: 'Aluno Excluído!',
           description: `O aluno "${studentName}" foi removido com sucesso.`,
