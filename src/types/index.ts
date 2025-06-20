@@ -31,6 +31,7 @@ export interface Plan {
   price: number;
   durationDays: number; 
   status: 'active' | 'inactive';
+  chargeOnEnrollment: boolean; 
 }
 
 export interface ClassSession {

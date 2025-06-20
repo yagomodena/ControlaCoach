@@ -28,7 +28,7 @@ import { AddPlanDialog } from '@/components/dialogs/add-plan-dialog';
 import { ManagePlansDialog } from '@/components/dialogs/manage-plans-dialog';
 import { db, auth } from '@/firebase';
 import { collection, addDoc, onSnapshot, query, where, orderBy } from 'firebase/firestore';
-import { formatISO } from 'date-fns';
+import { formatISO, addDays } from 'date-fns';
 
 const NO_LOCATION_VALUE = "__NO_LOCATION__";
 
@@ -143,8 +143,21 @@ export default function NovoAlunoPage() {
         return;
     }
     try {
-      const registrationDateISO = new Date().toISOString();
+      const registrationDate = new Date();
+      const registrationDateISO = formatISO(registrationDate, { representation: 'date' });
       const selectedPlanDetails = activePlans.find(p => p.name === data.plan);
+
+      if (!selectedPlanDetails) {
+        toast({ title: "Erro", description: "Plano selecionado não encontrado.", variant: "destructive" });
+        return;
+      }
+      
+      let initialDueDate: Date;
+      if (selectedPlanDetails.chargeOnEnrollment) {
+        initialDueDate = registrationDate;
+      } else {
+        initialDueDate = addDays(registrationDate, selectedPlanDetails.durationDays);
+      }
 
       const studentDataToSave: Record<string, any> = {
         name: data.name,
@@ -155,9 +168,9 @@ export default function NovoAlunoPage() {
         registrationDate: registrationDateISO,
         attendanceHistory: [],
         paymentStatus: 'pendente',
-        dueDate: registrationDateISO.split('T')[0], // Initial due date is registration date
+        dueDate: formatISO(initialDueDate, { representation: 'date' }),
         lastPaymentDate: null,
-        amountDue: selectedPlanDetails?.price ?? 0,
+        amountDue: selectedPlanDetails.price,
       };
       
       if (data.objective && data.objective.trim() !== '') studentDataToSave.objective = data.objective.trim();
@@ -175,13 +188,13 @@ export default function NovoAlunoPage() {
         studentDataToSave.recurringClassLocation = null; 
       }
       
-      // Payment fields from form (if different from initial logic)
+      // Override defaults if form values are explicitly set for payment
       if (data.paymentStatus && data.paymentStatus !== 'pendente') studentDataToSave.paymentStatus = data.paymentStatus;
-      if (data.dueDate && data.dueDate.trim() !== '' && data.dueDate !== registrationDateISO.split('T')[0]) studentDataToSave.dueDate = data.dueDate;
-      if (typeof data.amountDue === 'number' && !isNaN(data.amountDue) && data.amountDue !== (selectedPlanDetails?.price ?? 0)) studentDataToSave.amountDue = data.amountDue;
-      if (data.paymentMethod) studentDataToSave.paymentMethod = data.paymentMethod;
-      else studentDataToSave.paymentMethod = null;
-      if (data.lastPaymentDate && data.lastPaymentDate.trim() !== '') studentDataToSave.lastPaymentDate = data.lastPaymentDate;
+      if (data.dueDate && data.dueDate.trim() !== '' && data.dueDate !== formatISO(initialDueDate, { representation: 'date' })) studentDataToSave.dueDate = data.dueDate;
+      if (typeof data.amountDue === 'number' && !isNaN(data.amountDue) && data.amountDue !== selectedPlanDetails.price) studentDataToSave.amountDue = data.amountDue;
+      
+      studentDataToSave.paymentMethod = data.paymentMethod || null;
+      studentDataToSave.lastPaymentDate = (data.lastPaymentDate && data.lastPaymentDate.trim() !== '') ? data.lastPaymentDate : null;
       
 
       await addDoc(collection(db, 'coaches', userId, 'students'), studentDataToSave);
@@ -204,11 +217,13 @@ export default function NovoAlunoPage() {
   const handlePlansManaged = () => {
     if (!userId) return;
     const currentPlanValue = watch('plan');
-    fetchActivePlans(userId);
+    fetchActivePlans(userId); // Re-fetch to ensure list is up-to-date
     const currentPlanExistsAndIsActive = activePlans.some(p => p.name === currentPlanValue && p.status === 'active');
     if (!currentPlanExistsAndIsActive && activePlans.length > 0) {
+      // Optionally, auto-select the first active plan or clear the field
+      // For now, just ensures the list is fresh
     } else if (!currentPlanExistsAndIsActive) {
-      setValue('plan', ''); 
+      setValue('plan', ''); // Clear plan if the current one is no longer valid
     }
   };
 
@@ -278,8 +293,19 @@ export default function NovoAlunoPage() {
                                 const selectedPlan = activePlans.find(p => p.name === value);
                                 if (selectedPlan) {
                                     setValue('amountDue', selectedPlan.price);
+                                    // Set initial due date based on plan's chargeOnEnrollment
+                                    const regDate = new Date();
+                                    let initialDueDateValue: Date;
+                                    if (selectedPlan.chargeOnEnrollment) {
+                                        initialDueDateValue = regDate;
+                                    } else {
+                                        initialDueDateValue = addDays(regDate, selectedPlan.durationDays);
+                                    }
+                                    setValue('dueDate', formatISO(initialDueDateValue, { representation: 'date' }));
+
                                 } else {
                                     setValue('amountDue', undefined);
+                                    setValue('dueDate', '');
                                 }
                             }} 
                             value={field.value ?? ''} 
@@ -443,8 +469,11 @@ export default function NovoAlunoPage() {
             <Separator className="my-6" />
 
             <CardHeader className="pt-0">
-                <CardTitle className="flex items-center"><DollarSign className="mr-2 h-5 w-5 text-primary"/>Informações de Pagamento</CardTitle>
-                <CardDescription>Gerencie os detalhes financeiros do aluno. (Opcional)</CardDescription>
+                <CardTitle className="flex items-center"><DollarSign className="mr-2 h-5 w-5 text-primary"/>Informações de Pagamento Iniciais</CardTitle>
+                <CardDescription>
+                  Os dados de pagamento serão baseados no plano selecionado e na opção "Cobrar ao Iniciar" do plano.
+                  Você pode ajustar manualmente se necessário.
+                </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -464,8 +493,8 @@ export default function NovoAlunoPage() {
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="dueDate">Data de Vencimento (Inicial)</Label>
-                        <Controller name="dueDate" control={control} render={({ field }) => <Input id="dueDate" type="date" {...field} value={field.value ?? ''} placeholder={formatISO(new Date(), { representation: 'date' })} />} />
-                         <p className="text-xs text-muted-foreground">Será o dia do cadastro se não preenchido.</p>
+                        <Controller name="dueDate" control={control} render={({ field }) => <Input id="dueDate" type="date" {...field} value={field.value ?? ''} />} />
+                         <p className="text-xs text-muted-foreground">Preenchido automaticamente com base no plano.</p>
                         {errors.dueDate && <p className="text-sm text-destructive">{errors.dueDate.message}</p>}
                     </div>
                 </div>
@@ -473,7 +502,7 @@ export default function NovoAlunoPage() {
                     <div className="space-y-2">
                         <Label htmlFor="amountDue">Valor Devido (R$)</Label>
                         <Controller name="amountDue" control={control} render={({ field }) => <Input id="amountDue" type="number" step="0.01" {...field} value={field.value ?? ''}  onChange={e => { const val = e.target.value; field.onChange(val === '' ? undefined : parseFloat(val)); }} />} />
-                        <p className="text-xs text-muted-foreground">Será o valor do plano se não preenchido.</p>
+                        <p className="text-xs text-muted-foreground">Preenchido automaticamente com base no plano.</p>
                         {errors.amountDue && <p className="text-sm text-destructive">{errors.amountDue.message}</p>}
                     </div>
                     <div className="space-y-2">

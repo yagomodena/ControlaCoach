@@ -37,10 +37,12 @@ export default function NovoPlanoPage() {
         return;
     }
     try {
-      const dataToSave: Omit<Plan, 'id'> = { // Ensure ID is not part of what's saved
-        ...data,
+      const dataToSave: Omit<Plan, 'id'> = { 
+        name: data.name,
         price: data.price ?? 0, 
         durationDays: data.durationDays, 
+        status: data.status,
+        chargeOnEnrollment: data.chargeOnEnrollment,
       };
       await addDoc(collection(db, 'coaches', userId, 'plans'), dataToSave);
       toast({
@@ -94,7 +96,8 @@ export default function NovoPlanoPage() {
                 name: '', 
                 price: undefined, 
                 durationDays: undefined, 
-                status: 'active' 
+                status: 'active',
+                chargeOnEnrollment: true, 
               }} 
               submitButtonText="Salvar Plano"
             />

@@ -4,29 +4,15 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Edit3, Save, ListChecks, BadgeDollarSign, CalendarClock, Loader2 } from 'lucide-react';
+import { ArrowLeft, Edit3, Save, ListChecks, BadgeDollarSign, CalendarClock, Loader2, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { useForm, Controller } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
 import type { Plan } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { db, auth } from '@/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
-
-const planSchema = z.object({
-  name: z.string().min(3, { message: 'Nome do plano deve ter pelo menos 3 caracteres.' }),
-  price: z.coerce.number().min(0, {message: 'Preço deve ser positivo ou zero.'}),
-  durationDays: z.coerce.number().int().positive({ message: 'Duração deve ser um número inteiro positivo.' }),
-  status: z.enum(['active', 'inactive'], { required_error: 'Selecione o status.' }),
-});
-
-type PlanFormData = z.infer<typeof planSchema>;
+import { PlanForm, type PlanFormData } from '@/components/forms/plan-form'; 
 
 export default function PlanoDetailPage() {
   const router = useRouter();
@@ -39,10 +25,6 @@ export default function PlanoDetailPage() {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [isEditMode, setIsEditMode] = useState(searchParams.get('edit') === 'true');
   const [isLoading, setIsLoading] = useState(true);
-
-  const { control, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<PlanFormData>({
-    resolver: zodResolver(planSchema),
-  });
 
   useEffect(() => {
     const unsubscribeAuth = auth.onAuthStateChanged(user => {
@@ -69,7 +51,6 @@ export default function PlanoDetailPage() {
         if (planDocSnap.exists()) {
           const planData = { ...planDocSnap.data(), id: planDocSnap.id } as Plan;
           setPlan(planData);
-          reset(planData); 
         } else {
           toast({ title: "Erro", description: "Plano não encontrado.", variant: "destructive" });
           router.push('/planos');
@@ -82,7 +63,7 @@ export default function PlanoDetailPage() {
       }
     };
     fetchPlan();
-  }, [planId, userId, reset, router, toast]);
+  }, [planId, userId, router, toast]);
 
   useEffect(() => {
     setIsEditMode(searchParams.get('edit') === 'true');
@@ -95,10 +76,16 @@ export default function PlanoDetailPage() {
     }
     try {
       const planDocRef = doc(db, 'coaches', userId, 'plans', planId);
-      await updateDoc(planDocRef, data);
+      const dataToUpdate: Partial<Plan> = {
+        name: data.name,
+        price: data.price ?? 0,
+        durationDays: data.durationDays,
+        status: data.status,
+        chargeOnEnrollment: data.chargeOnEnrollment,
+      };
+      await updateDoc(planDocRef, dataToUpdate);
       
-      const updatedPlan = { ...plan, ...data };
-      setPlan(updatedPlan);
+      setPlan(prevPlan => prevPlan ? { ...prevPlan, ...dataToUpdate } as Plan : null);
 
       toast({
         title: "Plano Atualizado!",
@@ -129,12 +116,15 @@ export default function PlanoDetailPage() {
     return <div className="container mx-auto py-8 text-center text-destructive">Plano não encontrado.</div>;
   }
 
-  const InfoItem = ({ icon: Icon, label, value, prefix }: { icon: React.ElementType, label: string, value?: string | number | null, prefix?: string }) => (
+  const InfoItem = ({ icon: Icon, label, value, prefix }: { icon: React.ElementType, label: string, value?: string | number | null | boolean, prefix?: string }) => (
     <div className="flex items-start space-x-3">
       <Icon className="h-5 w-5 text-primary mt-1 flex-shrink-0" />
       <div>
         <p className="text-sm text-muted-foreground">{label}</p>
-        <p className="font-medium text-foreground">{prefix}{value || 'N/A'}</p>
+        <p className="font-medium text-foreground">
+          {prefix}
+          {typeof value === 'boolean' ? (value ? 'Sim' : 'Não') : (value ?? 'N/A')}
+        </p>
       </div>
     </div>
   );
@@ -164,57 +154,16 @@ export default function PlanoDetailPage() {
 
       {isEditMode ? (
         <Card className="max-w-xl mx-auto shadow-lg">
-          <form onSubmit={handleSubmit(onSubmit)}>
             <CardHeader>
               <CardTitle className="flex items-center"><ListChecks className="h-5 w-5 mr-2 text-primary"/> Editar Informações do Plano</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="name">Nome do Plano</Label>
-                <Controller name="name" control={control} render={({ field }) => <Input id="name" {...field} />} />
-                {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
-              </div>
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                    <Label htmlFor="price" className="flex items-center"><BadgeDollarSign className="h-4 w-4 mr-1 text-muted-foreground"/> Preço (R$)</Label>
-                    <Controller
-                        name="price"
-                        control={control}
-                        render={({ field }) => <Input id="price" type="number" step="0.01" {...field} onChange={e => field.onChange(parseFloat(e.target.value))}/>}
-                    />
-                    {errors.price && <p className="text-sm text-destructive">{errors.price.message}</p>}
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor="durationDays" className="flex items-center"><CalendarClock className="h-4 w-4 mr-1 text-muted-foreground"/> Duração (dias)</Label>
-                    <Controller
-                        name="durationDays"
-                        control={control}
-                        render={({ field }) => <Input id="durationDays" type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value,10))} />}
-                    />
-                    {errors.durationDays && <p className="text-sm text-destructive">{errors.durationDays.message}</p>}
-                </div>
-            </div>
-              <div className="space-y-2">
-                <Label htmlFor="status">Status</Label>
-                <Controller name="status" control={control} render={({ field }) => (
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <SelectTrigger id="status"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="active">Ativo</SelectItem>
-                        <SelectItem value="inactive">Inativo</SelectItem>
-                    </SelectContent>
-                  </Select>
-                )} />
-                {errors.status && <p className="text-sm text-destructive">{errors.status.message}</p>}
-              </div>
+            <CardContent>
+              <PlanForm 
+                onSubmit={onSubmit} 
+                initialData={plan} 
+                submitButtonText="Salvar Alterações"
+              />
             </CardContent>
-            <CardFooter className="flex justify-end gap-2">
-              <Button variant="outline" type="button" onClick={() => { setIsEditMode(false); router.replace(`/planos/${planId}`); reset(plan); }}>Cancelar</Button>
-              <Button type="submit" disabled={isSubmitting} className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                <Save className="mr-2 h-4 w-4" />{isSubmitting ? 'Salvando...' : 'Salvar Alterações'}
-              </Button>
-            </CardFooter>
-          </form>
         </Card>
       ) : (
         <Card className="shadow-lg max-w-xl mx-auto">
@@ -234,9 +183,15 @@ export default function PlanoDetailPage() {
                 <InfoItem icon={BadgeDollarSign} label="Preço" value={plan.price.toFixed(2)} prefix="R$ " />
                 <InfoItem icon={CalendarClock} label="Duração (dias)" value={plan.durationDays} />
                 <InfoItem 
-                    icon={plan.status === 'active' ? Edit3 : Edit3} 
+                    icon={Info} 
+                    label="Cobrar ao Iniciar" 
+                    value={plan.chargeOnEnrollment} 
+                />
+                <InfoItem 
+                    icon={plan.status === 'active' ? Edit3 : Edit3} // Consider a different icon for status if needed
                     label="Status" 
-                    value={plan.status === 'active' ? 'Ativo' : 'Inativo'} />
+                    value={plan.status === 'active' ? 'Ativo' : 'Inativo'} 
+                />
             </CardContent>
         </Card>
       )}

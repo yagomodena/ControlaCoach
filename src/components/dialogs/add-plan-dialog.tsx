@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react'; // Added useState, useEffect
+import React, { useState, useEffect } from 'react'; 
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,7 @@ import {
 import { PlanForm, type PlanFormData } from '@/components/forms/plan-form';
 import { type Plan } from '@/types';
 import { useToast } from '@/hooks/use-toast';
-import { db, auth } from '@/firebase'; // Added auth
+import { db, auth } from '@/firebase'; 
 import { collection, addDoc } from 'firebase/firestore';
 
 interface AddPlanDialogProps {
@@ -31,7 +31,6 @@ export function AddPlanDialog({ open, onOpenChange, onPlanAdded }: AddPlanDialog
         setUserId(user.uid);
       } else {
         setUserId(null);
-        // Optionally handle user not authenticated if dialog is opened somehow
       }
     });
     return () => unsubscribeAuth();
@@ -43,11 +42,12 @@ export function AddPlanDialog({ open, onOpenChange, onPlanAdded }: AddPlanDialog
       return;
     }
     try {
-      const planDataToSave: Omit<Plan, 'id'> = { // Ensure ID is not part of the data to save
+      const planDataToSave: Omit<Plan, 'id'> = { 
          name: data.name,
          price: data.price ?? 0,
          durationDays: data.durationDays,
          status: data.status,
+         chargeOnEnrollment: data.chargeOnEnrollment,
       };
       await addDoc(collection(db, 'coaches', userId, 'plans'), planDataToSave);
       toast({
@@ -77,7 +77,13 @@ export function AddPlanDialog({ open, onOpenChange, onPlanAdded }: AddPlanDialog
           <PlanForm 
             onSubmit={handleAddPlan} 
             submitButtonText="Adicionar Plano" 
-            initialData={{ name: '', price: undefined, durationDays: undefined, status: 'active' }}
+            initialData={{ 
+                name: '', 
+                price: undefined, 
+                durationDays: undefined, 
+                status: 'active',
+                chargeOnEnrollment: true, 
+            }}
           />
         </div>
       </DialogContent>

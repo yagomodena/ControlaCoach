@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react'; // Added useState, useEffect
+import React, { useState, useEffect } from 'react'; 
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,7 @@ import {
 import { PlanForm, type PlanFormData } from '@/components/forms/plan-form';
 import { type Plan } from '@/types';
 import { useToast } from '@/hooks/use-toast';
-import { db, auth } from '@/firebase'; // Added auth
+import { db, auth } from '@/firebase'; 
 import { doc, updateDoc } from 'firebase/firestore';
 
 interface EditPlanDialogProps {
@@ -32,7 +32,6 @@ export function EditPlanDialog({ open, onOpenChange, plan, onPlanEdited }: EditP
         setUserId(user.uid);
       } else {
         setUserId(null);
-        // Optionally handle user not authenticated if dialog is opened somehow
       }
     });
     return () => unsubscribeAuth();
@@ -49,12 +48,12 @@ export function EditPlanDialog({ open, onOpenChange, plan, onPlanEdited }: EditP
     }
     try {
       const planDocRef = doc(db, 'coaches', userId, 'plans', plan.id);
-      // Ensure data structure matches PlanFormData (price can be 0, duration must be positive)
       const dataToUpdate: Partial<Plan> = {
         name: data.name,
-        price: data.price ?? 0, // Default to 0 if undefined
+        price: data.price ?? 0, 
         durationDays: data.durationDays,
         status: data.status,
+        chargeOnEnrollment: data.chargeOnEnrollment,
       };
       await updateDoc(planDocRef, dataToUpdate);
       
@@ -88,8 +87,9 @@ export function EditPlanDialog({ open, onOpenChange, plan, onPlanEdited }: EditP
             onSubmit={handleEditPlan} 
             initialData={{
                 ...plan, 
-                price: plan.price ?? undefined, // Pass undefined if price is null/0 to PlanForm
-                durationDays: plan.durationDays ?? undefined
+                price: plan.price ?? undefined, 
+                durationDays: plan.durationDays ?? undefined,
+                chargeOnEnrollment: plan.chargeOnEnrollment === undefined ? true : plan.chargeOnEnrollment,
             }} 
             submitButtonText="Salvar Alterações" 
           />

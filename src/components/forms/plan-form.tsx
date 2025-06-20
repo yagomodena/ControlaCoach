@@ -10,13 +10,15 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { type Plan } from '@/types';
-import { BadgeDollarSign, CalendarClock, ListChecks, Save } from 'lucide-react';
+import { BadgeDollarSign, CalendarClock, ListChecks, Save, AlertCircle } from 'lucide-react';
+import { Switch } from '@/components/ui/switch'; 
 
 export const planSchema = z.object({
   name: z.string().min(3, { message: 'Nome do plano deve ter pelo menos 3 caracteres.' }),
   price: z.coerce.number().min(0, { message: 'Preço deve ser positivo ou zero.' }).optional(),
   durationDays: z.coerce.number().int().positive({ message: 'Duração deve ser um número inteiro positivo.' }),
   status: z.enum(['active', 'inactive'], { required_error: 'Selecione o status.' }),
+  chargeOnEnrollment: z.boolean().default(true),
 });
 
 export type PlanFormData = z.infer<typeof planSchema>;
@@ -33,8 +35,9 @@ export function PlanForm({ onSubmit, initialData, submitButtonText = 'Salvar Pla
     defaultValues: {
       name: initialData?.name || '',
       price: initialData?.price ?? undefined,
-      durationDays: initialData?.durationDays ?? undefined, // Changed default to undefined
+      durationDays: initialData?.durationDays ?? undefined, 
       status: initialData?.status || 'active',
+      chargeOnEnrollment: initialData?.chargeOnEnrollment === undefined ? true : initialData.chargeOnEnrollment,
     },
   });
 
@@ -115,6 +118,32 @@ export function PlanForm({ onSubmit, initialData, submitButtonText = 'Salvar Pla
           />
         {errors.status && <p className="text-sm text-destructive">{errors.status.message}</p>}
       </div>
+
+      <div className="space-y-2 p-4 border rounded-md bg-muted/30">
+        <Controller
+            name="chargeOnEnrollment"
+            control={control}
+            render={({ field }) => (
+                <div className="flex items-center space-x-3">
+                    <Switch
+                        id="chargeOnEnrollment"
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        aria-labelledby="chargeOnEnrollmentLabel"
+                    />
+                    <Label htmlFor="chargeOnEnrollment" id="chargeOnEnrollmentLabel" className="cursor-pointer flex-grow">
+                        Cobrar plano imediatamente ao matricular aluno?
+                    </Label>
+                </div>
+            )}
+        />
+        {errors.chargeOnEnrollment && <p className="text-sm text-destructive mt-1">{errors.chargeOnEnrollment.message}</p>}
+        <p className="text-xs text-muted-foreground mt-1.5">
+            Se ativado, a primeira cobrança ocorre na data da matrícula. Se desativado, a primeira cobrança ocorre após o término da primeira "duração em dias" do plano (ex: após 30 dias para um plano de 30 dias).
+        </p>
+      </div>
+
+
       <div className="flex justify-end">
         <Button type="submit" disabled={isSubmitting} className="bg-primary hover:bg-primary/90 text-primary-foreground">
           <Save className="mr-2 h-4 w-4" />
