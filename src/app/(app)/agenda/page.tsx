@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
-import { ChevronLeft, ChevronRight, Users, Edit, PlusCircle, Clock, Trash2, Search, UserCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight, Users, Edit, PlusCircle, Clock, Trash2, Search, UserCircle, Loader2 } from "lucide-react";
 import Link from 'next/link';
 import { 
   Dialog,
@@ -37,20 +37,22 @@ import {
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { BookedClass, DailyAvailability, Student, Location, DayOfWeek } from '@/types';
-import { INITIAL_MOCK_BOOKED_CLASSES, MOCK_COACH_AVAILABILITY, MOCK_STUDENTS, MOCK_LOCATIONS, getDayOfWeekName, DAYS_OF_WEEK } from '@/types';
+import { INITIAL_MOCK_BOOKED_CLASSES, MOCK_COACH_AVAILABILITY, MOCK_LOCATIONS, getDayOfWeekName, DAYS_OF_WEEK } from '@/types';
 import { useToast } from '@/hooks/use-toast';
+import { db } from '@/firebase';
+import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 
 interface TimeSlot {
   time: string; 
   isBooked: boolean;
   bookingType?: 'one-off' | 'recurring-student';
-  bookedClassDetails?: { // For 'one-off' BookedClass
+  bookedClassDetails?: { 
     id: string; 
     title: string;
     location: string;
     studentsCount: number;
   };
-  recurringStudentDetails?: { // For student's recurring class
+  recurringStudentDetails?: { 
     studentName: string;
     location?: string;
   };
@@ -73,13 +75,34 @@ export default function AgendaPage() {
   const [editedClassLocation, setEditedClassLocation] = useState('');
   const [editedClassStudentIds, setEditedClassStudentIds] = useState<string[]>([]);
 
-  const [studentsList, setStudentsList] = useState<Student[]>([]);
+  const [allStudents, setAllStudents] = useState<Student[]>([]);
+  const [activeStudentsList, setActiveStudentsList] = useState<Student[]>([]);
   const [activeLocations, setActiveLocations] = useState<Location[]>([]);
+  const [isLoadingStudents, setIsLoadingStudents] = useState(true);
 
   useEffect(() => {
-    setStudentsList(MOCK_STUDENTS.filter(s => s.status === 'active'));
+    setIsLoadingStudents(true);
+    const studentsCollectionRef = collection(db, 'students');
+    const q = query(studentsCollectionRef, orderBy('name', 'asc'));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const studentsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Student));
+      setAllStudents(studentsData);
+      setActiveStudentsList(studentsData.filter(s => s.status === 'active'));
+      setIsLoadingStudents(false);
+    }, (error) => {
+      console.error("Error fetching students: ", error);
+      toast({
+        title: "Erro ao Carregar Alunos",
+        description: "Não foi possível buscar os dados dos alunos para a agenda.",
+        variant: "destructive",
+      });
+      setIsLoadingStudents(false);
+    });
+
     setActiveLocations(MOCK_LOCATIONS.filter(loc => loc.status === 'active'));
-  }, []);
+    return () => unsubscribe();
+  }, [toast]);
 
   const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
   const prevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
@@ -88,16 +111,16 @@ export default function AgendaPage() {
     const eventDates = new Set<string>();
     bookedClasses.forEach(c => eventDates.add(format(parseISO(c.date), 'yyyy-MM-dd')));
 
-    if(selectedDate) { // Also check recurring student classes for the *current month*
+    if(selectedDate) { 
         const year = selectedDate.getFullYear();
         const month = selectedDate.getMonth();
 
-        MOCK_STUDENTS.forEach(student => {
+        allStudents.forEach(student => {
             if (student.recurringClassTime && student.recurringClassDays && student.recurringClassDays.length > 0) {
                 for (let day = 1; day <= 31; day++) {
                     try {
                         const dateInMonth = new Date(year, month, day);
-                        if (dateInMonth.getMonth() !== month) continue; // Ensure it's the current month
+                        if (dateInMonth.getMonth() !== month) continue; 
                         
                         const dayOfWeekName = getDayOfWeekName(getDay(dateInMonth));
                         if (dayOfWeekName && student.recurringClassDays.includes(dayOfWeekName)) {
@@ -109,7 +132,7 @@ export default function AgendaPage() {
         });
     }
     return Array.from(eventDates).map(dateStr => parseISO(dateStr));
-  }, [bookedClasses, MOCK_STUDENTS, currentMonth, selectedDate]);
+  }, [bookedClasses, allStudents, currentMonth, selectedDate]);
 
   const availableTimeSlots = useMemo((): TimeSlot[] => {
     if (!selectedDate) return [];
@@ -166,7 +189,6 @@ export default function AgendaPage() {
           continue;
         }
 
-        // 1. Check one-off booked classes
         const bookedClass = bookedClasses.find(c => {
           const classDate = parseISO(c.date);
           const classStartDateTime = set(classDate, {
@@ -192,10 +214,9 @@ export default function AgendaPage() {
           continue; 
         }
 
-        // 2. Check student recurring classes
         let recurringStudentBookedThisSlot: Student | undefined = undefined;
         if (dayOfWeekName) {
-            for (const student of MOCK_STUDENTS) {
+            for (const student of allStudents) {
                 if (
                     student.status === 'active' &&
                     student.recurringClassTime === slotTimeFormatted &&
@@ -224,7 +245,7 @@ export default function AgendaPage() {
       }
     });
     return slots.sort((a, b) => a.time.localeCompare(b.time));
-  }, [selectedDate, bookedClasses, MOCK_STUDENTS]);
+  }, [selectedDate, bookedClasses, allStudents]);
 
   const openStudentSelectionDialog = (time: string) => {
     if (!selectedDate) {
@@ -264,7 +285,7 @@ export default function AgendaPage() {
     let toastDescription = `Aula em grupo às ${slotBeingBooked} no dia ${format(selectedDate, 'dd/MM/yyyy')} foi agendada com ${selectedStudentIdsForBooking.length} aluno(s).`;
 
     if (selectedStudentIdsForBooking.length === 1) {
-      const student = MOCK_STUDENTS.find(s => s.id === selectedStudentIdsForBooking[0]);
+      const student = allStudents.find(s => s.id === selectedStudentIdsForBooking[0]);
       if (student) {
         classTitle = `Aula Particular - ${student.name}`;
         toastDescription = `Aula com ${student.name} às ${slotBeingBooked} no dia ${format(selectedDate, 'dd/MM/yyyy')} foi agendada.`;
@@ -420,7 +441,12 @@ export default function AgendaPage() {
             <CardDescription>Disponibilidade e aulas do dia.</CardDescription>
           </CardHeader>
           <CardContent>
-            {selectedDate ? (
+            {isLoadingStudents ? (
+              <div className="flex justify-center items-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="ml-2 text-muted-foreground">Carregando dados...</p>
+              </div>
+            ) : selectedDate ? (
               availableTimeSlots.length > 0 ? (
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
                   {availableTimeSlots.map((slot, index) => (
@@ -490,8 +516,8 @@ export default function AgendaPage() {
           <div className="py-4">
             <Label className="mb-2 block">Alunos Ativos</Label>
             <ScrollArea className="h-[200px] w-full rounded-md border p-4">
-              {studentsList.length > 0 ? (
-                studentsList.map(student => (
+              {activeStudentsList.length > 0 ? (
+                activeStudentsList.map(student => (
                   <div key={student.id} className="flex items-center space-x-2 mb-2">
                     <Checkbox
                       id={`book-student-${student.id}`}
@@ -572,8 +598,8 @@ export default function AgendaPage() {
               <div>
                 <Label className="mb-2 block">Alunos Inscritos</Label>
                 <ScrollArea className="h-[180px] w-full rounded-md border p-4">
-                  {studentsList.length > 0 ? (
-                    studentsList.map(student => (
+                  {activeStudentsList.length > 0 ? (
+                    activeStudentsList.map(student => (
                       <div key={student.id} className="flex items-center space-x-2 mb-2">
                         <Checkbox
                           id={`edit-student-${student.id}`}
@@ -611,3 +637,4 @@ export default function AgendaPage() {
     </div>
   );
 }
+
