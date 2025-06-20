@@ -17,6 +17,7 @@ import { Eye, EyeOff, CreditCard, ListChecks } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const registrationSchema = z.object({
+  fullName: z.string().min(3, { message: 'Nome completo deve ter pelo menos 3 caracteres.' }),
   email: z.string().email({ message: 'Email inválido.' }),
   password: z.string().min(8, { message: 'Senha deve ter pelo menos 8 caracteres.' }),
   confirmPassword: z.string(),
@@ -38,6 +39,7 @@ export default function CadastroPage() {
   const { control, handleSubmit, formState: { errors, isSubmitting } } = useForm<RegistrationFormData>({
     resolver: zodResolver(registrationSchema),
     defaultValues: {
+      fullName: '',
       email: '',
       password: '',
       confirmPassword: '',
@@ -71,6 +73,16 @@ export default function CadastroPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="fullName">Nome Completo</Label>
+              <Controller
+                name="fullName"
+                control={control}
+                render={({ field }) => <Input id="fullName" placeholder="Seu nome completo" {...field} />}
+              />
+              {errors.fullName && <p className="text-sm text-destructive">{errors.fullName.message}</p>}
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Controller
