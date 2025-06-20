@@ -26,6 +26,8 @@ import { useToast } from '@/hooks/use-toast';
 import { type ClassSession, DAYS_OF_WEEK, type Location, type Student, DayOfWeek } from '@/types';
 import { db, auth } from '@/firebase';
 import { collection, addDoc, onSnapshot, query, where, orderBy } from 'firebase/firestore';
+import { AddLocationDialog } from '@/components/dialogs/add-location-dialog';
+import { ManageLocationsDialog } from '@/components/dialogs/manage-locations-dialog';
 
 const classSessionSchema = z.object({
   daysOfWeek: z.array(z.enum(DAYS_OF_WEEK)).min(1, { message: "Selecione pelo menos um dia da semana." }),
@@ -46,6 +48,8 @@ export default function NovaAulaConfigPage() {
   const [activeStudents, setActiveStudents] = useState<Student[]>([]);
   const [isLoadingStudents, setIsLoadingStudents] = useState(true);
   const [isLoadingLocations, setIsLoadingLocations] = useState(true);
+  const [isAddLocationDialogOpen, setIsAddLocationDialogOpen] = useState(false);
+  const [isManageLocationsDialogOpen, setIsManageLocationsDialogOpen] = useState(false);
 
   useEffect(() => {
     const unsubscribeAuth = auth.onAuthStateChanged(user => {
@@ -59,12 +63,10 @@ export default function NovaAulaConfigPage() {
     });
     return () => unsubscribeAuth();
   }, [router, toast]);
-
-  useEffect(() => {
-    if (!userId) return;
-
+  
+  const fetchActiveLocations = (currentUserId: string) => {
     setIsLoadingLocations(true);
-    const locationsCollectionRef = collection(db, 'coaches', userId, 'locations');
+    const locationsCollectionRef = collection(db, 'coaches', currentUserId, 'locations');
     const qLocations = query(locationsCollectionRef, where('status', '==', 'active'), orderBy('name', 'asc'));
     const unsubscribeLocations = onSnapshot(qLocations, (snapshot) => {
       const locationsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Location));
@@ -75,6 +77,13 @@ export default function NovaAulaConfigPage() {
       toast({ title: "Erro ao Carregar Locais", variant: "destructive" });
       setIsLoadingLocations(false);
     });
+    return unsubscribeLocations;
+  };
+
+  useEffect(() => {
+    if (!userId) return;
+    
+    const unsubLocations = fetchActiveLocations(userId);
 
     setIsLoadingStudents(true);
     const studentsCollectionRef = collection(db, 'coaches', userId, 'students');
@@ -90,7 +99,7 @@ export default function NovaAulaConfigPage() {
     });
 
     return () => {
-      unsubscribeLocations();
+      unsubLocations();
       unsubscribeStudents();
     };
   }, [userId, toast]);
@@ -143,6 +152,12 @@ export default function NovaAulaConfigPage() {
       });
     }
   };
+  
+  const handleLocationsManaged = () => {
+    if (userId) {
+      fetchActiveLocations(userId);
+    }
+  };
 
   if (isLoadingLocations || isLoadingStudents || !userId) {
     return (
@@ -154,6 +169,7 @@ export default function NovaAulaConfigPage() {
   }
 
   return (
+    <>
     <div className="container mx-auto py-8">
        <div className="flex items-center mb-8">
         <Button variant="outline" size="icon" asChild className="mr-4">
@@ -253,17 +269,13 @@ export default function NovaAulaConfigPage() {
                     )}
                   />
                 </div>
-                <Button variant="outline" size="icon" asChild>
-                  <Link href="/locais/novo" target="_blank" rel="noopener noreferrer">
-                    <PlusCircle className="h-4 w-4" />
-                    <span className="sr-only">Adicionar Novo Local</span>
-                  </Link>
+                <Button variant="outline" size="icon" type="button" onClick={() => setIsAddLocationDialogOpen(true)}>
+                  <PlusCircle className="h-4 w-4" />
+                  <span className="sr-only">Adicionar Novo Local</span>
                 </Button>
-                <Button variant="outline" size="icon" asChild>
-                  <Link href="/locais" target="_blank" rel="noopener noreferrer">
-                    <Search className="h-4 w-4" />
-                    <span className="sr-only">Consultar Locais</span>
-                  </Link>
+                <Button variant="outline" size="icon" type="button" onClick={() => setIsManageLocationsDialogOpen(true)}>
+                  <Search className="h-4 w-4" />
+                  <span className="sr-only">Consultar Locais</span>
                 </Button>
               </div>
               {errors.location && <p className="text-sm text-destructive">{errors.location.message}</p>}
@@ -340,5 +352,16 @@ export default function NovaAulaConfigPage() {
         </form>
       </Card>
     </div>
+     <AddLocationDialog
+        open={isAddLocationDialogOpen}
+        onOpenChange={setIsAddLocationDialogOpen}
+        onLocationAdded={handleLocationsManaged}
+      />
+      <ManageLocationsDialog
+        open={isManageLocationsDialogOpen}
+        onOpenChange={setIsManageLocationsDialogOpen}
+        onLocationsManaged={handleLocationsManaged}
+      />
+    </>
   );
 }

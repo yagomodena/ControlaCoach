@@ -20,6 +20,8 @@ import { type ClassSession, DAYS_OF_WEEK, type Location, type Student, DayOfWeek
 import { useToast } from '@/hooks/use-toast';
 import { db, auth } from '@/firebase';
 import { doc, getDoc, updateDoc, collection, onSnapshot, query, where, orderBy } from 'firebase/firestore';
+import { AddLocationDialog } from '@/components/dialogs/add-location-dialog';
+import { ManageLocationsDialog } from '@/components/dialogs/manage-locations-dialog';
 
 const classSessionSchema = z.object({
   daysOfWeek: z.array(z.enum(DAYS_OF_WEEK)).min(1, { message: "Selecione pelo menos um dia da semana." }),
@@ -47,6 +49,8 @@ export default function AulaDetalhePage() {
   const [activeStudents, setActiveStudents] = useState<Student[]>([]);
   const [isLoadingStudents, setIsLoadingStudents] = useState(true);
   const [isLoadingLocations, setIsLoadingLocations] = useState(true);
+  const [isAddLocationDialogOpen, setIsAddLocationDialogOpen] = useState(false);
+  const [isManageLocationsDialogOpen, setIsManageLocationsDialogOpen] = useState(false);
 
   useEffect(() => {
     const unsubscribeAuth = auth.onAuthStateChanged(user => {
@@ -61,14 +65,12 @@ export default function AulaDetalhePage() {
     return () => unsubscribeAuth();
   }, [router, toast]);
 
-  useEffect(() => {
-    if (!userId) return;
-
+  const fetchActiveLocations = (currentUserId: string) => {
     setIsLoadingLocations(true);
-    const locationsCollectionRef = collection(db, 'coaches', userId, 'locations');
+    const locationsCollectionRef = collection(db, 'coaches', currentUserId, 'locations');
     const qLocations = query(locationsCollectionRef, where('status', '==', 'active'), orderBy('name', 'asc'));
     const unsubscribeLocations = onSnapshot(qLocations, (snapshot) => {
-      const locationsData = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Location));
+      const locationsData = snapshot.docs.map(docSnap => ({ ...docSnap.data(), id: docSnap.id } as Location));
       setActiveLocations(locationsData);
       setIsLoadingLocations(false);
     }, (error) => {
@@ -76,6 +78,13 @@ export default function AulaDetalhePage() {
       toast({ title: "Erro ao Carregar Locais", variant: "destructive" });
       setIsLoadingLocations(false);
     });
+    return unsubscribeLocations;
+  };
+
+  useEffect(() => {
+    if (!userId) return;
+
+    const unsubLocations = fetchActiveLocations(userId);
     
     setIsLoadingStudents(true);
     const studentsCollectionRef = collection(db, 'coaches', userId, 'students');
@@ -91,7 +100,7 @@ export default function AulaDetalhePage() {
     });
 
     return () => {
-      unsubscribeLocations();
+      unsubLocations();
       unsubscribeStudents();
     };
   }, [userId, toast]);
@@ -175,6 +184,12 @@ export default function AulaDetalhePage() {
     }
   };
 
+  const handleLocationsManaged = () => {
+    if (userId) {
+      fetchActiveLocations(userId);
+    }
+  };
+
   if (isLoading || isLoadingStudents || isLoadingLocations || !userId) {
     return (
       <div className="container mx-auto py-8 flex flex-col items-center justify-center min-h-[calc(100vh-150px)]">
@@ -212,6 +227,7 @@ export default function AulaDetalhePage() {
 
 
   return (
+    <>
     <div className="container mx-auto py-8">
       <div className="flex items-center mb-8">
         <Button variant="outline" size="icon" asChild className="mr-4">
@@ -311,17 +327,13 @@ export default function AulaDetalhePage() {
                           )} 
                       />
                     </div>
-                    <Button variant="outline" size="icon" asChild>
-                      <Link href="/locais/novo" target="_blank" rel="noopener noreferrer">
+                    <Button variant="outline" size="icon" type="button" onClick={() => setIsAddLocationDialogOpen(true)}>
                         <PlusCircle className="h-4 w-4" />
                         <span className="sr-only">Adicionar Novo Local</span>
-                      </Link>
                     </Button>
-                    <Button variant="outline" size="icon" asChild>
-                      <Link href="/locais" target="_blank" rel="noopener noreferrer">
+                    <Button variant="outline" size="icon" type="button" onClick={() => setIsManageLocationsDialogOpen(true)}>
                         <Search className="h-4 w-4" />
                         <span className="sr-only">Consultar Locais</span>
-                      </Link>
                     </Button>
                   </div>
                   {errors.location && <p className="text-sm text-destructive">{errors.location.message}</p>}
@@ -416,5 +428,16 @@ export default function AulaDetalhePage() {
         </Card>
       )}
     </div>
+      <AddLocationDialog
+        open={isAddLocationDialogOpen}
+        onOpenChange={setIsAddLocationDialogOpen}
+        onLocationAdded={handleLocationsManaged}
+      />
+      <ManageLocationsDialog
+        open={isManageLocationsDialogOpen}
+        onOpenChange={setIsManageLocationsDialogOpen}
+        onLocationsManaged={handleLocationsManaged}
+      />
+    </>
   );
 }

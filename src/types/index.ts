@@ -106,38 +106,6 @@ export interface CoachProfileSettings {
 }
 
 
-export let INITIAL_MOCK_BOOKED_CLASSES: BookedClass[] = [
-  { 
-    id: 'bc2', 
-    date: '2024-07-29', 
-    time: '19:00', 
-    title: 'Futevôlei Intermediário', 
-    location: 'Praia Central', 
-    studentIds: ['2', '4'], 
-    durationMinutes: 60,
-    attendance: { '2': 'present', '4': 'pending' }
-  },
-  { 
-    id: 'bc3', 
-    date: '2024-07-30', 
-    time: '07:00', 
-    title: 'Futevôlei Avançado', 
-    location: 'Quadra Coberta A', 
-    studentIds: ['3'], 
-    durationMinutes: 60,
-    attendance: { '3': 'absent'}
-  },
-  { 
-    id: 'bc4', 
-    date: '2024-08-01', 
-    time: '18:30', 
-    title: 'Técnica e Tática', 
-    location: 'Praia do Tombo', 
-    studentIds: ['s28', 's29'], 
-    durationMinutes: 90 
-  },
-];
-
 export const getDayOfWeekName = (dayNumber: number): DayOfWeek | undefined => {
   const map: Record<number, DayOfWeek> = {
     0: 'Domingo',
