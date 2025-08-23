@@ -2,8 +2,9 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { BarChart, Users, CalendarCheck2, DollarSign, Loader2 } from 'lucide-react';
+import { BarChart, Users, CalendarCheck2, DollarSign, Loader2, Printer } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import {
   ChartContainer,
   ChartTooltip,
@@ -220,90 +221,147 @@ export default function RelatoriosPage() {
     return null;
   };
 
+  const handlePrint = () => {
+    window.print();
+  };
+
 
   return (
-    <div className="container mx-auto py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-headline font-bold text-foreground">Relatórios</h1>
-        <p className="text-muted-foreground">Insights sobre o desempenho do seu negócio.</p>
+    <>
+      <div className="container mx-auto py-8 print:py-0">
+        <div className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 print:hidden">
+          <div>
+            <h1 className="text-3xl font-headline font-bold text-foreground">Relatórios</h1>
+            <p className="text-muted-foreground">Insights sobre o desempenho do seu negócio.</p>
+          </div>
+          <Button onClick={handlePrint} variant="outline">
+              <Printer className="mr-2 h-4 w-4" />
+              Imprimir Relatórios
+          </Button>
+        </div>
+
+        <div id="report-content-area" className="grid gap-6 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 print:grid-cols-2 print:gap-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center text-xl"><Users className="mr-2 h-5 w-5 text-primary" />Novos Alunos por Mês</CardTitle>
+              <CardDescription>Últimos {CHART_MONTH_RANGE} meses</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {newStudentsData.length > 0 ? (
+              <ChartContainer config={chartConfigBase} className="min-h-[250px] w-full">
+                <ResponsiveContainer width="100%" height={250}>
+                  <RechartsBarChart data={newStudentsData} margin={{ top: 5, right: 0, left: -20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={10} />
+                    <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={10} width={30}/>
+                    <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--muted))', radius: 4 }}/>
+                    <Legend content={<ChartLegendContent />} />
+                    <Bar dataKey="count" name="Novos Alunos" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />
+                  </RechartsBarChart>
+                </ResponsiveContainer>
+              </ChartContainer>
+              ) : <p className="text-muted-foreground text-sm text-center py-10">Nenhum dado de novos alunos para exibir.</p>}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center text-xl"><CalendarCheck2 className="mr-2 h-5 w-5 text-primary" />Aulas Realizadas por Mês</CardTitle>
+              <CardDescription>Últimos {CHART_MONTH_RANGE} meses</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {bookedClassesData.length > 0 ? (
+              <ChartContainer config={chartConfigBase} className="min-h-[250px] w-full">
+                <ResponsiveContainer width="100%" height={250}>
+                  <RechartsBarChart data={bookedClassesData} margin={{ top: 5, right: 0, left: -20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={10} />
+                    <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={10} width={30}/>
+                    <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--muted))', radius: 4 }}/>
+                    <Legend content={<ChartLegendContent />} />
+                    <Bar dataKey="count" name="Aulas Realizadas" fill="hsl(var(--chart-3))" radius={[4, 4, 0, 0]} />
+                  </RechartsBarChart>
+                </ResponsiveContainer>
+              </ChartContainer>
+              ) : <p className="text-muted-foreground text-sm text-center py-10">Nenhum dado de aulas realizadas para exibir.</p>}
+            </CardContent>
+          </Card>
+
+          <Card className="lg:col-span-2 xl:col-span-1 print:col-span-2">
+            <CardHeader>
+              <CardTitle className="flex items-center text-xl"><DollarSign className="mr-2 h-5 w-5 text-primary" />Receita Mensal Estimada</CardTitle>
+              <CardDescription>Estimativa de receita nos últimos {CHART_MONTH_RANGE} meses (baseado em pagamentos confirmados)</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {monthlyRevenueData.length > 0 ? (
+              <ChartContainer config={chartConfigBase} className="min-h-[250px] w-full">
+                <ResponsiveContainer width="100%" height={250}>
+                  <RechartsBarChart data={monthlyRevenueData} margin={{ top: 5, right: 0, left: -20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={10} />
+                    <YAxis 
+                      tickLine={false} 
+                      axisLine={false} 
+                      fontSize={10} 
+                      width={50}
+                      tickFormatter={(value) => `R$${value.toLocaleString('pt-BR')}`}
+                    />
+                    <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--muted))', radius: 4 }}/>
+                    <Legend content={<ChartLegendContent />} />
+                    <Bar dataKey="revenue" name="Receita (R$)" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />
+                  </RechartsBarChart>
+                </ResponsiveContainer>
+              </ChartContainer>
+              ) : <p className="text-muted-foreground text-sm text-center py-10">Nenhum dado de receita para exibir.</p>}
+            </CardContent>
+          </Card>
+        </div>
       </div>
-
-      <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center text-xl"><Users className="mr-2 h-5 w-5 text-primary" />Novos Alunos por Mês</CardTitle>
-            <CardDescription>Últimos {CHART_MONTH_RANGE} meses</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {newStudentsData.length > 0 ? (
-            <ChartContainer config={chartConfigBase} className="min-h-[250px] w-full">
-              <ResponsiveContainer width="100%" height={250}>
-                <RechartsBarChart data={newStudentsData} margin={{ top: 5, right: 0, left: -20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={10} />
-                  <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={10} width={30}/>
-                  <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--muted))', radius: 4 }}/>
-                  <Legend content={<ChartLegendContent />} />
-                  <Bar dataKey="count" name="Novos Alunos" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />
-                </RechartsBarChart>
-              </ResponsiveContainer>
-            </ChartContainer>
-            ) : <p className="text-muted-foreground text-sm text-center py-10">Nenhum dado de novos alunos para exibir.</p>}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center text-xl"><CalendarCheck2 className="mr-2 h-5 w-5 text-primary" />Aulas Realizadas por Mês</CardTitle>
-            <CardDescription>Últimos {CHART_MONTH_RANGE} meses</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {bookedClassesData.length > 0 ? (
-            <ChartContainer config={chartConfigBase} className="min-h-[250px] w-full">
-               <ResponsiveContainer width="100%" height={250}>
-                <RechartsBarChart data={bookedClassesData} margin={{ top: 5, right: 0, left: -20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={10} />
-                  <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={10} width={30}/>
-                  <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--muted))', radius: 4 }}/>
-                  <Legend content={<ChartLegendContent />} />
-                  <Bar dataKey="count" name="Aulas Realizadas" fill="hsl(var(--chart-3))" radius={[4, 4, 0, 0]} />
-                </RechartsBarChart>
-              </ResponsiveContainer>
-            </ChartContainer>
-            ) : <p className="text-muted-foreground text-sm text-center py-10">Nenhum dado de aulas realizadas para exibir.</p>}
-          </CardContent>
-        </Card>
-
-        <Card className="lg:col-span-2 xl:col-span-1">
-          <CardHeader>
-            <CardTitle className="flex items-center text-xl"><DollarSign className="mr-2 h-5 w-5 text-primary" />Receita Mensal Estimada</CardTitle>
-            <CardDescription>Estimativa de receita nos últimos {CHART_MONTH_RANGE} meses (baseado em pagamentos confirmados)</CardDescription>
-          </CardHeader>
-          <CardContent>
-             {monthlyRevenueData.length > 0 ? (
-            <ChartContainer config={chartConfigBase} className="min-h-[250px] w-full">
-               <ResponsiveContainer width="100%" height={250}>
-                <RechartsBarChart data={monthlyRevenueData} margin={{ top: 5, right: 0, left: -20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={10} />
-                  <YAxis 
-                    tickLine={false} 
-                    axisLine={false} 
-                    fontSize={10} 
-                    width={50}
-                    tickFormatter={(value) => `R$${value.toLocaleString('pt-BR')}`}
-                  />
-                  <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--muted))', radius: 4 }}/>
-                  <Legend content={<ChartLegendContent />} />
-                  <Bar dataKey="revenue" name="Receita (R$)" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />
-                </RechartsBarChart>
-              </ResponsiveContainer>
-            </ChartContainer>
-             ) : <p className="text-muted-foreground text-sm text-center py-10">Nenhum dado de receita para exibir.</p>}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+      <style jsx global>{`
+        @media print {
+          body {
+            margin: 0;
+            padding: 1rem;
+            background-color: white !important;
+          }
+          .container {
+             padding: 0 !important;
+             max-width: 100% !important;
+          }
+          aside[data-sidebar="sidebar"], header {
+            display: none !important;
+          }
+          main {
+            padding: 0 !important;
+            overflow: visible !important;
+          }
+          .print\:hidden {
+            display: none !important;
+          }
+          .print\:py-0 {
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+          }
+          .print\:grid-cols-2 {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+          .print\:col-span-2 {
+            grid-column: span 2 / span 2;
+          }
+          .print\:gap-4 {
+            gap: 1rem;
+          }
+          .recharts-wrapper {
+            width: 100% !important;
+            height: 100% !important;
+          }
+          .recharts-surface {
+            width: 100% !important;
+            height: 100% !important;
+          }
+        }
+      `}</style>
+    </>
   );
 }
+
