@@ -228,7 +228,7 @@ export default function RelatoriosPage() {
 
   return (
     <>
-      <div className="container mx-auto py-8 print:py-0">
+      <div className="container mx-auto py-8 print:py-4">
         <div className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 print:hidden">
           <div>
             <h1 className="text-3xl font-headline font-bold text-foreground">Relatórios</h1>
@@ -317,51 +317,34 @@ export default function RelatoriosPage() {
           </Card>
         </div>
       </div>
-      <style jsx global>{`
+      {/* A more robust way to handle print styles */}
+      <style>{`
         @media print {
-          body {
-            margin: 0;
-            padding: 1rem;
+          body, html {
             background-color: white !important;
+            -webkit-print-color-adjust: exact;
+          }
+          main {
+             padding: 0 !important;
+             margin: 0 !important;
+             overflow: visible !important;
           }
           .container {
              padding: 0 !important;
+             margin: 0 !important;
              max-width: 100% !important;
-          }
-          aside[data-sidebar="sidebar"], header {
-            display: none !important;
-          }
-          main {
-            padding: 0 !important;
-            overflow: visible !important;
-          }
-          .print\:hidden {
-            display: none !important;
-          }
-          .print\:py-0 {
-            padding-top: 0 !important;
-            padding-bottom: 0 !important;
-          }
-          .print\:grid-cols-2 {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-          }
-          .print\:col-span-2 {
-            grid-column: span 2 / span 2;
-          }
-          .print\:gap-4 {
-            gap: 1rem;
+             width: 100% !important;
           }
           .recharts-wrapper {
             width: 100% !important;
-            height: 100% !important;
+            height: 250px !important;
           }
           .recharts-surface {
             width: 100% !important;
-            height: 100% !important;
+            height: 250px !important;
           }
         }
       `}</style>
     </>
   );
 }
-
