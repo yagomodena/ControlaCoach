@@ -46,7 +46,7 @@ export function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialogProps) 
     resolver: zodResolver(expenseSchema),
     defaultValues: {
       description: '',
-      amount: undefined,
+      amount: '' as any, // Use empty string to avoid uncontrolled to controlled error
       date: format(new Date(), 'yyyy-MM-dd'),
       category: undefined,
     },
@@ -61,7 +61,7 @@ export function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialogProps) 
     if(open) {
       reset({
         description: '',
-        amount: undefined,
+        amount: '' as any,
         date: format(new Date(), 'yyyy-MM-dd'),
         category: undefined,
       });
