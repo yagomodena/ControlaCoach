@@ -13,7 +13,7 @@ export interface PhysicalAssessment {
 
 export interface TrainingSheet {
   lastUpdated: string; // ISO String
-  content: string;
+  workouts: Partial<Record<DayOfWeek, string>>; // A workout string for each day of the week
 }
 
 export interface Student {

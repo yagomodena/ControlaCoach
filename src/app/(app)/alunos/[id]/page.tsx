@@ -4,7 +4,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Edit3, Save, CalendarDays, DollarSign, ShieldCheck, ShieldOff, User, Phone, BarChart, Users, CheckCircle, XCircle, Clock, Goal, PlusCircle, Search, MapPinIcon, ClockIcon, Loader2, Dumbbell, Activity } from 'lucide-react';
+import { ArrowLeft, Edit3, Save, CalendarDays, DollarSign, ShieldCheck, ShieldOff, User, Phone, BarChart, Users, CheckCircle, XCircle, Clock, Goal, PlusCircle, Search, MapPinIcon, ClockIcon, Loader2, Dumbbell, Activity, CalendarIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,14 +20,14 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import type { Student, Plan, Location, DayOfWeek } from '@/types';
+import type { Student, Plan, Location, DayOfWeek, TrainingSheet } from '@/types';
 import { DAYS_OF_WEEK } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { AddPlanDialog } from '@/components/dialogs/add-plan-dialog';
 import { ManagePlansDialog } from '@/components/dialogs/manage-plans-dialog';
 import { db, auth } from '@/firebase';
 import { doc, getDoc, updateDoc, collection, onSnapshot, query, where, orderBy } from 'firebase/firestore';
-import { differenceInYears, parseISO } from 'date-fns';
+import { differenceInYears, parseISO, format } from 'date-fns';
 
 const NO_LOCATION_VALUE = "__NO_LOCATION__";
 
@@ -40,7 +40,7 @@ const studentSchema = z.object({
   objective: z.string().optional(),
   birthDate: z.string().optional().nullable(),
   photoURL: z.string().url().optional().nullable(),
-  trainingSheetContent: z.string().optional(),
+  trainingSheetWorkouts: z.record(z.nativeEnum(DAYS_OF_WEEK), z.string().optional()).optional(),
   paymentStatus: z.enum(['pago', 'pendente', 'vencido']).optional(),
   dueDate: z.string().optional(),
   amountDue: z.number().optional(),
@@ -55,6 +55,10 @@ const studentSchema = z.object({
 });
 
 type StudentFormData = z.infer<typeof studentSchema>;
+
+const sortDays = (days: DayOfWeek[] = []) => {
+    return days.sort((a, b) => DAYS_OF_WEEK.indexOf(a) - DAYS_OF_WEEK.indexOf(b));
+}
 
 export default function AlunoDetailPage() {
   const router = useRouter();
@@ -129,6 +133,8 @@ export default function AlunoDetailPage() {
   const { control, handleSubmit, reset, formState: { errors, isSubmitting }, watch, setValue } = useForm<StudentFormData>({
     resolver: zodResolver(studentSchema),
   });
+  
+  const recurringClassDays = watch('recurringClassDays') || [];
 
   useEffect(() => {
     if (!studentId || !userId) return;
@@ -145,7 +151,7 @@ export default function AlunoDetailPage() {
             ...studentData,
             birthDate: studentData.birthDate || '',
             photoURL: studentData.photoURL || null,
-            trainingSheetContent: studentData.trainingSheet?.content || '',
+            trainingSheetWorkouts: studentData.trainingSheet?.workouts || {},
             recurringClassTime: studentData.recurringClassTime || '',
             recurringClassDays: studentData.recurringClassDays || [],
             recurringClassLocation: studentData.recurringClassLocation || NO_LOCATION_VALUE,
@@ -193,9 +199,11 @@ export default function AlunoDetailPage() {
         photoURL: data.photoURL || null,
       };
       
-      if(data.trainingSheetContent && data.trainingSheetContent.trim() !== '') {
+      const hasWorkoutData = data.trainingSheetWorkouts && Object.values(data.trainingSheetWorkouts).some(workout => workout && workout.trim() !== '');
+
+      if(hasWorkoutData) {
         updatePayload.trainingSheet = {
-            content: data.trainingSheetContent,
+            workouts: data.trainingSheetWorkouts,
             lastUpdated: new Date().toISOString(),
         };
       } else {
@@ -274,18 +282,19 @@ export default function AlunoDetailPage() {
     return <div className="container mx-auto py-8 text-center text-destructive">Aluno não encontrado.</div>;
   }
 
-  const InfoItem = ({ icon: Icon, label, value, isLongText = false }: { icon: React.ElementType, label: string, value?: string | number | null | DayOfWeek[], isLongText?: boolean }) => (
+  const InfoItem = ({ icon: Icon, label, value, isLongText = false, children }: { icon: React.ElementType, label: string, value?: string | number | null | DayOfWeek[], isLongText?: boolean, children?: React.ReactNode }) => (
     <div className="flex items-start space-x-3">
       <Icon className="h-5 w-5 text-primary mt-1 flex-shrink-0" />
       <div>
         <p className="text-sm text-muted-foreground">{label}</p>
-        {Array.isArray(value) ? (
-          <p className="font-medium text-foreground">{value.join(', ') || 'N/A'}</p>
-        ) : isLongText && value ? (
-            <p className="font-medium text-foreground whitespace-pre-wrap">{String(value)}</p>
-        ) : (
-            <p className="font-medium text-foreground">{value != null && value !== '' ? String(value) : 'N/A'}</p>
-        )}
+        {children ? children :
+          Array.isArray(value) ? (
+            <p className="font-medium text-foreground">{value.join(', ') || 'N/A'}</p>
+          ) : isLongText && value ? (
+              <p className="font-medium text-foreground whitespace-pre-wrap">{String(value)}</p>
+          ) : (
+              <p className="font-medium text-foreground">{value != null && value !== '' ? String(value) : 'N/A'}</p>
+          )}
       </div>
     </div>
   );
@@ -345,9 +354,9 @@ export default function AlunoDetailPage() {
             <Tabs defaultValue="personal" className="w-full">
                 <TabsList className="grid w-full grid-cols-4 mb-6 max-w-2xl mx-auto">
                     <TabsTrigger value="personal">Pessoal</TabsTrigger>
-                    <TabsTrigger value="training">Treino</TabsTrigger>
                     <TabsTrigger value="sports">Info Esportiva</TabsTrigger>
-                    <TabsTrigger value="financial">Financeiro</TabsTrigger>
+                    <TabsTrigger value="schedule">Aulas & Financeiro</TabsTrigger>
+                    <TabsTrigger value="training">Treino</TabsTrigger>
                 </TabsList>
                 
                 <TabsContent value="personal">
@@ -391,17 +400,41 @@ export default function AlunoDetailPage() {
                      <Card className="max-w-3xl mx-auto shadow-lg">
                         <CardHeader>
                             <CardTitle className="flex items-center"><Dumbbell className="mr-2 h-5 w-5 text-primary"/>Plano de Treino</CardTitle>
-                            <CardDescription>Monte a ficha de treino do aluno.</CardDescription>
+                            <CardDescription>
+                                {recurringClassDays.length > 0
+                                ? "Defina o treino para cada dia selecionado."
+                                : "Selecione os 'Dias da Semana para Aula Recorrente' na aba 'Info Esportiva' para montar os treinos."
+                                }
+                            </CardDescription>
                         </CardHeader>
-                        <CardContent>
-                           <Controller name="trainingSheetContent" control={control} render={({ field }) => (
-                            <Textarea 
-                                {...field}
-                                placeholder="Ex:&#10;Aquecimento: 10min esteira&#10;--&#10;A. Supino Reto: 3x12&#10;B. Remada Curvada: 3x12&#10;..."
-                                rows={15}
-                                className="font-mono text-sm"
-                            />
-                           )} />
+                        <CardContent className="space-y-4">
+                            {sortDays(recurringClassDays).length > 0 ? (
+                                sortDays(recurringClassDays).map(day => (
+                                    <Card key={day} className="bg-muted/30">
+                                        <CardHeader className="py-3 px-4">
+                                            <CardTitle className="text-lg">Treino de {day}</CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="px-4 pb-4">
+                                            <Controller
+                                                name={`trainingSheetWorkouts.${day}`}
+                                                control={control}
+                                                render={({ field }) => (
+                                                    <Textarea
+                                                        {...field}
+                                                        placeholder={`Detalhes do treino de ${day}...`}
+                                                        rows={8}
+                                                        className="font-mono text-sm bg-background"
+                                                    />
+                                                )}
+                                            />
+                                        </CardContent>
+                                    </Card>
+                                ))
+                            ) : (
+                                <p className="text-center text-muted-foreground py-8">
+                                    Nenhum dia de aula recorrente selecionado.
+                                </p>
+                            )}
                         </CardContent>
                      </Card>
                 </TabsContent>
@@ -479,7 +512,7 @@ export default function AlunoDetailPage() {
                     </Card>
                 </TabsContent>
 
-                <TabsContent value="financial">
+                <TabsContent value="schedule">
                     <Card className="max-w-3xl mx-auto shadow-lg">
                         <CardHeader>
                             <CardTitle className="flex items-center"><CalendarDays className="mr-2 h-5 w-5 text-primary"/>Aulas Recorrentes</CardTitle>
@@ -611,7 +644,7 @@ export default function AlunoDetailPage() {
                 </TabsContent>
                 <div className="max-w-3xl mx-auto w-full px-6 pb-6 mt-4">
                     <CardFooter className="flex justify-end gap-2 p-0">
-                        <Button variant="outline" type="button" onClick={() => { setIsEditMode(false); router.replace(`/alunos/${studentId}`); reset({...student, objective: student?.objective || '', recurringClassTime: student?.recurringClassTime || '', recurringClassDays: student?.recurringClassDays || [], recurringClassLocation: student?.recurringClassLocation || NO_LOCATION_VALUE, dueDate: student?.dueDate?.split('T')[0] || '', lastPaymentDate: student?.lastPaymentDate?.split('T')[0] || '', amountDue: student?.amountDue === null || student?.amountDue === undefined ? undefined : student.amountDue, paymentStatus: student?.paymentStatus || undefined, paymentMethod: student?.paymentMethod || undefined  } as StudentFormData); }}>Cancelar</Button>
+                        <Button variant="outline" type="button" onClick={() => { setIsEditMode(false); router.replace(`/alunos/${studentId}`); reset({...student, objective: student?.objective || '', recurringClassTime: student?.recurringClassTime || '', recurringClassDays: student?.recurringClassDays || [], recurringClassLocation: student?.recurringClassLocation || NO_LOCATION_VALUE, dueDate: student?.dueDate?.split('T')[0] || '', lastPaymentDate: student?.lastPaymentDate?.split('T')[0] || '', amountDue: student?.amountDue === null || student?.amountDue === undefined ? undefined : student.amountDue, paymentStatus: student?.paymentStatus || undefined, paymentMethod: student?.paymentMethod || undefined, trainingSheetWorkouts: student?.trainingSheet?.workouts || {}  } as StudentFormData); }}>Cancelar</Button>
                         <Button type="submit" disabled={isSubmitting || isLoadingLocations || isLoadingPlans} className="bg-primary hover:bg-primary/90 text-primary-foreground">
                         <Save className="mr-2 h-4 w-4" />{isSubmitting ? 'Salvando...' : 'Salvar Alterações'}
                         </Button>
@@ -651,7 +684,7 @@ export default function AlunoDetailPage() {
                   <InfoItem icon={User} label="Nome Completo" value={student.name} />
                   <InfoItem icon={Phone} label="Telefone" value={student.phone} />
                   <InfoItem icon={CalendarDays} label="Data de Nascimento" value={student.birthDate ? `${formatDateString(student.birthDate)} (${studentAge} anos)` : 'N/A'} />
-                  <InfoItem icon={CalendarDays} label="Data de Cadastro" value={formatDateString(student.registrationDate)} />
+                  <InfoItem icon={CalendarIcon} label="Data de Cadastro" value={formatDateString(student.registrationDate)} />
                   <InfoItem icon={student.status === 'active' ? ShieldCheck : ShieldOff} label="Status" value={student.status === 'active' ? 'Ativo' : 'Inativo'} />
                 </CardContent>
                 {student.objective && (
@@ -712,11 +745,16 @@ export default function AlunoDetailPage() {
                         <CardTitle className="flex items-center"><Dumbbell className="mr-2 h-5 w-5 text-primary"/>Plano de Treino</CardTitle>
                         <CardDescription>Ficha de treino atual do aluno. Atualizado em: {student.trainingSheet?.lastUpdated ? formatDateString(student.trainingSheet.lastUpdated) : 'N/A'}</CardDescription>
                     </CardHeader>
-                    <CardContent>
-                        {student.trainingSheet?.content ? (
-                           <div className="prose prose-sm max-w-none whitespace-pre-wrap p-4 bg-muted/30 rounded-md">
-                            {student.trainingSheet.content}
-                           </div>
+                    <CardContent className="space-y-4">
+                        {student.trainingSheet?.workouts && Object.keys(student.trainingSheet.workouts).length > 0 ? (
+                           sortDays(Object.keys(student.trainingSheet.workouts) as DayOfWeek[]).map(day => (
+                               <div key={day}>
+                                   <h3 className="font-semibold text-md text-foreground mb-1">Treino de {day}</h3>
+                                   <div className="prose prose-sm max-w-none whitespace-pre-wrap p-3 bg-muted/30 rounded-md">
+                                     {student.trainingSheet?.workouts?.[day] || 'Nenhum treino definido para este dia.'}
+                                   </div>
+                               </div>
+                           ))
                         ): (
                             <p className="text-muted-foreground text-center py-4">Nenhuma ficha de treino cadastrada para este aluno.</p>
                         )}
@@ -749,25 +787,23 @@ export default function AlunoDetailPage() {
                   <CardTitle>Detalhes Financeiros</CardTitle>
                   <CardDescription>Informações sobre o plano atual e status de pagamento.</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-6">
+                <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <InfoItem icon={DollarSign} label="Plano Atual" value={student.plan} />
-                  <div className="flex items-start space-x-3">
-                    <DollarSign className="h-5 w-5 text-primary mt-1" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">Status do Pagamento</p>
-                      {getPaymentStatusBadge(student.paymentStatus)}
-                    </div>
-                  </div>
+                   <InfoItem icon={DollarSign} label="Status do Pagamento">
+                       {getPaymentStatusBadge(student.paymentStatus)}
+                   </InfoItem>
                   <InfoItem icon={CalendarDays} label="Data de Vencimento" value={formatDateString(student.dueDate)} />
                   <InfoItem icon={DollarSign} label="Valor Devido" value={student.amountDue ? `R$ ${student.amountDue.toFixed(2)}` : 'N/A'} />
                   <InfoItem icon={DollarSign} label="Método de Pagamento Preferencial" value={student.paymentMethod} />
                   <InfoItem icon={CalendarDays} label="Último Pagamento" value={formatDateString(student.lastPaymentDate)} />
+                </CardContent>
+                <CardFooter>
                   <Button asChild className="mt-4">
                     <Link href={`/financeiro/lembrete/${student.id}`}>
                       <DollarSign className="mr-2 h-4 w-4" /> Gerar Lembrete de Pagamento
                     </Link>
                   </Button>
-                </CardContent>
+                </CardFooter>
               </Card>
             </TabsContent>
           </Tabs>
