@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -795,7 +796,7 @@ export default function AlunoDetailPage() {
                     </Avatar>
                     <div>
                         <CardTitle className="text-2xl font-headline">{student.name}</CardTitle>
-                        <CardDescription>ID: {student.id}</CardDescription>
+                        <CardDescription>ID do Aluno: {student.id}</CardDescription>
                     </div>
                   </div>
                   {student.status === 'active'

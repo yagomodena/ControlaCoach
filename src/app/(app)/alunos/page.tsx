@@ -87,7 +87,7 @@ export default function AlunosPage() {
   }, [students, searchTerm, statusFilter]);
   
   const handleSendLogin = (student: Student) => {
-    if (!student.phone || !student.authId) {
+    if (!student.phone || !student.id) {
       toast({
         title: "Dados Incompletos",
         description: "O aluno não possui um telefone ou ID de acesso cadastrado para enviar o login.",
@@ -97,7 +97,7 @@ export default function AlunosPage() {
     }
 
     const studentLoginPageUrl = `${window.location.origin}/login/aluno`;
-    const message = `Olá, ${student.name.split(' ')[0]}! Aqui estão seus dados de acesso ao portal FitPlanner:\n\n*Link de Acesso:* ${studentLoginPageUrl}\n*Seu ID de Aluno:* ${student.authId}\n\nGuarde este ID, ele será sua chave de entrada!`;
+    const message = `Olá, ${student.name.split(' ')[0]}! Aqui estão seus dados de acesso ao portal FitPlanner:\n\n*Link de Acesso:* ${studentLoginPageUrl}\n*Seu ID de Aluno:* ${student.id}\n\nGuarde este ID, ele será sua chave de entrada!`;
     const whatsappNumber = student.phone.replace(/\D/g, '');
     const whatsappUrl = `https://wa.me/55${whatsappNumber}?text=${encodeURIComponent(message)}`;
     
