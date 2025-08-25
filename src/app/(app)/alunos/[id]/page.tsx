@@ -1,10 +1,9 @@
-
 'use client';
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Edit3, Save, CalendarDays, DollarSign, ShieldCheck, ShieldOff, User, Phone, BarChart, Users, CheckCircle, XCircle, Clock, Goal, PlusCircle, Search, MapPinIcon, ClockIcon, Loader2, Dumbbell, Activity, CalendarIcon } from 'lucide-react';
+import { ArrowLeft, Edit3, Save, CalendarDays, DollarSign, ShieldCheck, ShieldOff, User, Phone, BarChart, Users, CheckCircle, XCircle, Clock, Goal, PlusCircle, Search, MapPinIcon, ClockIcon, Loader2, Dumbbell, Activity, CalendarIcon, LineChart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,14 +19,16 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import type { Student, Plan, Location, DayOfWeek, TrainingSheet } from '@/types';
+import type { Student, Plan, Location, DayOfWeek, TrainingSheet, PhysicalAssessment } from '@/types';
 import { DAYS_OF_WEEK } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { AddPlanDialog } from '@/components/dialogs/add-plan-dialog';
 import { ManagePlansDialog } from '@/components/dialogs/manage-plans-dialog';
 import { db, auth } from '@/firebase';
-import { doc, getDoc, updateDoc, collection, onSnapshot, query, where, orderBy } from 'firebase/firestore';
-import { differenceInYears, parseISO, format } from 'date-fns';
+import { doc, getDoc, updateDoc, collection, onSnapshot, query, where, orderBy, arrayUnion } from 'firebase/firestore';
+import { differenceInYears, parseISO, format, formatISO } from 'date-fns';
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
+import { CartesianGrid, XAxis, YAxis, Legend, Line, ComposedChart, ResponsiveContainer } from 'recharts';
 
 const NO_LOCATION_VALUE = "__NO_LOCATION__";
 
@@ -77,6 +78,12 @@ export default function AlunoDetailPage() {
   const [isLoadingLocations, setIsLoadingLocations] = useState(true);
   const [isAddPlanDialogOpen, setIsAddPlanDialogOpen] = useState(false);
   const [isManagePlansDialogOpen, setIsManagePlansDialogOpen] = useState(false);
+
+  // State for new physical assessment
+  const [newWeight, setNewWeight] = useState('');
+  const [newHeight, setNewHeight] = useState('');
+  const [newBodyFat, setNewBodyFat] = useState('');
+  const [isAddingAssessment, setIsAddingAssessment] = useState(false);
   
   useEffect(() => {
     const unsubscribeAuth = auth.onAuthStateChanged(user => {
@@ -136,10 +143,9 @@ export default function AlunoDetailPage() {
   
   const recurringClassDays = watch('recurringClassDays') || [];
 
-  useEffect(() => {
-    if (!studentId || !userId) return;
-    setIsLoading(true);
-    const fetchStudent = async () => {
+  const fetchStudent = async () => {
+      if (!studentId || !userId) return;
+      setIsLoading(true);
       try {
         const studentDocRef = doc(db, 'coaches', userId, 'students', studentId);
         const studentDocSnap = await getDoc(studentDocRef);
@@ -147,21 +153,23 @@ export default function AlunoDetailPage() {
         if (studentDocSnap.exists()) {
           const studentData = { ...studentDocSnap.data(), id: studentDocSnap.id } as Student;
           setStudent(studentData);
-          reset({
-            ...studentData,
-            birthDate: studentData.birthDate || '',
-            photoURL: studentData.photoURL || null,
-            trainingSheetWorkouts: studentData.trainingSheet?.workouts || {},
-            recurringClassTime: studentData.recurringClassTime || '',
-            recurringClassDays: studentData.recurringClassDays || [],
-            recurringClassLocation: studentData.recurringClassLocation || NO_LOCATION_VALUE,
-            objective: studentData.objective || '',
-            dueDate: studentData.dueDate ? (studentData.dueDate.includes('T') ? studentData.dueDate.split('T')[0] : studentData.dueDate) : '',
-            lastPaymentDate: studentData.lastPaymentDate ? (studentData.lastPaymentDate.includes('T') ? studentData.lastPaymentDate.split('T')[0] : studentData.lastPaymentDate) : '',
-            amountDue: studentData.amountDue === null || studentData.amountDue === undefined ? undefined : studentData.amountDue,
-            paymentStatus: studentData.paymentStatus || undefined,
-            paymentMethod: studentData.paymentMethod || undefined,
-          });
+          if (!isEditMode) { // Only reset if not in edit mode to preserve form state
+            reset({
+              ...studentData,
+              birthDate: studentData.birthDate || '',
+              photoURL: studentData.photoURL || null,
+              trainingSheetWorkouts: studentData.trainingSheet?.workouts || {},
+              recurringClassTime: studentData.recurringClassTime || '',
+              recurringClassDays: studentData.recurringClassDays || [],
+              recurringClassLocation: studentData.recurringClassLocation || NO_LOCATION_VALUE,
+              objective: studentData.objective || '',
+              dueDate: studentData.dueDate ? (studentData.dueDate.includes('T') ? studentData.dueDate.split('T')[0] : studentData.dueDate) : '',
+              lastPaymentDate: studentData.lastPaymentDate ? (studentData.lastPaymentDate.includes('T') ? studentData.lastPaymentDate.split('T')[0] : studentData.lastPaymentDate) : '',
+              amountDue: studentData.amountDue === null || studentData.amountDue === undefined ? undefined : studentData.amountDue,
+              paymentStatus: studentData.paymentStatus || undefined,
+              paymentMethod: studentData.paymentMethod || undefined,
+            });
+          }
         } else {
           toast({ title: "Erro", description: "Aluno não encontrado.", variant: "destructive" });
           router.push('/alunos');
@@ -174,8 +182,10 @@ export default function AlunoDetailPage() {
         setIsLoading(false);
       }
     };
+
+  useEffect(() => {
     fetchStudent();
-  }, [studentId, userId, reset, router, toast]);
+  }, [studentId, userId, isEditMode]); // re-fetch if isEditMode changes to reload data when cancelling
 
   useEffect(() => {
     setIsEditMode(searchParams.get('edit') === 'true');
@@ -197,6 +207,7 @@ export default function AlunoDetailPage() {
         status: data.status,
         birthDate: data.birthDate || null,
         photoURL: data.photoURL || null,
+        // physicalAssessments are handled separately
       };
       
       const hasWorkoutData = data.trainingSheetWorkouts && Object.values(data.trainingSheetWorkouts).some(workout => workout && workout.trim() !== '');
@@ -246,6 +257,39 @@ export default function AlunoDetailPage() {
             description: "Não foi possível atualizar os dados do aluno. Tente novamente.",
             variant: "destructive",
         });
+    }
+  };
+
+  const handleAddAssessment = async () => {
+    if (!userId || !studentId) return;
+    if (!newWeight && !newHeight && !newBodyFat) {
+      toast({ title: "Dados Incompletos", description: "Preencha pelo menos um campo da avaliação.", variant: "destructive" });
+      return;
+    }
+
+    setIsAddingAssessment(true);
+    const newAssessment: PhysicalAssessment = {
+      date: formatISO(new Date()),
+      weight: newWeight ? parseFloat(newWeight) : undefined,
+      height: newHeight ? parseFloat(newHeight) : undefined,
+      bodyFatPercentage: newBodyFat ? parseFloat(newBodyFat) : undefined,
+    };
+
+    try {
+      const studentDocRef = doc(db, 'coaches', userId, 'students', studentId);
+      await updateDoc(studentDocRef, {
+        physicalAssessments: arrayUnion(newAssessment)
+      });
+      toast({ title: "Avaliação Adicionada!", description: "A nova avaliação física foi salva." });
+      setNewWeight('');
+      setNewHeight('');
+      setNewBodyFat('');
+      await fetchStudent(); // Re-fetch student data to update the view
+    } catch (error) {
+      console.error("Error adding assessment:", error);
+      toast({ title: "Erro ao Salvar Avaliação", variant: "destructive" });
+    } finally {
+      setIsAddingAssessment(false);
     }
   };
 
@@ -323,6 +367,12 @@ export default function AlunoDetailPage() {
   };
   
   const studentAge = student.birthDate ? calculateAge(student.birthDate) : null;
+  const sortedAssessments = student.physicalAssessments?.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()) || [];
+  const chartData = sortedAssessments.map(a => ({
+    date: formatDateString(a.date),
+    Peso: a.weight,
+    'Gordura (%)': a.bodyFatPercentage,
+  }));
 
 
   return (
@@ -504,10 +554,31 @@ export default function AlunoDetailPage() {
                                 {errors.objective && <p className="text-sm text-destructive">{errors.objective.message}</p>}
                             </div>
                             <Separator />
-                             <Label>Adicionar Nova Avaliação Física</Label>
-                              <Card className="p-4 bg-muted/30">
-                                <p className="text-center text-sm text-muted-foreground">Em breve: adicione peso, % gordura, etc. e veja gráficos de evolução.</p>
+                            <div className="space-y-4">
+                              <Label className="text-base font-medium">Adicionar Nova Avaliação Física</Label>
+                              <Card className="p-4 bg-muted/30 border">
+                                <CardContent className="p-0 space-y-4">
+                                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                      <div className="space-y-1">
+                                        <Label htmlFor="newWeight" className="text-xs">Peso (kg)</Label>
+                                        <Input id="newWeight" type="number" placeholder="Ex: 75.5" value={newWeight} onChange={(e) => setNewWeight(e.target.value)} disabled={isAddingAssessment}/>
+                                      </div>
+                                      <div className="space-y-1">
+                                        <Label htmlFor="newHeight" className="text-xs">Altura (cm)</Label>
+                                        <Input id="newHeight" type="number" placeholder="Ex: 180" value={newHeight} onChange={(e) => setNewHeight(e.target.value)} disabled={isAddingAssessment}/>
+                                      </div>
+                                      <div className="space-y-1">
+                                        <Label htmlFor="newBodyFat" className="text-xs">% Gordura</Label>
+                                        <Input id="newBodyFat" type="number" placeholder="Ex: 15" value={newBodyFat} onChange={(e) => setNewBodyFat(e.target.value)} disabled={isAddingAssessment}/>
+                                      </div>
+                                   </div>
+                                   <Button type="button" onClick={handleAddAssessment} disabled={isAddingAssessment} className="w-full">
+                                    {isAddingAssessment && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                                    {isAddingAssessment ? "Salvando..." : "Adicionar Avaliação"}
+                                   </Button>
+                                </CardContent>
                               </Card>
+                            </div>
                          </CardContent>
                     </Card>
                 </TabsContent>
@@ -657,8 +728,8 @@ export default function AlunoDetailPage() {
             <TabsList className="grid w-full grid-cols-5 mb-6 max-w-2xl mx-auto">
               <TabsTrigger value="overview">Visão Geral</TabsTrigger>
               <TabsTrigger value="schedule">Aulas</TabsTrigger>
+              <TabsTrigger value="evolution">Evolução Física</TabsTrigger>
               <TabsTrigger value="payments">Financeiro</TabsTrigger>
-              <TabsTrigger value="sports_info">Info Esportiva</TabsTrigger>
               <TabsTrigger value="training_sheet">Treino</TabsTrigger>
             </TabsList>
 
@@ -719,22 +790,65 @@ export default function AlunoDetailPage() {
               </Card>
             </TabsContent>
             
-            <TabsContent value="sports_info">
+            <TabsContent value="evolution">
                 <Card className="shadow-lg">
                     <CardHeader>
-                        <CardTitle className="flex items-center"><Activity className="mr-2 h-5 w-5 text-primary"/>Informações Esportivas</CardTitle>
+                        <CardTitle className="flex items-center"><LineChart className="mr-2 h-5 w-5 text-primary"/>Evolução Física</CardTitle>
                         <CardDescription>Plano, nível e histórico de avaliações físicas.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-6">
-                        <div className="grid md:grid-cols-2 gap-6">
                          <InfoItem icon={Users} label="Plano" value={student.plan} />
                          <InfoItem icon={BarChart} label="Nível Técnico" value={student.technicalLevel} />
-                        </div>
                         <Separator />
-                        <CardTitle className="text-lg">Histórico de Evolução</CardTitle>
-                         <Card className="p-4 bg-muted/30">
-                            <p className="text-center text-sm text-muted-foreground">Em breve: Gráfico com a evolução de peso, % de gordura e outras medidas.</p>
-                         </Card>
+                        <CardTitle className="text-lg">Gráfico de Evolução</CardTitle>
+                         {sortedAssessments.length > 1 ? (
+                          <ChartContainer config={{}} className="min-h-[250px] w-full">
+                            <ResponsiveContainer>
+                               <ComposedChart data={chartData}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="date" tick={{fontSize: 12}} />
+                                <YAxis yAxisId="left" label={{ value: 'Peso (kg)', angle: -90, position: 'insideLeft' }} tick={{fontSize: 12}}/>
+                                <YAxis yAxisId="right" orientation="right" label={{ value: 'Gordura (%)', angle: -90, position: 'insideRight' }} tick={{fontSize: 12}}/>
+                                <ChartTooltip content={<ChartTooltipContent />} />
+                                <Legend />
+                                <Line yAxisId="left" type="monotone" dataKey="Peso" stroke="hsl(var(--chart-1))" strokeWidth={2} dot={{r: 4}} activeDot={{r: 6}} />
+                                <Line yAxisId="right" type="monotone" dataKey="Gordura (%)" stroke="hsl(var(--chart-2))" strokeWidth={2} dot={{r: 4}} activeDot={{r: 6}}/>
+                              </ComposedChart>
+                            </ResponsiveContainer>
+                           </ChartContainer>
+                         ) : (
+                            <p className="text-center text-sm text-muted-foreground py-8">
+                                Adicione pelo menos duas avaliações físicas para ver o gráfico de evolução.
+                            </p>
+                         )}
+                        <Separator />
+                        <CardTitle className="text-lg">Histórico de Avaliações</CardTitle>
+                        {sortedAssessments.length > 0 ? (
+                           <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Data</TableHead>
+                                    <TableHead>Peso (kg)</TableHead>
+                                    <TableHead>Altura (cm)</TableHead>
+                                    <TableHead>Gordura (%)</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {sortedAssessments.map((assessment, index) => (
+                                    <TableRow key={index}>
+                                        <TableCell>{formatDateString(assessment.date)}</TableCell>
+                                        <TableCell>{assessment.weight || 'N/A'}</TableCell>
+                                        <TableCell>{assessment.height || 'N/A'}</TableCell>
+                                        <TableCell>{assessment.bodyFatPercentage || 'N/A'}</TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                           </Table>
+                        ) : (
+                           <p className="text-center text-sm text-muted-foreground py-8">
+                                Nenhuma avaliação física registrada. Adicione uma na aba de edição.
+                           </p>
+                        )}
                     </CardContent>
                 </Card>
             </TabsContent>
