@@ -3,6 +3,19 @@
 export type DayOfWeek = 'Segunda' | 'Terça' | 'Quarta' | 'Quinta' | 'Sexta' | 'Sábado' | 'Domingo';
 export const DAYS_OF_WEEK: DayOfWeek[] = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
 
+export interface PhysicalAssessment {
+  date: string; // ISO String
+  weight?: number;
+  height?: number;
+  bodyFatPercentage?: number;
+  notes?: string;
+}
+
+export interface TrainingSheet {
+  lastUpdated: string; // ISO String
+  content: string;
+}
+
 export interface Student {
   id: string; // Firestore document ID
   name: string;
@@ -11,6 +24,8 @@ export interface Student {
   technicalLevel: 'Iniciante' | 'Intermediário' | 'Avançado';
   status: 'active' | 'inactive';
   registrationDate: string; // ISO String
+  birthDate?: string | null; // ISO String YYYY-MM-DD
+  photoURL?: string | null;
   objective?: string | null;
   attendanceHistory?: { date: string; classId: string; bookedClassId: string; status: 'present' | 'absent' | 'rescheduled' | 'pending' }[];
   
@@ -23,6 +38,9 @@ export interface Student {
   recurringClassTime?: string | null; // HH:MM
   recurringClassDays?: DayOfWeek[] | null; 
   recurringClassLocation?: string | null; 
+  
+  physicalAssessments?: PhysicalAssessment[] | null;
+  trainingSheet?: TrainingSheet | null;
 }
 
 export interface Plan {
@@ -118,4 +136,3 @@ export const getDayOfWeekName = (dayNumber: number): DayOfWeek | undefined => {
   };
   return map[dayNumber];
 };
-

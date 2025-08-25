@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Save, PlusCircle, Search, CalendarClock, MapPinIcon, ClockIcon, DollarSign, Loader2 } from 'lucide-react';
+import { ArrowLeft, Save, PlusCircle, Search, CalendarClock, MapPinIcon, ClockIcon, DollarSign, Loader2, CalendarIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -38,6 +38,7 @@ const studentSchema = z.object({
   plan: z.string().min(1, { message: 'Selecione um plano.' }),
   technicalLevel: z.enum(['Iniciante', 'Intermediário', 'Avançado'], { required_error: 'Selecione o nível técnico.' }),
   status: z.enum(['active', 'inactive'], { required_error: 'Selecione o status.' }),
+  birthDate: z.string().optional().nullable(),
   objective: z.string().optional(),
   recurringClassTime: z.string()
     .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, { message: "Formato de hora inválido (HH:MM)." })
@@ -126,6 +127,7 @@ export default function NovoAlunoPage() {
       technicalLevel: undefined,
       status: 'active',
       objective: '',
+      birthDate: '',
       recurringClassTime: '',
       recurringClassDays: [],
       recurringClassLocation: NO_LOCATION_VALUE, 
@@ -171,6 +173,10 @@ export default function NovoAlunoPage() {
         dueDate: formatISO(initialDueDate, { representation: 'date' }),
         lastPaymentDate: null,
         amountDue: selectedPlanDetails.price,
+        photoURL: null,
+        physicalAssessments: [],
+        trainingSheet: null,
+        birthDate: (data.birthDate && data.birthDate.trim() !== '') ? data.birthDate.trim() : null,
       };
       
       if (data.objective && data.objective.trim() !== '') studentDataToSave.objective = data.objective.trim();
@@ -258,87 +264,33 @@ export default function NovoAlunoPage() {
               <CardDescription>Insira os detalhes básicos.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="name">Nome Completo</Label>
-                <Controller
-                  name="name"
-                  control={control}
-                  render={({ field }) => <Input id="name" placeholder="Ex: João da Silva" {...field} value={field.value ?? ''} />}
-                />
-                {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                 <div className="space-y-2">
+                    <Label htmlFor="name">Nome Completo</Label>
+                    <Controller
+                    name="name"
+                    control={control}
+                    render={({ field }) => <Input id="name" placeholder="Ex: João da Silva" {...field} value={field.value ?? ''} />}
+                    />
+                    {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
+                </div>
+                 <div className="space-y-2">
+                    <Label htmlFor="phone">Telefone (WhatsApp)</Label>
+                    <Controller
+                    name="phone"
+                    control={control}
+                    render={({ field }) => <Input id="phone" type="tel" placeholder="(XX) XXXXX-XXXX" {...field} value={field.value ?? ''} />}
+                    />
+                    {errors.phone && <p className="text-sm text-destructive">{errors.phone.message}</p>}
+                </div>
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="phone">Telefone (WhatsApp)</Label>
-                <Controller
-                  name="phone"
-                  control={control}
-                  render={({ field }) => <Input id="phone" type="tel" placeholder="(XX) XXXXX-XXXX" {...field} value={field.value ?? ''} />}
-                />
-                {errors.phone && <p className="text-sm text-destructive">{errors.phone.message}</p>}
-              </div>
-
+              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label htmlFor="plan">Plano</Label>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-grow">
-                      <Controller
-                        name="plan"
-                        control={control}
-                        render={({ field }) => (
-                          <Select 
-                            onValueChange={(value) => {
-                                field.onChange(value);
-                                const selectedPlan = activePlans.find(p => p.name === value);
-                                if (selectedPlan) {
-                                    setValue('amountDue', selectedPlan.price);
-                                    // Set initial due date based on plan's chargeOnEnrollment
-                                    const regDate = new Date();
-                                    let initialDueDateValue: Date;
-                                    if (selectedPlan.chargeOnEnrollment) {
-                                        initialDueDateValue = regDate;
-                                    } else {
-                                        initialDueDateValue = addDays(regDate, selectedPlan.durationDays);
-                                    }
-                                    setValue('dueDate', formatISO(initialDueDateValue, { representation: 'date' }));
-
-                                } else {
-                                    setValue('amountDue', undefined);
-                                    setValue('dueDate', '');
-                                }
-                            }} 
-                            value={field.value ?? ''} 
-                            disabled={isLoadingPlans}
-                          >
-                            <SelectTrigger id="plan">
-                              <SelectValue placeholder={isLoadingPlans ? "Carregando..." : "Selecione o plano"} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {activePlans.length > 0 ? (
-                                activePlans.map(p => (
-                                  <SelectItem key={p.id} value={p.name}>{p.name} - R$ {p.price.toFixed(2)}</SelectItem>
-                                ))
-                              ) : (
-                                <SelectItem value="no-plans" disabled>{isLoadingPlans ? "Carregando..." : "Nenhum plano ativo"}</SelectItem>
-                              )}
-                            </SelectContent>
-                          </Select>
-                        )}
-                      />
-                    </div>
-                    <Button variant="outline" size="icon" type="button" onClick={() => setIsAddPlanDialogOpen(true)}>
-                      <PlusCircle className="h-4 w-4" />
-                      <span className="sr-only">Adicionar Novo Plano</span>
-                    </Button>
-                    <Button variant="outline" size="icon" type="button" onClick={() => setIsManagePlansDialogOpen(true)}>
-                      <Search className="h-4 w-4" />
-                      <span className="sr-only">Consultar Planos</span>
-                    </Button>
-                  </div>
-                  {errors.plan && <p className="text-sm text-destructive">{errors.plan.message}</p>}
+                  <Label htmlFor="birthDate" className="flex items-center"><CalendarIcon className="mr-1 h-4 w-4"/>Data de Nascimento</Label>
+                  <Controller name="birthDate" control={control} render={({ field }) => <Input id="birthDate" type="date" {...field} value={field.value ?? ''} />} />
+                  {errors.birthDate && <p className="text-sm text-destructive">{errors.birthDate.message}</p>}
                 </div>
-
                 <div className="space-y-2">
                   <Label htmlFor="technicalLevel">Nível Técnico</Label>
                   <Controller
@@ -361,6 +313,66 @@ export default function NovoAlunoPage() {
                 </div>
               </div>
 
+
+              <div className="space-y-2">
+                <Label htmlFor="plan">Plano</Label>
+                <div className="flex items-center gap-2">
+                  <div className="flex-grow">
+                    <Controller
+                      name="plan"
+                      control={control}
+                      render={({ field }) => (
+                        <Select 
+                          onValueChange={(value) => {
+                              field.onChange(value);
+                              const selectedPlan = activePlans.find(p => p.name === value);
+                              if (selectedPlan) {
+                                  setValue('amountDue', selectedPlan.price);
+                                  // Set initial due date based on plan's chargeOnEnrollment
+                                  const regDate = new Date();
+                                  let initialDueDateValue: Date;
+                                  if (selectedPlan.chargeOnEnrollment) {
+                                      initialDueDateValue = regDate;
+                                  } else {
+                                      initialDueDateValue = addDays(regDate, selectedPlan.durationDays);
+                                  }
+                                  setValue('dueDate', formatISO(initialDueDateValue, { representation: 'date' }));
+
+                              } else {
+                                  setValue('amountDue', undefined);
+                                  setValue('dueDate', '');
+                              }
+                          }} 
+                          value={field.value ?? ''} 
+                          disabled={isLoadingPlans}
+                        >
+                          <SelectTrigger id="plan">
+                            <SelectValue placeholder={isLoadingPlans ? "Carregando..." : "Selecione o plano"} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {activePlans.length > 0 ? (
+                              activePlans.map(p => (
+                                <SelectItem key={p.id} value={p.name}>{p.name} - R$ {p.price.toFixed(2)}</SelectItem>
+                              ))
+                            ) : (
+                              <SelectItem value="no-plans" disabled>{isLoadingPlans ? "Carregando..." : "Nenhum plano ativo"}</SelectItem>
+                            )}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                  </div>
+                  <Button variant="outline" size="icon" type="button" onClick={() => setIsAddPlanDialogOpen(true)}>
+                    <PlusCircle className="h-4 w-4" />
+                    <span className="sr-only">Adicionar Novo Plano</span>
+                  </Button>
+                  <Button variant="outline" size="icon" type="button" onClick={() => setIsManagePlansDialogOpen(true)}>
+                    <Search className="h-4 w-4" />
+                    <span className="sr-only">Consultar Planos</span>
+                  </Button>
+                </div>
+                {errors.plan && <p className="text-sm text-destructive">{errors.plan.message}</p>}
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="status">Status</Label>
                 <Controller
@@ -472,7 +484,7 @@ export default function NovoAlunoPage() {
                 <CardTitle className="flex items-center"><DollarSign className="mr-2 h-5 w-5 text-primary"/>Informações de Pagamento Iniciais</CardTitle>
                 <CardDescription>
                   Os dados de pagamento serão baseados no plano selecionado e na opção "Cobrar ao Iniciar" do plano.
-                  Você pode ajustar manualmente se necessário.
+                  Você pode ajustar manually se necessário.
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -554,4 +566,3 @@ export default function NovoAlunoPage() {
     </>
   );
 }
-

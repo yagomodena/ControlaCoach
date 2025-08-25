@@ -4,7 +4,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Edit3, Save, CalendarDays, DollarSign, ShieldCheck, ShieldOff, User, Phone, BarChart, Users, CheckCircle, XCircle, Clock, Goal, PlusCircle, Search, MapPinIcon, ClockIcon, Loader2 } from 'lucide-react';
+import { ArrowLeft, Edit3, Save, CalendarDays, DollarSign, ShieldCheck, ShieldOff, User, Phone, BarChart, Users, CheckCircle, XCircle, Clock, Goal, PlusCircle, Search, MapPinIcon, ClockIcon, Loader2, Dumbbell, Activity } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,6 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -26,6 +27,7 @@ import { AddPlanDialog } from '@/components/dialogs/add-plan-dialog';
 import { ManagePlansDialog } from '@/components/dialogs/manage-plans-dialog';
 import { db, auth } from '@/firebase';
 import { doc, getDoc, updateDoc, collection, onSnapshot, query, where, orderBy } from 'firebase/firestore';
+import { differenceInYears, parseISO } from 'date-fns';
 
 const NO_LOCATION_VALUE = "__NO_LOCATION__";
 
@@ -36,6 +38,9 @@ const studentSchema = z.object({
   technicalLevel: z.enum(['Iniciante', 'Intermediário', 'Avançado'], { required_error: 'Selecione o nível técnico.' }),
   status: z.enum(['active', 'inactive'], { required_error: 'Selecione o status.' }),
   objective: z.string().optional(),
+  birthDate: z.string().optional().nullable(),
+  photoURL: z.string().url().optional().nullable(),
+  trainingSheetContent: z.string().optional(),
   paymentStatus: z.enum(['pago', 'pendente', 'vencido']).optional(),
   dueDate: z.string().optional(),
   amountDue: z.number().optional(),
@@ -138,6 +143,9 @@ export default function AlunoDetailPage() {
           setStudent(studentData);
           reset({
             ...studentData,
+            birthDate: studentData.birthDate || '',
+            photoURL: studentData.photoURL || null,
+            trainingSheetContent: studentData.trainingSheet?.content || '',
             recurringClassTime: studentData.recurringClassTime || '',
             recurringClassDays: studentData.recurringClassDays || [],
             recurringClassLocation: studentData.recurringClassLocation || NO_LOCATION_VALUE,
@@ -181,7 +189,18 @@ export default function AlunoDetailPage() {
         plan: data.plan,
         technicalLevel: data.technicalLevel,
         status: data.status,
+        birthDate: data.birthDate || null,
+        photoURL: data.photoURL || null,
       };
+      
+      if(data.trainingSheetContent && data.trainingSheetContent.trim() !== '') {
+        updatePayload.trainingSheet = {
+            content: data.trainingSheetContent,
+            lastUpdated: new Date().toISOString(),
+        };
+      } else {
+        updatePayload.trainingSheet = null;
+      }
 
       updatePayload.objective = (data.objective && data.objective.trim() !== '') ? data.objective.trim() : null;
       updatePayload.recurringClassTime = (data.recurringClassTime && data.recurringClassTime.trim() !== '') ? data.recurringClassTime.trim() : null;
@@ -231,6 +250,14 @@ export default function AlunoDetailPage() {
       // Optional: Select first active plan or clear
     } else if (!currentPlanExistsAndIsActive) {
        setValue('plan', '');
+    }
+  };
+  
+  const calculateAge = (birthDate: string): number | null => {
+    try {
+        return differenceInYears(new Date(), parseISO(birthDate));
+    } catch (error) {
+        return null;
     }
   };
 
@@ -285,6 +312,8 @@ export default function AlunoDetailPage() {
         return 'Data inválida';
     }
   };
+  
+  const studentAge = student.birthDate ? calculateAge(student.birthDate) : null;
 
 
   return (
@@ -312,232 +341,306 @@ export default function AlunoDetailPage() {
         </div>
 
         {isEditMode ? (
-          <Card className="max-w-3xl mx-auto shadow-lg">
-            <form onSubmit={handleSubmit(onSubmit)}>
-              <CardHeader>
-                <CardTitle>Editar Informações</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Nome Completo</Label>
-                  <Controller name="name" control={control} render={({ field }) => <Input id="name" {...field} value={field.value ?? ''} />} />
-                  {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Telefone</Label>
-                  <Controller name="phone" control={control} render={({ field }) => <Input id="phone" type="tel" {...field} value={field.value ?? ''} />} />
-                  {errors.phone && <p className="text-sm text-destructive">{errors.phone.message}</p>}
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="plan">Plano</Label>
-                    <div className="flex items-center gap-2">
-                      <div className="flex-grow">
-                        <Controller name="plan" control={control} render={({ field }) => (
-                          <Select onValueChange={field.onChange} value={field.value ?? ''} disabled={isLoadingPlans}>
-                            <SelectTrigger id="plan"><SelectValue placeholder={isLoadingPlans ? "Carregando..." : "Selecione o plano"} /></SelectTrigger>
-                            <SelectContent>
-                              {activePlans.length > 0 ? (
-                                activePlans.map(p => (
-                                  <SelectItem key={p.id} value={p.name}>{p.name} - R$ {p.price.toFixed(2)}</SelectItem>
-                                ))
-                              ) : (
-                                <SelectItem value="no-plans" disabled>{isLoadingPlans ? "Carregando..." : "Nenhum plano ativo"}</SelectItem>
-                              )}
-                            </SelectContent>
-                          </Select>
-                        )} />
-                      </div>
-                      <Button variant="outline" size="icon" type="button" onClick={() => setIsAddPlanDialogOpen(true)}>
-                        <PlusCircle className="h-4 w-4" />
-                        <span className="sr-only">Adicionar Novo Plano</span>
-                      </Button>
-                      <Button variant="outline" size="icon" type="button" onClick={() => setIsManagePlansDialogOpen(true)}>
-                        <Search className="h-4 w-4" />
-                        <span className="sr-only">Consultar Planos</span>
-                      </Button>
-                    </div>
-                    {errors.plan && <p className="text-sm text-destructive">{errors.plan.message}</p>}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="technicalLevel">Nível Técnico</Label>
-                    <Controller name="technicalLevel" control={control} render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value ?? ''}>
-                        <SelectTrigger id="technicalLevel"><SelectValue /></SelectTrigger>
-                        <SelectContent><SelectItem value="Iniciante">Iniciante</SelectItem><SelectItem value="Intermediário">Intermediário</SelectItem><SelectItem value="Avançado">Avançado</SelectItem></SelectContent>
-                      </Select>
-                    )} />
-                    {errors.technicalLevel && <p className="text-sm text-destructive">{errors.technicalLevel.message}</p>}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="status">Status</Label>
-                  <Controller name="status" control={control} render={({ field }) => (
-                    <Select onValueChange={field.onChange} value={field.value ?? ''}>
-                      <SelectTrigger id="status"><SelectValue /></SelectTrigger>
-                      <SelectContent><SelectItem value="active">Ativo</SelectItem><SelectItem value="inactive">Inativo</SelectItem></SelectContent>
-                    </Select>
-                  )} />
-                  {errors.status && <p className="text-sm text-destructive">{errors.status.message}</p>}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="objective">Objetivo</Label>
-                  <Controller name="objective" control={control} render={({ field }) => <Textarea id="objective" placeholder="Descreva o objetivo do aluno..." {...field} value={field.value ?? ''} />} />
-                  {errors.objective && <p className="text-sm text-destructive">{errors.objective.message}</p>}
-                </div>
-              </CardContent>
+          <form onSubmit={handleSubmit(onSubmit)}>
+            <Tabs defaultValue="personal" className="w-full">
+                <TabsList className="grid w-full grid-cols-4 mb-6 max-w-2xl mx-auto">
+                    <TabsTrigger value="personal">Pessoal</TabsTrigger>
+                    <TabsTrigger value="training">Treino</TabsTrigger>
+                    <TabsTrigger value="sports">Info Esportiva</TabsTrigger>
+                    <TabsTrigger value="financial">Financeiro</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="personal">
+                  <Card className="max-w-3xl mx-auto shadow-lg">
+                    <CardHeader>
+                      <CardTitle>Informações Pessoais</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                       <div className="flex items-center gap-4">
+                         <Controller name="photoURL" control={control} render={({ field }) => (
+                           <Avatar className="h-20 w-20">
+                            <AvatarImage src={field.value ?? undefined} alt={watch('name')} />
+                            <AvatarFallback><User className="h-10 w-10" /></AvatarFallback>
+                           </Avatar>
+                         )} />
+                         {/* Placeholder for upload logic */}
+                         <Button type="button" variant="outline" onClick={() => toast({title: "Em breve!", description:"Upload de fotos será implementado em breve."})}>Alterar Foto</Button>
+                       </div>
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                            <Label htmlFor="name">Nome Completo</Label>
+                            <Controller name="name" control={control} render={({ field }) => <Input id="name" {...field} value={field.value ?? ''} />} />
+                            {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="phone">Telefone</Label>
+                          <Controller name="phone" control={control} render={({ field }) => <Input id="phone" type="tel" {...field} value={field.value ?? ''} />} />
+                          {errors.phone && <p className="text-sm text-destructive">{errors.phone.message}</p>}
+                        </div>
+                       </div>
+                       <div className="space-y-2">
+                        <Label htmlFor="birthDate">Data de Nascimento</Label>
+                        <Controller name="birthDate" control={control} render={({ field }) => <Input id="birthDate" type="date" {...field} value={field.value ?? ''} />} />
+                        {errors.birthDate && <p className="text-sm text-destructive">{errors.birthDate.message}</p>}
+                       </div>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
 
-              <Separator className="my-6" />
-
-              <CardHeader className="pt-0">
-                <CardTitle className="flex items-center"><CalendarDays className="mr-2 h-5 w-5 text-primary"/>Horários e Dias de Aula Recorrentes</CardTitle>
-                <CardDescription>Defina o horário e os dias fixos para as aulas deste aluno. (Opcional)</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="recurringClassTime" className="flex items-center"><ClockIcon className="mr-1 h-4 w-4"/>Horário da Aula</Label>
-                    <Controller
-                      name="recurringClassTime"
-                      control={control}
-                      render={({ field }) => <Input id="recurringClassTime" type="time" {...field} value={field.value ?? ''} />}
-                    />
-                    {errors.recurringClassTime && <p className="text-sm text-destructive">{errors.recurringClassTime.message}</p>}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="recurringClassLocation" className="flex items-center"><MapPinIcon className="mr-1 h-4 w-4"/>Local da Aula</Label>
-                    <Controller
-                      name="recurringClassLocation"
-                      control={control}
-                      render={({ field }) => (
-                        <Select onValueChange={field.onChange} value={field.value || NO_LOCATION_VALUE} disabled={isLoadingLocations}>
-                          <SelectTrigger id="recurringClassLocation">
-                            <SelectValue placeholder={isLoadingLocations ? "Carregando..." : "Selecione o local"} />
-                          </SelectTrigger>
-                          <SelectContent>
-                             <SelectItem value={NO_LOCATION_VALUE}>Nenhum local específico</SelectItem>
-                            {activeLocations.map(loc => (
-                              <SelectItem key={loc.id} value={loc.name}>{loc.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    />
-                    {errors.recurringClassLocation && <p className="text-sm text-destructive">{errors.recurringClassLocation.message}</p>}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Dias da Semana para Aula Recorrente</Label>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 pt-2">
-                    {DAYS_OF_WEEK.map((day) => (
-                      <Controller
-                        key={day}
-                        name="recurringClassDays"
-                        control={control}
-                        render={({ field }) => {
-                          const currentDays = Array.isArray(field.value) ? field.value : [];
-                          return (
-                            <div className="flex items-center space-x-2">
-                              <Checkbox
-                                id={`day-edit-${day}`}
-                                checked={currentDays.includes(day)}
-                                onCheckedChange={(checked) => {
-                                  const newDays = checked
-                                    ? [...currentDays, day]
-                                    : currentDays.filter((d) => d !== day);
-                                  field.onChange(newDays);
-                                }}
-                              />
-                              <Label htmlFor={`day-edit-${day}`} className="font-normal">
-                                {day}
-                              </Label>
+                <TabsContent value="training">
+                     <Card className="max-w-3xl mx-auto shadow-lg">
+                        <CardHeader>
+                            <CardTitle className="flex items-center"><Dumbbell className="mr-2 h-5 w-5 text-primary"/>Plano de Treino</CardTitle>
+                            <CardDescription>Monte a ficha de treino do aluno.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                           <Controller name="trainingSheetContent" control={control} render={({ field }) => (
+                            <Textarea 
+                                {...field}
+                                placeholder="Ex:&#10;Aquecimento: 10min esteira&#10;--&#10;A. Supino Reto: 3x12&#10;B. Remada Curvada: 3x12&#10;..."
+                                rows={15}
+                                className="font-mono text-sm"
+                            />
+                           )} />
+                        </CardContent>
+                     </Card>
+                </TabsContent>
+                
+                <TabsContent value="sports">
+                    <Card className="max-w-3xl mx-auto shadow-lg">
+                        <CardHeader>
+                            <CardTitle className="flex items-center"><Activity className="mr-2 h-5 w-5 text-primary"/>Informações Esportivas</CardTitle>
+                            <CardDescription>Acompanhe a evolução física do aluno.</CardDescription>
+                        </CardHeader>
+                         <CardContent className="space-y-6">
+                            <div className="space-y-2">
+                                <Label htmlFor="plan">Plano</Label>
+                                <div className="flex items-center gap-2">
+                                <div className="flex-grow">
+                                    <Controller name="plan" control={control} render={({ field }) => (
+                                    <Select onValueChange={field.onChange} value={field.value ?? ''} disabled={isLoadingPlans}>
+                                        <SelectTrigger id="plan"><SelectValue placeholder={isLoadingPlans ? "Carregando..." : "Selecione o plano"} /></SelectTrigger>
+                                        <SelectContent>
+                                        {activePlans.length > 0 ? (
+                                            activePlans.map(p => (
+                                            <SelectItem key={p.id} value={p.name}>{p.name} - R$ {p.price.toFixed(2)}</SelectItem>
+                                            ))
+                                        ) : (
+                                            <SelectItem value="no-plans" disabled>{isLoadingPlans ? "Carregando..." : "Nenhum plano ativo"}</SelectItem>
+                                        )}
+                                        </SelectContent>
+                                    </Select>
+                                    )} />
+                                </div>
+                                <Button variant="outline" size="icon" type="button" onClick={() => setIsAddPlanDialogOpen(true)}>
+                                    <PlusCircle className="h-4 w-4" />
+                                    <span className="sr-only">Adicionar Novo Plano</span>
+                                </Button>
+                                <Button variant="outline" size="icon" type="button" onClick={() => setIsManagePlansDialogOpen(true)}>
+                                    <Search className="h-4 w-4" />
+                                    <span className="sr-only">Consultar Planos</span>
+                                </Button>
+                                </div>
+                                {errors.plan && <p className="text-sm text-destructive">{errors.plan.message}</p>}
                             </div>
-                          );
-                        }}
-                      />
-                    ))}
-                  </div>
-                  {errors.recurringClassDays && <p className="text-sm text-destructive">{errors.recurringClassDays.message}</p>}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-2">
+                                    <Label htmlFor="technicalLevel">Nível Técnico</Label>
+                                    <Controller name="technicalLevel" control={control} render={({ field }) => (
+                                    <Select onValueChange={field.onChange} value={field.value ?? ''}>
+                                        <SelectTrigger id="technicalLevel"><SelectValue /></SelectTrigger>
+                                        <SelectContent><SelectItem value="Iniciante">Iniciante</SelectItem><SelectItem value="Intermediário">Intermediário</SelectItem><SelectItem value="Avançado">Avançado</SelectItem></SelectContent>
+                                    </Select>
+                                    )} />
+                                    {errors.technicalLevel && <p className="text-sm text-destructive">{errors.technicalLevel.message}</p>}
+                                </div>
+                                <div className="space-y-2">
+                                <Label htmlFor="status">Status</Label>
+                                <Controller name="status" control={control} render={({ field }) => (
+                                    <Select onValueChange={field.onChange} value={field.value ?? ''}>
+                                    <SelectTrigger id="status"><SelectValue /></SelectTrigger>
+                                    <SelectContent><SelectItem value="active">Ativo</SelectItem><SelectItem value="inactive">Inativo</SelectItem></SelectContent>
+                                    </Select>
+                                )} />
+                                {errors.status && <p className="text-sm text-destructive">{errors.status.message}</p>}
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="objective">Objetivo</Label>
+                                <Controller name="objective" control={control} render={({ field }) => <Textarea id="objective" placeholder="Descreva o objetivo do aluno..." {...field} value={field.value ?? ''} />} />
+                                {errors.objective && <p className="text-sm text-destructive">{errors.objective.message}</p>}
+                            </div>
+                            <Separator />
+                             <Label>Adicionar Nova Avaliação Física</Label>
+                              <Card className="p-4 bg-muted/30">
+                                <p className="text-center text-sm text-muted-foreground">Em breve: adicione peso, % gordura, etc. e veja gráficos de evolução.</p>
+                              </Card>
+                         </CardContent>
+                    </Card>
+                </TabsContent>
+
+                <TabsContent value="financial">
+                    <Card className="max-w-3xl mx-auto shadow-lg">
+                        <CardHeader>
+                            <CardTitle className="flex items-center"><CalendarDays className="mr-2 h-5 w-5 text-primary"/>Aulas Recorrentes</CardTitle>
+                            <CardDescription>Defina o horário e os dias fixos para as aulas deste aluno. (Opcional)</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-2">
+                                <Label htmlFor="recurringClassTime" className="flex items-center"><ClockIcon className="mr-1 h-4 w-4"/>Horário da Aula</Label>
+                                <Controller
+                                name="recurringClassTime"
+                                control={control}
+                                render={({ field }) => <Input id="recurringClassTime" type="time" {...field} value={field.value ?? ''} />}
+                                />
+                                {errors.recurringClassTime && <p className="text-sm text-destructive">{errors.recurringClassTime.message}</p>}
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="recurringClassLocation" className="flex items-center"><MapPinIcon className="mr-1 h-4 w-4"/>Local da Aula</Label>
+                                <Controller
+                                name="recurringClassLocation"
+                                control={control}
+                                render={({ field }) => (
+                                    <Select onValueChange={field.onChange} value={field.value || NO_LOCATION_VALUE} disabled={isLoadingLocations}>
+                                    <SelectTrigger id="recurringClassLocation">
+                                        <SelectValue placeholder={isLoadingLocations ? "Carregando..." : "Selecione o local"} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value={NO_LOCATION_VALUE}>Nenhum local específico</SelectItem>
+                                        {activeLocations.map(loc => (
+                                        <SelectItem key={loc.id} value={loc.name}>{loc.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                    </Select>
+                                )}
+                                />
+                                {errors.recurringClassLocation && <p className="text-sm text-destructive">{errors.recurringClassLocation.message}</p>}
+                            </div>
+                            </div>
+                            <div className="space-y-2">
+                            <Label>Dias da Semana para Aula Recorrente</Label>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 pt-2">
+                                {DAYS_OF_WEEK.map((day) => (
+                                <Controller
+                                    key={day}
+                                    name="recurringClassDays"
+                                    control={control}
+                                    render={({ field }) => {
+                                    const currentDays = Array.isArray(field.value) ? field.value : [];
+                                    return (
+                                        <div className="flex items-center space-x-2">
+                                        <Checkbox
+                                            id={`day-edit-${day}`}
+                                            checked={currentDays.includes(day)}
+                                            onCheckedChange={(checked) => {
+                                            const newDays = checked
+                                                ? [...currentDays, day]
+                                                : currentDays.filter((d) => d !== day);
+                                            field.onChange(newDays);
+                                            }}
+                                        />
+                                        <Label htmlFor={`day-edit-${day}`} className="font-normal">
+                                            {day}
+                                        </Label>
+                                        </div>
+                                    );
+                                    }}
+                                />
+                                ))}
+                            </div>
+                            {errors.recurringClassDays && <p className="text-sm text-destructive">{errors.recurringClassDays.message}</p>}
+                            </div>
+                        </CardContent>
+                        <Separator className="my-6" />
+
+                        <CardHeader className="pt-0">
+                            <CardTitle className="flex items-center"><DollarSign className="mr-2 h-5 w-5 text-primary"/>Informações de Pagamento</CardTitle>
+                            <CardDescription>Gerencie os detalhes financeiros do aluno. (Opcional)</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-2">
+                                    <Label htmlFor="paymentStatus">Status do Pagamento</Label>
+                                    <Controller name="paymentStatus" control={control} render={({ field }) => (
+                                        <Select onValueChange={field.onChange} value={field.value || ''}>
+                                        <SelectTrigger id="paymentStatus"><SelectValue placeholder="Selecione"/></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="pago">Pago</SelectItem>
+                                            <SelectItem value="pendente">Pendente</SelectItem>
+                                            <SelectItem value="vencido">Vencido</SelectItem>
+                                        </SelectContent>
+                                        </Select>
+                                    )} />
+                                    {errors.paymentStatus && <p className="text-sm text-destructive">{errors.paymentStatus.message}</p>}
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="dueDate">Data de Vencimento</Label>
+                                    <Controller name="dueDate" control={control} render={({ field }) => <Input id="dueDate" type="date" {...field} value={field.value ?? ''} />} />
+                                    {errors.dueDate && <p className="text-sm text-destructive">{errors.dueDate.message}</p>}
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-2">
+                                    <Label htmlFor="amountDue">Valor Devido (R$)</Label>
+                                    <Controller name="amountDue" control={control} render={({ field }) => <Input id="amountDue" type="number" step="0.01" {...field} value={field.value ?? ''} onChange={e => { const val = e.target.value; field.onChange(val === '' ? undefined : parseFloat(val)); }} />} />
+                                    {errors.amountDue && <p className="text-sm text-destructive">{errors.amountDue.message}</p>}
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="paymentMethod">Método de Pagamento</Label>
+                                    <Controller name="paymentMethod" control={control} render={({ field }) => (
+                                        <Select onValueChange={field.onChange} value={field.value || ''}>
+                                        <SelectTrigger id="paymentMethod"><SelectValue placeholder="Selecione"/></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="PIX">PIX</SelectItem>
+                                            <SelectItem value="Dinheiro">Dinheiro</SelectItem>
+                                            <SelectItem value="Cartão">Cartão</SelectItem>
+                                        </SelectContent>
+                                        </Select>
+                                    )} />
+                                    {errors.paymentMethod && <p className="text-sm text-destructive">{errors.paymentMethod.message}</p>}
+                                </div>
+                            </div>
+                            <div className="space-y-2 md:max-w-[calc(50%-0.75rem)]"> 
+                                <Label htmlFor="lastPaymentDate">Data do Último Pagamento</Label>
+                                <Controller name="lastPaymentDate" control={control} render={({ field }) => <Input id="lastPaymentDate" type="date" {...field} value={field.value ?? ''} />} />
+                                {errors.lastPaymentDate && <p className="text-sm text-destructive">{errors.lastPaymentDate.message}</p>}
+                            </div>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+                <div className="max-w-3xl mx-auto w-full px-6 pb-6 mt-4">
+                    <CardFooter className="flex justify-end gap-2 p-0">
+                        <Button variant="outline" type="button" onClick={() => { setIsEditMode(false); router.replace(`/alunos/${studentId}`); reset({...student, objective: student?.objective || '', recurringClassTime: student?.recurringClassTime || '', recurringClassDays: student?.recurringClassDays || [], recurringClassLocation: student?.recurringClassLocation || NO_LOCATION_VALUE, dueDate: student?.dueDate?.split('T')[0] || '', lastPaymentDate: student?.lastPaymentDate?.split('T')[0] || '', amountDue: student?.amountDue === null || student?.amountDue === undefined ? undefined : student.amountDue, paymentStatus: student?.paymentStatus || undefined, paymentMethod: student?.paymentMethod || undefined  } as StudentFormData); }}>Cancelar</Button>
+                        <Button type="submit" disabled={isSubmitting || isLoadingLocations || isLoadingPlans} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                        <Save className="mr-2 h-4 w-4" />{isSubmitting ? 'Salvando...' : 'Salvar Alterações'}
+                        </Button>
+                    </CardFooter>
                 </div>
-              </CardContent>
-               <Separator className="my-6" />
-
-                <CardHeader className="pt-0">
-                    <CardTitle className="flex items-center"><DollarSign className="mr-2 h-5 w-5 text-primary"/>Informações de Pagamento</CardTitle>
-                    <CardDescription>Gerencie os detalhes financeiros do aluno. (Opcional)</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-2">
-                            <Label htmlFor="paymentStatus">Status do Pagamento</Label>
-                            <Controller name="paymentStatus" control={control} render={({ field }) => (
-                                <Select onValueChange={field.onChange} value={field.value || ''}>
-                                <SelectTrigger id="paymentStatus"><SelectValue placeholder="Selecione"/></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="pago">Pago</SelectItem>
-                                    <SelectItem value="pendente">Pendente</SelectItem>
-                                    <SelectItem value="vencido">Vencido</SelectItem>
-                                </SelectContent>
-                                </Select>
-                            )} />
-                            {errors.paymentStatus && <p className="text-sm text-destructive">{errors.paymentStatus.message}</p>}
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="dueDate">Data de Vencimento</Label>
-                            <Controller name="dueDate" control={control} render={({ field }) => <Input id="dueDate" type="date" {...field} value={field.value ?? ''} />} />
-                            {errors.dueDate && <p className="text-sm text-destructive">{errors.dueDate.message}</p>}
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-2">
-                            <Label htmlFor="amountDue">Valor Devido (R$)</Label>
-                            <Controller name="amountDue" control={control} render={({ field }) => <Input id="amountDue" type="number" step="0.01" {...field} value={field.value ?? ''} onChange={e => { const val = e.target.value; field.onChange(val === '' ? undefined : parseFloat(val)); }} />} />
-                            {errors.amountDue && <p className="text-sm text-destructive">{errors.amountDue.message}</p>}
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="paymentMethod">Método de Pagamento</Label>
-                             <Controller name="paymentMethod" control={control} render={({ field }) => (
-                                <Select onValueChange={field.onChange} value={field.value || ''}>
-                                <SelectTrigger id="paymentMethod"><SelectValue placeholder="Selecione"/></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="PIX">PIX</SelectItem>
-                                    <SelectItem value="Dinheiro">Dinheiro</SelectItem>
-                                    <SelectItem value="Cartão">Cartão</SelectItem>
-                                </SelectContent>
-                                </Select>
-                            )} />
-                            {errors.paymentMethod && <p className="text-sm text-destructive">{errors.paymentMethod.message}</p>}
-                        </div>
-                    </div>
-                     <div className="space-y-2 md:max-w-[calc(50%-0.75rem)]"> 
-                        <Label htmlFor="lastPaymentDate">Data do Último Pagamento</Label>
-                        <Controller name="lastPaymentDate" control={control} render={({ field }) => <Input id="lastPaymentDate" type="date" {...field} value={field.value ?? ''} />} />
-                        {errors.lastPaymentDate && <p className="text-sm text-destructive">{errors.lastPaymentDate.message}</p>}
-                    </div>
-                </CardContent>
-
-              <CardFooter className="flex justify-end gap-2 pt-6">
-                <Button variant="outline" type="button" onClick={() => { setIsEditMode(false); router.replace(`/alunos/${studentId}`); reset({...student, objective: student?.objective || '', recurringClassTime: student?.recurringClassTime || '', recurringClassDays: student?.recurringClassDays || [], recurringClassLocation: student?.recurringClassLocation || NO_LOCATION_VALUE, dueDate: student?.dueDate?.split('T')[0] || '', lastPaymentDate: student?.lastPaymentDate?.split('T')[0] || '', amountDue: student?.amountDue === null || student?.amountDue === undefined ? undefined : student.amountDue, paymentStatus: student?.paymentStatus || undefined, paymentMethod: student?.paymentMethod || undefined  } as StudentFormData); }}>Cancelar</Button>
-                <Button type="submit" disabled={isSubmitting || isLoadingLocations || isLoadingPlans} className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                  <Save className="mr-2 h-4 w-4" />{isSubmitting ? 'Salvando...' : 'Salvar Alterações'}
-                </Button>
-              </CardFooter>
-            </form>
-          </Card>
+            </Tabs>
+          </form>
         ) : (
           <Tabs defaultValue="overview" className="w-full">
-            <TabsList className="grid w-full grid-cols-3 mb-6 max-w-lg mx-auto">
+            <TabsList className="grid w-full grid-cols-5 mb-6 max-w-2xl mx-auto">
               <TabsTrigger value="overview">Visão Geral</TabsTrigger>
-              <TabsTrigger value="schedule">Aulas Recorrentes</TabsTrigger>
-              <TabsTrigger value="payments">Pagamentos</TabsTrigger>
+              <TabsTrigger value="schedule">Aulas</TabsTrigger>
+              <TabsTrigger value="payments">Financeiro</TabsTrigger>
+              <TabsTrigger value="sports_info">Info Esportiva</TabsTrigger>
+              <TabsTrigger value="training_sheet">Treino</TabsTrigger>
             </TabsList>
 
             <TabsContent value="overview">
               <Card className="shadow-lg">
                 <CardHeader className="flex flex-row items-center justify-between">
-                  <div>
-                    <CardTitle className="text-2xl font-headline">{student.name}</CardTitle>
-                    <CardDescription>ID: {student.id}</CardDescription>
+                  <div className="flex items-center gap-4">
+                    <Avatar className="h-20 w-20">
+                        <AvatarImage src={student.photoURL ?? undefined} alt={student.name} />
+                        <AvatarFallback><User className="h-10 w-10" /></AvatarFallback>
+                    </Avatar>
+                    <div>
+                        <CardTitle className="text-2xl font-headline">{student.name}</CardTitle>
+                        <CardDescription>ID: {student.id}</CardDescription>
+                    </div>
                   </div>
                   {student.status === 'active'
                     ? <Badge className="bg-green-500/20 text-green-700 border-green-500/30 py-1 px-3 text-sm"><ShieldCheck className="inline mr-1 h-4 w-4" />Ativo</Badge>
@@ -547,8 +650,7 @@ export default function AlunoDetailPage() {
                 <CardContent className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 pt-6">
                   <InfoItem icon={User} label="Nome Completo" value={student.name} />
                   <InfoItem icon={Phone} label="Telefone" value={student.phone} />
-                  <InfoItem icon={Users} label="Plano" value={student.plan} />
-                  <InfoItem icon={BarChart} label="Nível Técnico" value={student.technicalLevel} />
+                  <InfoItem icon={CalendarDays} label="Data de Nascimento" value={student.birthDate ? `${formatDateString(student.birthDate)} (${studentAge} anos)` : 'N/A'} />
                   <InfoItem icon={CalendarDays} label="Data de Cadastro" value={formatDateString(student.registrationDate)} />
                   <InfoItem icon={student.status === 'active' ? ShieldCheck : ShieldOff} label="Status" value={student.status === 'active' ? 'Ativo' : 'Inativo'} />
                 </CardContent>
@@ -582,6 +684,44 @@ export default function AlunoDetailPage() {
                     )}
                 </CardContent>
               </Card>
+            </TabsContent>
+            
+            <TabsContent value="sports_info">
+                <Card className="shadow-lg">
+                    <CardHeader>
+                        <CardTitle className="flex items-center"><Activity className="mr-2 h-5 w-5 text-primary"/>Informações Esportivas</CardTitle>
+                        <CardDescription>Plano, nível e histórico de avaliações físicas.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                        <div className="grid md:grid-cols-2 gap-6">
+                         <InfoItem icon={Users} label="Plano" value={student.plan} />
+                         <InfoItem icon={BarChart} label="Nível Técnico" value={student.technicalLevel} />
+                        </div>
+                        <Separator />
+                        <CardTitle className="text-lg">Histórico de Evolução</CardTitle>
+                         <Card className="p-4 bg-muted/30">
+                            <p className="text-center text-sm text-muted-foreground">Em breve: Gráfico com a evolução de peso, % de gordura e outras medidas.</p>
+                         </Card>
+                    </CardContent>
+                </Card>
+            </TabsContent>
+            
+            <TabsContent value="training_sheet">
+                 <Card className="shadow-lg">
+                    <CardHeader>
+                        <CardTitle className="flex items-center"><Dumbbell className="mr-2 h-5 w-5 text-primary"/>Plano de Treino</CardTitle>
+                        <CardDescription>Ficha de treino atual do aluno. Atualizado em: {student.trainingSheet?.lastUpdated ? formatDateString(student.trainingSheet.lastUpdated) : 'N/A'}</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {student.trainingSheet?.content ? (
+                           <div className="prose prose-sm max-w-none whitespace-pre-wrap p-4 bg-muted/30 rounded-md">
+                            {student.trainingSheet.content}
+                           </div>
+                        ): (
+                            <p className="text-muted-foreground text-center py-4">Nenhuma ficha de treino cadastrada para este aluno.</p>
+                        )}
+                    </CardContent>
+                 </Card>
             </TabsContent>
 
             <TabsContent value="schedule">
