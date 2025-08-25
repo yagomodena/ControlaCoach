@@ -10,9 +10,9 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Logo } from '@/components/logo';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, KeyRound } from 'lucide-react';
+import { ArrowLeft, KeyRound, Loader2 } from 'lucide-react';
 import { db } from '@/firebase';
-import { collection, getDocs, query, where, limit } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 
 
 export default function AlunoLoginPage() {
@@ -42,19 +42,13 @@ export default function AlunoLoginPage() {
       let studentFound = false;
 
       for (const coachDoc of coachesSnapshot.docs) {
-        const studentsRef = collection(db, 'coaches', coachDoc.id, 'students');
-        const q = query(studentsRef, where("id", "==", studentId), limit(1)); // This won't work as 'id' is the documentID, not a field.
-        
-        // A correct but slow query would be to fetch all students and filter client-side,
-        // or have a root 'students' collection for lookups.
-        // Given the structure, we can try a direct doc get if we assume studentId is the authId.
-        
+        // Since the studentId is the document ID, we can do a direct getDoc
         const studentDocRef = doc(db, 'coaches', coachDoc.id, 'students', studentId);
         const studentDocSnap = await getDoc(studentDocRef);
 
         if (studentDocSnap.exists()) {
             studentFound = true;
-            break;
+            break; // Exit the loop once the student is found
         }
       }
 
@@ -62,6 +56,10 @@ export default function AlunoLoginPage() {
         // In a real app, you'd create a secure session. Here, we'll use local storage.
         // This is NOT secure for production use.
         localStorage.setItem('studentId', studentId);
+        toast({
+            title: "Login realizado!",
+            description: "Bem-vindo ao seu portal.",
+        });
         router.push('/student/dashboard');
       } else {
         setError('ID de Aluno não encontrado.');
@@ -112,6 +110,7 @@ export default function AlunoLoginPage() {
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
             <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isLoading}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
               {isLoading ? 'Verificando...' : 'Entrar'}
             </Button>
           </form>
