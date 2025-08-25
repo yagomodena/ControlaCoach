@@ -12,7 +12,7 @@ import { Logo } from '@/components/logo';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, KeyRound, Loader2 } from 'lucide-react';
 import { db } from '@/firebase';
-import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, query, where } from 'firebase/firestore';
 
 
 export default function AlunoLoginPage() {
