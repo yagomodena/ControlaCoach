@@ -15,7 +15,6 @@ import { ArrowLeft } from 'lucide-react';
 export default function AlunoLoginPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [coachId, setCoachId] = useState('');
   const [studentId, setStudentId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -25,14 +24,14 @@ export default function AlunoLoginPage() {
     setError('');
     setIsLoading(true);
 
-    if (!coachId.trim() || !studentId.trim()) {
-        setError("Por favor, preencha o ID do Treinador e seu ID de Aluno.");
+    if (!studentId.trim()) {
+        setError("Por favor, preencha seu ID de Aluno.");
         setIsLoading(false);
         return;
     }
     
     // In a real application, this is where you would implement
-    // the logic to verify the coach and student IDs against your database,
+    // the logic to verify the student ID against your database,
     // likely using a serverless function for security.
     // For now, we'll simulate a successful login and redirect.
     
@@ -45,7 +44,7 @@ export default function AlunoLoginPage() {
     setTimeout(() => {
         // On success, redirect to the student dashboard
         // The URL would likely be dynamic, e.g., /student/{studentId}
-        router.push('/dashboard'); // Placeholder redirect
+        router.push('/student/dashboard'); // Placeholder redirect
         setIsLoading(false);
     }, 1500);
 
@@ -60,23 +59,11 @@ export default function AlunoLoginPage() {
           </div>
           <CardTitle className="text-2xl font-headline">Acesso do Aluno</CardTitle>
           <CardDescription>
-            Insira o ID do seu treinador e o seu ID de aluno.
+            Insira o seu ID de aluno para continuar.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="coachId">ID do Treinador</Label>
-              <Input
-                id="coachId"
-                placeholder="Peça ao seu treinador"
-                value={coachId}
-                onChange={(e) => setCoachId(e.target.value)}
-                required
-                className="bg-input"
-                disabled={isLoading}
-              />
-            </div>
             <div className="space-y-2">
               <Label htmlFor="studentId">Seu ID de Aluno</Label>
                <Input
@@ -106,5 +93,3 @@ export default function AlunoLoginPage() {
     </div>
   );
 }
-
-    
