@@ -114,6 +114,23 @@ export default function FinanceiroPage() {
   }, [router, toast]);
 
 
+  const fetchExpenses = (currentUserId: string, date: Date) => {
+    const monthStart = startOfMonth(date);
+    const monthEnd = endOfMonth(date);
+    const expensesQuery = query(
+        collection(db, 'coaches', currentUserId, 'expenses'), 
+        where('date', '>=', dateFnsFormatISO(monthStart, { representation: 'date' })),
+        where('date', '<=', dateFnsFormatISO(monthEnd, { representation: 'date' })),
+        orderBy('date', 'desc')
+    );
+    return onSnapshot(expensesQuery, (snapshot) => {
+        setExpenses(snapshot.docs.map(doc => ({...doc.data(), id: doc.id} as Expense)));
+    }, (error) => {
+        console.error("Error fetching expenses:", error);
+        toast({ title: "Erro ao Carregar Saídas", variant: "destructive"});
+    });
+  }
+
   useEffect(() => {
     if (!userId) {
       setIsLoading(false);
@@ -154,22 +171,7 @@ export default function FinanceiroPage() {
   useEffect(() => {
       if (!userId) return;
 
-      const monthStart = startOfMonth(selectedMonthDate);
-      const monthEnd = endOfMonth(selectedMonthDate);
-
-      const expensesQuery = query(
-          collection(db, 'coaches', userId, 'expenses'), 
-          where('date', '>=', dateFnsFormatISO(monthStart, { representation: 'date' })),
-          where('date', '<=', dateFnsFormatISO(monthEnd, { representation: 'date' })),
-          orderBy('date', 'desc')
-      );
-
-      const unsubscribeExpenses = onSnapshot(expensesQuery, (snapshot) => {
-          setExpenses(snapshot.docs.map(doc => ({...doc.data(), id: doc.id} as Expense)));
-      }, (error) => {
-          console.error("Error fetching expenses:", error);
-          toast({ title: "Erro ao Carregar Saídas", variant: "destructive"});
-      });
+      const unsubscribeExpenses = fetchExpenses(userId, selectedMonthDate);
 
       return () => unsubscribeExpenses();
   }, [userId, selectedMonthDate, toast]);
@@ -724,7 +726,14 @@ export default function FinanceiroPage() {
         </Card>
       </div>
 
-      <AddExpenseDialog open={isAddExpenseDialogOpen} onOpenChange={setIsAddExpenseDialogOpen} />
+      <AddExpenseDialog
+        open={isAddExpenseDialogOpen}
+        onOpenChange={setIsAddExpenseDialogOpen}
+        onExpenseAdded={() => {
+          // Re-fetch expenses for the current month.
+          if(userId) fetchExpenses(userId, selectedMonthDate);
+        }}
+      />
 
       <Dialog open={isReportDialogOpen} onOpenChange={setIsReportDialogOpen}>
         <DialogContent className="sm:max-w-3xl max-h-[90vh] flex flex-col">
@@ -875,7 +884,6 @@ export default function FinanceiroPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <AddExpenseDialog open={isAddExpenseDialogOpen} onOpenChange={setIsAddExpenseDialogOpen}/>
     </>
   );
 }

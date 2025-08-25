@@ -36,9 +36,10 @@ type ExpenseFormData = z.infer<typeof expenseSchema>;
 interface AddExpenseDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onExpenseAdded: () => void;
 }
 
-export function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialogProps) {
+export function AddExpenseDialog({ open, onOpenChange, onExpenseAdded }: AddExpenseDialogProps) {
   const { toast } = useToast();
   const [userId, setUserId] = useState<string | null>(null);
 
@@ -83,6 +84,7 @@ export function AddExpenseDialog({ open, onOpenChange }: AddExpenseDialogProps) 
         title: "Saída Adicionada!",
         description: `A saída "${data.description}" foi registrada com sucesso.`,
       });
+      onExpenseAdded(); // Notify parent component
       onOpenChange(false);
     } catch (error) {
       console.error("Error adding expense: ", error);
