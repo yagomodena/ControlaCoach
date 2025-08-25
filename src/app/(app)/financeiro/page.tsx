@@ -134,7 +134,7 @@ export default function FinanceiroPage() {
         orderBy('date', 'desc')
     );
     const unsubscribeExpenses = onSnapshot(expensesQuery, (snapshot) => {
-        const expensesData = snapshot.docs.map(doc => ({...doc.doc.data(), id: doc.id} as Expense));
+        const expensesData = snapshot.docs.map(doc => ({...doc.data(), id: doc.id} as Expense));
         setExpenses(expensesData);
     }, (error) => {
         console.error("Error fetching expenses:", error);
