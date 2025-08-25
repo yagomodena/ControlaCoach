@@ -22,6 +22,16 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import type { Student } from '@/types';
 import { db, auth } from '@/firebase';
 import { collection, deleteDoc, doc, query, orderBy, onSnapshot, writeBatch } from 'firebase/firestore';
@@ -36,6 +46,9 @@ export default function AlunosPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const { toast } = useToast();
   const router = useRouter();
+
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
 
   useEffect(() => {
     const unsubscribeAuth = auth.onAuthStateChanged(user => {
@@ -87,57 +100,67 @@ export default function AlunosPage() {
   }, [students, searchTerm, statusFilter]);
   
   const handleSendLogin = (student: Student) => {
-    if (!student.phone || !student.email) {
+    if (!student.phone || !student.id) {
       toast({
         title: "Dados Incompletos",
-        description: "O aluno não possui um telefone ou email cadastrado para enviar o login.",
+        description: "O aluno não possui um telefone ou ID para enviar o login.",
         variant: "destructive",
       });
       return;
     }
 
-    const message = `Olá, ${student.name.split(' ')[0]}! Aqui estão seus dados de acesso ao portal FitPlanner:\n\n*Email:* ${student.email}\n*Senha:* (a senha que você cadastrou)\n\nPara acessar, use o link: ${window.location.origin}/login\n\nQualquer dúvida, fale com seu treinador.`;
+    const message = `Olá, ${student.name.split(' ')[0]}! Aqui estão seus dados de acesso ao portal FitPlanner:\n\n*Seu ID de Acesso:* ${student.id}\n\nPara acessar, use o link: ${window.location.origin}/login/aluno\n\nQualquer dúvida, fale com seu treinador.`;
     const whatsappNumber = student.phone.replace(/\D/g, '');
     const whatsappUrl = `https://wa.me/55${whatsappNumber}?text=${encodeURIComponent(message)}`;
     
     window.open(whatsappUrl, '_blank');
   };
+  
+  const confirmDeleteStudent = (student: Student) => {
+    setStudentToDelete(student);
+    setIsDeleteDialogOpen(true);
+  };
 
-  const handleDeleteStudent = async (studentIdToDelete: string, studentName: string) => {
-    if (!userId) {
-      toast({ title: "Erro", description: "Usuário não autenticado.", variant: "destructive" });
+
+  const handleDeleteStudent = async () => {
+    if (!userId || !studentToDelete) {
+      toast({ title: "Erro", description: "Usuário ou aluno a ser excluído não está definido.", variant: "destructive" });
+      setIsDeleteDialogOpen(false);
       return;
     }
-    if (window.confirm(`Tem certeza que deseja excluir o aluno "${studentName}"? Esta ação não pode ser desfeita.`)) {
-      try {
-        const batch = writeBatch(db);
-        const studentCoachRef = doc(db, 'coaches', userId, 'students', studentIdToDelete);
-        const studentRootRef = doc(db, 'students', studentIdToDelete);
-        
-        batch.delete(studentCoachRef);
-        batch.delete(studentRootRef);
+    
+    try {
+      const batch = writeBatch(db);
+      const studentCoachRef = doc(db, 'coaches', userId, 'students', studentToDelete.id);
+      const studentRootRef = doc(db, 'students', studentToDelete.id);
+      
+      batch.delete(studentCoachRef);
+      batch.delete(studentRootRef);
 
-        await batch.commit();
-        
-        // Note: The student's Firebase Auth user is not deleted here. 
-        // This should be handled by a backend process for security reasons.
+      await batch.commit();
+      
+      // Note: The student's Firebase Auth user is not deleted here. 
+      // This should be handled by a backend process for security reasons.
 
-        toast({
-          title: 'Aluno Excluído!',
-          description: `O aluno "${studentName}" foi removido com sucesso.`,
-        });
-      } catch (error) {
-        console.error("Error deleting student: ", error);
-        toast({
-          title: "Erro ao Excluir",
-          description: "Não foi possível excluir o aluno. Tente novamente.",
-          variant: "destructive",
-        });
-      }
+      toast({
+        title: 'Aluno Excluído!',
+        description: `O aluno "${studentToDelete.name}" foi removido com sucesso.`,
+      });
+    } catch (error) {
+      console.error("Error deleting student: ", error);
+      toast({
+        title: "Erro ao Excluir",
+        description: "Não foi possível excluir o aluno. Tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+        setIsDeleteDialogOpen(false);
+        setStudentToDelete(null);
     }
   };
 
   return (
+    <>
     <div className="container mx-auto py-8">
       <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
         <div>
@@ -247,7 +270,7 @@ export default function AlunosPage() {
                              <DropdownMenuItem onClick={() => handleSendLogin(student)} className="flex items-center">
                               <KeyRound className="mr-2 h-4 w-4" /> Enviar Login
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleDeleteStudent(student.id, student.name)} className="text-destructive focus:text-destructive focus:bg-destructive/10 flex items-center">
+                            <DropdownMenuItem onClick={() => confirmDeleteStudent(student)} className="text-destructive focus:text-destructive focus:bg-destructive/10 flex items-center">
                               <Trash2 className="mr-2 h-4 w-4" /> Excluir
                             </DropdownMenuItem>
                           </DropdownMenuContent>
@@ -268,5 +291,20 @@ export default function AlunosPage() {
         </CardContent>
       </Card>
     </div>
+    <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Esta ação não pode ser desfeita. Isso excluirá permanentemente o aluno <span className="font-medium text-foreground">"{studentToDelete?.name}"</span> e todos os seus dados associados.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={() => setStudentToDelete(null)}>Cancelar</AlertDialogCancel>
+          <AlertDialogAction onClick={handleDeleteStudent}>Continuar</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
