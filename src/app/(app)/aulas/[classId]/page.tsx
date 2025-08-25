@@ -4,7 +4,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Edit3, Save, Clock, MapPin, Users, CalendarDays, PlusCircle, Search, ClockIcon, Loader2 } from 'lucide-react';
+import { ArrowLeft, Edit3, Save, Clock, MapPin, Users, CalendarDays, PlusCircle, Search, ClockIcon, Loader2, Goal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,6 +22,7 @@ import { db, auth } from '@/firebase';
 import { doc, getDoc, updateDoc, collection, onSnapshot, query, where, orderBy } from 'firebase/firestore';
 import { AddLocationDialog } from '@/components/dialogs/add-location-dialog';
 import { ManageLocationsDialog } from '@/components/dialogs/manage-locations-dialog';
+import { Textarea } from '@/components/ui/textarea';
 
 const classSessionSchema = z.object({
   daysOfWeek: z.array(z.enum(DAYS_OF_WEEK)).min(1, { message: "Selecione pelo menos um dia da semana." }),
@@ -30,6 +31,7 @@ const classSessionSchema = z.object({
   location: z.string().min(1, { message: 'Selecione um local.' }), 
   maxStudents: z.coerce.number().int().positive({ message: 'Número de alunos deve ser positivo.' }).min(1, {message: 'Mínimo 1 aluno'}),
   enrolledStudentIds: z.array(z.string()).optional(),
+  objective: z.string().optional(),
 });
 
 type ClassSessionFormData = z.infer<typeof classSessionSchema>;
@@ -122,7 +124,7 @@ export default function AulaDetalhePage() {
         if (classSessionDocSnap.exists()) {
           const sessionData = { ...classSessionDocSnap.data(), id: classSessionDocSnap.id } as ClassSession;
           setClassSession(sessionData);
-          reset({...sessionData, daysOfWeek: sessionData.daysOfWeek || [], enrolledStudentIds: sessionData.enrolledStudentIds || []}); 
+          reset({...sessionData, daysOfWeek: sessionData.daysOfWeek || [], enrolledStudentIds: sessionData.enrolledStudentIds || [], objective: sessionData.objective || ''}); 
         } else {
           toast({ title: "Erro", description: "Configuração de aula não encontrada.", variant: "destructive" });
           router.push('/aulas');
@@ -162,6 +164,7 @@ export default function AulaDetalhePage() {
          daysOfWeek: data.daysOfWeek.sort((a, b) => DAYS_OF_WEEK.indexOf(a) - DAYS_OF_WEEK.indexOf(b)), 
          maxStudents: Number(data.maxStudents),
          enrolledStudentIds: data.enrolledStudentIds || [],
+         objective: (data.objective && data.objective.trim() !== '') ? data.objective.trim() : null,
       };
       await updateDoc(classSessionDocRef, updatePayload);
 
@@ -203,16 +206,19 @@ export default function AulaDetalhePage() {
     return <div className="container mx-auto py-8 text-center text-destructive">Configuração de aula não encontrada.</div>;
   }
 
-  const InfoItem = ({ icon: Icon, label, value, children }: { icon: React.ElementType, label: string, value?: string | number | string[] | null, children?: React.ReactNode }) => (
+  const InfoItem = ({ icon: Icon, label, value, isLongText = false, children }: { icon: React.ElementType, label: string, value?: string | number | string[] | null, isLongText?: boolean, children?: React.ReactNode }) => (
     <div className="flex items-start space-x-3">
       <Icon className="h-5 w-5 text-primary mt-1 flex-shrink-0" />
       <div>
         <p className="text-sm text-muted-foreground">{label}</p>
-        {children ? children : (
-          Array.isArray(value) ? 
-          <p className="font-medium text-foreground">{value.join(', ') || 'N/A'}</p> :
-          <p className="font-medium text-foreground">{value || 'N/A'}</p>
-        )}
+        {children ? children :
+          Array.isArray(value) ? (
+            <p className="font-medium text-foreground">{value.join(', ') || 'N/A'}</p>
+          ) : isLongText && value ? (
+              <p className="font-medium text-foreground whitespace-pre-wrap">{String(value)}</p>
+          ) : (
+              <p className="font-medium text-foreground">{value != null && value !== '' ? String(value) : 'N/A'}</p>
+          )}
       </div>
     </div>
   );
@@ -345,6 +351,12 @@ export default function AulaDetalhePage() {
                     {errors.maxStudents && <p className="text-sm text-destructive">{errors.maxStudents.message}</p>}
                 </div>
 
+                <div className="space-y-2">
+                  <Label htmlFor="objective" className="flex items-center"><Goal className="mr-1 h-4 w-4"/>Objetivo da Aula</Label>
+                  <Controller name="objective" control={control} render={({ field }) => <Textarea id="objective" placeholder="Descreva o foco principal ou objetivo desta aula..." {...field} value={field.value ?? ''} />} />
+                  {errors.objective && <p className="text-sm text-destructive">{errors.objective.message}</p>}
+                </div>
+
                 <Separator />
 
                 <div>
@@ -395,7 +407,7 @@ export default function AulaDetalhePage() {
 
             </CardContent>
             <CardFooter className="flex justify-end gap-2">
-              <Button variant="outline" type="button" onClick={() => { setIsEditMode(false); router.replace(`/aulas/${classId}`); reset({...classSession, daysOfWeek: classSession?.daysOfWeek || [], enrolledStudentIds: classSession?.enrolledStudentIds || [] }); }}>Cancelar</Button>
+              <Button variant="outline" type="button" onClick={() => { setIsEditMode(false); router.replace(`/aulas/${classId}`); reset({...classSession, daysOfWeek: classSession?.daysOfWeek || [], enrolledStudentIds: classSession?.enrolledStudentIds || [], objective: classSession?.objective || '' }); }}>Cancelar</Button>
               <Button type="submit" disabled={isSubmitting || isLoadingStudents || isLoadingLocations} className="bg-primary hover:bg-primary/90 text-primary-foreground">
                 <Save className="mr-2 h-4 w-4" />{isSubmitting ? 'Salvando...' : 'Salvar Alterações'}
               </Button>
@@ -419,6 +431,9 @@ export default function AulaDetalhePage() {
                         {getEnrolledStudentNames()} ({(classSession.enrolledStudentIds?.length || 0)} de {classSession.maxStudents})
                     </p>
                 </InfoItem>
+                {classSession.objective && (
+                  <InfoItem icon={Goal} label="Objetivo da Aula" value={classSession.objective} isLongText={true} />
+                )}
             </CardContent>
             <CardFooter>
                 <p className="text-xs text-muted-foreground">

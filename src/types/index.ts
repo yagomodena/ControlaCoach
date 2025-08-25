@@ -66,7 +66,8 @@ export interface ClassSession {
   endTime: string;   
   location: string; 
   maxStudents: number;
-  enrolledStudentIds: string[]; 
+  enrolledStudentIds: string[];
+  objective?: string | null; 
 }
 
 export interface BookedClass {

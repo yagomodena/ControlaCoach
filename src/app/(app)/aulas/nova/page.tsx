@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Save, PlusCircle, Search, Users, ClockIcon, Loader2, CalendarDays, MapPin } from 'lucide-react'; 
+import { ArrowLeft, Save, PlusCircle, Search, Users, ClockIcon, Loader2, CalendarDays, MapPin, Goal } from 'lucide-react'; 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -28,6 +28,7 @@ import { db, auth } from '@/firebase';
 import { collection, addDoc, onSnapshot, query, where, orderBy } from 'firebase/firestore';
 import { AddLocationDialog } from '@/components/dialogs/add-location-dialog';
 import { ManageLocationsDialog } from '@/components/dialogs/manage-locations-dialog';
+import { Textarea } from '@/components/ui/textarea';
 
 const classSessionSchema = z.object({
   daysOfWeek: z.array(z.enum(DAYS_OF_WEEK)).min(1, { message: "Selecione pelo menos um dia da semana." }),
@@ -36,6 +37,7 @@ const classSessionSchema = z.object({
   location: z.string().min(1, { message: 'Selecione um local.' }), 
   maxStudents: z.coerce.number().int().positive({ message: 'Número de alunos deve ser positivo.' }).min(1, {message: 'Mínimo 1 aluno'}),
   enrolledStudentIds: z.array(z.string()).optional(),
+  objective: z.string().optional(),
 });
 
 type ClassSessionFormData = z.infer<typeof classSessionSchema>;
@@ -113,6 +115,7 @@ export default function NovaAulaConfigPage() {
       location: undefined, 
       maxStudents: 10,
       enrolledStudentIds: [],
+      objective: '',
     },
   });
 
@@ -135,6 +138,7 @@ export default function NovaAulaConfigPage() {
         ...data,
         daysOfWeek: data.daysOfWeek.sort((a, b) => DAYS_OF_WEEK.indexOf(a) - DAYS_OF_WEEK.indexOf(b)), 
         enrolledStudentIds: data.enrolledStudentIds || [],
+        objective: (data.objective && data.objective.trim() !== '') ? data.objective.trim() : null,
       };
       await addDoc(collection(db, 'coaches', userId, 'classSessions'), classSessionData);
       
@@ -290,6 +294,13 @@ export default function NovaAulaConfigPage() {
               />
               {errors.maxStudents && <p className="text-sm text-destructive">{errors.maxStudents.message}</p>}
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="objective" className="flex items-center"><Goal className="mr-1 h-4 w-4"/>Objetivo da Aula</Label>
+              <Controller name="objective" control={control} render={({ field }) => <Textarea id="objective" placeholder="Descreva o foco principal ou objetivo desta aula..." {...field} value={field.value ?? ''} />} />
+              {errors.objective && <p className="text-sm text-destructive">{errors.objective.message}</p>}
+            </div>
+
 
             <Separator />
 
