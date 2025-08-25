@@ -8,6 +8,13 @@ export interface PhysicalAssessment {
   weight?: number;
   height?: number;
   bodyFatPercentage?: number;
+  chest?: number;
+  waist?: number;
+  hips?: number;
+  rightArm?: number;
+  leftArm?: number;
+  rightThigh?: number;
+  leftThigh?: number;
   notes?: string;
 }
 

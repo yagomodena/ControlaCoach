@@ -83,6 +83,13 @@ export default function AlunoDetailPage() {
   const [newWeight, setNewWeight] = useState('');
   const [newHeight, setNewHeight] = useState('');
   const [newBodyFat, setNewBodyFat] = useState('');
+  const [newChest, setNewChest] = useState('');
+  const [newWaist, setNewWaist] = useState('');
+  const [newHips, setNewHips] = useState('');
+  const [newRightArm, setNewRightArm] = useState('');
+  const [newLeftArm, setNewLeftArm] = useState('');
+  const [newRightThigh, setNewRightThigh] = useState('');
+  const [newLeftThigh, setNewLeftThigh] = useState('');
   const [isAddingAssessment, setIsAddingAssessment] = useState(false);
   
   useEffect(() => {
@@ -260,10 +267,6 @@ export default function AlunoDetailPage() {
 
   const handleAddAssessment = async () => {
     if (!userId || !studentId) return;
-    if (!newWeight && !newHeight && !newBodyFat) {
-      toast({ title: "Dados Incompletos", description: "Preencha pelo menos um campo da avaliação.", variant: "destructive" });
-      return;
-    }
 
     setIsAddingAssessment(true);
     const newAssessment: PhysicalAssessment = {
@@ -271,7 +274,23 @@ export default function AlunoDetailPage() {
       weight: newWeight ? parseFloat(newWeight) : undefined,
       height: newHeight ? parseFloat(newHeight) : undefined,
       bodyFatPercentage: newBodyFat ? parseFloat(newBodyFat) : undefined,
+      chest: newChest ? parseFloat(newChest) : undefined,
+      waist: newWaist ? parseFloat(newWaist) : undefined,
+      hips: newHips ? parseFloat(newHips) : undefined,
+      rightArm: newRightArm ? parseFloat(newRightArm) : undefined,
+      leftArm: newLeftArm ? parseFloat(newLeftArm) : undefined,
+      rightThigh: newRightThigh ? parseFloat(newRightThigh) : undefined,
+      leftThigh: newLeftThigh ? parseFloat(newLeftThigh) : undefined,
     };
+    
+    // Check if at least one measurement is filled
+    const hasData = Object.values(newAssessment).some(v => v !== undefined && v !== null && v !== '');
+    if (!hasData) {
+      toast({ title: "Dados Incompletos", description: "Preencha pelo menos um campo da avaliação.", variant: "destructive" });
+      setIsAddingAssessment(false);
+      return;
+    }
+
 
     try {
       const studentDocRef = doc(db, 'coaches', userId, 'students', studentId);
@@ -282,6 +301,13 @@ export default function AlunoDetailPage() {
       setNewWeight('');
       setNewHeight('');
       setNewBodyFat('');
+      setNewChest('');
+      setNewWaist('');
+      setNewHips('');
+      setNewRightArm('');
+      setNewLeftArm('');
+      setNewRightThigh('');
+      setNewLeftThigh('');
       await fetchStudent(); // Re-fetch student data to update the view
     } catch (error) {
       console.error("Error adding assessment:", error);
@@ -556,18 +582,46 @@ export default function AlunoDetailPage() {
                               <Label className="text-base font-medium">Adicionar Nova Avaliação Física</Label>
                               <Card className="p-4 bg-muted/30 border">
                                 <CardContent className="p-0 space-y-4">
-                                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                                       <div className="space-y-1">
                                         <Label htmlFor="newWeight" className="text-xs">Peso (kg)</Label>
-                                        <Input id="newWeight" type="number" placeholder="Ex: 75.5" value={newWeight} onChange={(e) => setNewWeight(e.target.value)} disabled={isAddingAssessment}/>
+                                        <Input id="newWeight" type="number" placeholder="75.5" value={newWeight} onChange={(e) => setNewWeight(e.target.value)} disabled={isAddingAssessment}/>
                                       </div>
                                       <div className="space-y-1">
                                         <Label htmlFor="newHeight" className="text-xs">Altura (cm)</Label>
-                                        <Input id="newHeight" type="number" placeholder="Ex: 180" value={newHeight} onChange={(e) => setNewHeight(e.target.value)} disabled={isAddingAssessment}/>
+                                        <Input id="newHeight" type="number" placeholder="180" value={newHeight} onChange={(e) => setNewHeight(e.target.value)} disabled={isAddingAssessment}/>
                                       </div>
                                       <div className="space-y-1">
                                         <Label htmlFor="newBodyFat" className="text-xs">% Gordura</Label>
-                                        <Input id="newBodyFat" type="number" placeholder="Ex: 15" value={newBodyFat} onChange={(e) => setNewBodyFat(e.target.value)} disabled={isAddingAssessment}/>
+                                        <Input id="newBodyFat" type="number" placeholder="15" value={newBodyFat} onChange={(e) => setNewBodyFat(e.target.value)} disabled={isAddingAssessment}/>
+                                      </div>
+                                      <div className="space-y-1">
+                                        <Label htmlFor="newChest" className="text-xs">Peito (cm)</Label>
+                                        <Input id="newChest" type="number" placeholder="101" value={newChest} onChange={(e) => setNewChest(e.target.value)} disabled={isAddingAssessment}/>
+                                      </div>
+                                      <div className="space-y-1">
+                                        <Label htmlFor="newWaist" className="text-xs">Cintura (cm)</Label>
+                                        <Input id="newWaist" type="number" placeholder="80" value={newWaist} onChange={(e) => setNewWaist(e.target.value)} disabled={isAddingAssessment}/>
+                                      </div>
+                                      <div className="space-y-1">
+                                        <Label htmlFor="newHips" className="text-xs">Quadril (cm)</Label>
+                                        <Input id="newHips" type="number" placeholder="105" value={newHips} onChange={(e) => setNewHips(e.target.value)} disabled={isAddingAssessment}/>
+                                      </div>
+                                       <div className="space-y-1">
+                                        <Label htmlFor="newLeftArm" className="text-xs">Braço E. (cm)</Label>
+                                        <Input id="newLeftArm" type="number" placeholder="35" value={newLeftArm} onChange={(e) => setNewLeftArm(e.target.value)} disabled={isAddingAssessment}/>
+                                      </div>
+                                      <div className="space-y-1">
+                                        <Label htmlFor="newRightArm" className="text-xs">Braço D. (cm)</Label>
+                                        <Input id="newRightArm" type="number" placeholder="35" value={newRightArm} onChange={(e) => setNewRightArm(e.target.value)} disabled={isAddingAssessment}/>
+                                      </div>
+                                      <div className="space-y-1">
+                                        <Label htmlFor="newLeftThigh" className="text-xs">Coxa E. (cm)</Label>
+                                        <Input id="newLeftThigh" type="number" placeholder="60" value={newLeftThigh} onChange={(e) => setNewLeftThigh(e.target.value)} disabled={isAddingAssessment}/>
+                                      </div>
+                                      <div className="space-y-1">
+                                        <Label htmlFor="newRightThigh" className="text-xs">Coxa D. (cm)</Label>
+                                        <Input id="newRightThigh" type="number" placeholder="60" value={newRightThigh} onChange={(e) => setNewRightThigh(e.target.value)} disabled={isAddingAssessment}/>
                                       </div>
                                    </div>
                                    <Button type="button" onClick={handleAddAssessment} disabled={isAddingAssessment} className="w-full">
@@ -822,26 +876,42 @@ export default function AlunoDetailPage() {
                         <Separator />
                         <CardTitle className="text-lg">Histórico de Avaliações</CardTitle>
                         {sortedAssessments.length > 0 ? (
+                           <div className="overflow-x-auto">
                            <Table>
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Data</TableHead>
-                                    <TableHead>Peso (kg)</TableHead>
-                                    <TableHead>Altura (cm)</TableHead>
-                                    <TableHead>Gordura (%)</TableHead>
+                                    <TableHead>Peso</TableHead>
+                                    <TableHead>Altura</TableHead>
+                                    <TableHead>% Gord</TableHead>
+                                    <TableHead>Peito</TableHead>
+                                    <TableHead>Cintura</TableHead>
+                                    <TableHead>Quadril</TableHead>
+                                    <TableHead>B. Esq</TableHead>
+                                    <TableHead>B. Dir</TableHead>
+                                    <TableHead>C. Esq</TableHead>
+                                    <TableHead>C. Dir</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {sortedAssessments.map((assessment, index) => (
                                     <TableRow key={index}>
                                         <TableCell>{formatDateString(assessment.date)}</TableCell>
-                                        <TableCell>{assessment.weight || 'N/A'}</TableCell>
-                                        <TableCell>{assessment.height || 'N/A'}</TableCell>
-                                        <TableCell>{assessment.bodyFatPercentage || 'N/A'}</TableCell>
+                                        <TableCell>{assessment.weight || '-'}</TableCell>
+                                        <TableCell>{assessment.height || '-'}</TableCell>
+                                        <TableCell>{assessment.bodyFatPercentage || '-'}</TableCell>
+                                        <TableCell>{assessment.chest || '-'}</TableCell>
+                                        <TableCell>{assessment.waist || '-'}</TableCell>
+                                        <TableCell>{assessment.hips || '-'}</TableCell>
+                                        <TableCell>{assessment.leftArm || '-'}</TableCell>
+                                        <TableCell>{assessment.rightArm || '-'}</TableCell>
+                                        <TableCell>{assessment.leftThigh || '-'}</TableCell>
+                                        <TableCell>{assessment.rightThigh || '-'}</TableCell>
                                     </TableRow>
                                 ))}
                             </TableBody>
                            </Table>
+                           </div>
                         ) : (
                            <p className="text-center text-sm text-muted-foreground py-8">
                                 Nenhuma avaliação física registrada. Adicione uma na aba de edição.
@@ -935,5 +1005,3 @@ export default function AlunoDetailPage() {
     </>
   );
 }
-
-    
