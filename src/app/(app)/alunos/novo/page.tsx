@@ -37,7 +37,6 @@ const studentSchema = z.object({
   name: z.string().min(3, { message: 'Nome deve ter pelo menos 3 caracteres.' }),
   phone: z.string().min(10, { message: 'Telefone inválido.' }),
   email: z.string().email({ message: 'Email inválido.' }),
-  password: z.string().min(6, { message: 'Senha deve ter pelo menos 6 caracteres.' }),
   plan: z.string().min(1, { message: 'Selecione um plano.' }),
   technicalLevel: z.enum(['Iniciante', 'Intermediário', 'Avançado'], { required_error: 'Selecione o nível técnico.' }),
   status: z.enum(['active', 'inactive'], { required_error: 'Selecione o status.' }),
@@ -68,9 +67,11 @@ export default function NovoAlunoPage() {
   const [isLoadingLocations, setIsLoadingLocations] = useState(true);
   const [isAddPlanDialogOpen, setIsAddPlanDialogOpen] = useState(false);
   const [isManagePlansDialogOpen, setIsManagePlansDialogOpen] = useState(false);
+  
+  const coachAuth = auth; // Keep a reference to the coach's auth instance
 
   useEffect(() => {
-    const unsubscribeAuth = auth.onAuthStateChanged(user => {
+    const unsubscribeAuth = coachAuth.onAuthStateChanged(user => {
       if (user) {
         setUserId(user.uid);
       } else {
@@ -127,7 +128,6 @@ export default function NovoAlunoPage() {
       name: '',
       phone: '',
       email: '',
-      password: '',
       plan: undefined,
       technicalLevel: undefined,
       status: 'active',
@@ -151,9 +151,20 @@ export default function NovoAlunoPage() {
     }
     
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
+      // We will just create a random password for now.
+      // The user can reset it later. This avoids the auto-login issue.
+      const tempPassword = Math.random().toString(36).slice(-8);
+
+      // Create user with a temporary auth instance to avoid session conflicts
+      const tempApp = auth.app;
+      const tempAuth = getAuth(tempApp);
+      
+      const userCredential = await createUserWithEmailAndPassword(tempAuth, data.email, tempPassword);
       const studentUser = userCredential.user;
       await updateProfile(studentUser, { displayName: data.name });
+      
+      // IMPORTANT: Sign out the temporary user immediately to not affect the coach's session
+      await signOut(tempAuth);
 
       const registrationDate = new Date();
       const registrationDateISO = formatISO(registrationDate, { representation: 'date' });
@@ -208,7 +219,6 @@ export default function NovoAlunoPage() {
       const studentCoachDocRef = doc(db, 'coaches', userId, 'students', studentId);
       const studentRootDocRef = doc(db, 'students', studentId);
 
-      // Create a version without the coachId for the subcollection
       const { coachId, ...studentDataForCoachSubcollection } = studentDataToSave;
       
       batch.set(studentCoachDocRef, studentDataForCoachSubcollection);
@@ -316,7 +326,7 @@ export default function NovoAlunoPage() {
                     <Card className="shadow-lg">
                         <CardHeader>
                             <CardTitle className="flex items-center"><KeyRound className="mr-2 h-5 w-5 text-primary"/>Acesso do Aluno</CardTitle>
-                            <CardDescription>Crie as credenciais para o aluno acessar o portal.</CardDescription>
+                            <CardDescription>Defina o e-mail de acesso para o aluno.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
                             <div className="space-y-2">
@@ -324,11 +334,7 @@ export default function NovoAlunoPage() {
                                 <Controller name="email" control={control} render={({ field }) => <Input id="email" type="email" placeholder="aluno@email.com" {...field} />} />
                                 {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
                             </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="password">Senha de Acesso</Label>
-                                <Controller name="password" control={control} render={({ field }) => <Input id="password" type="password" placeholder="Mínimo 6 caracteres" {...field} />} />
-                                {errors.password && <p className="text-sm text-destructive">{errors.password.message}</p>}
-                            </div>
+                             <p className="text-xs text-muted-foreground">Uma senha temporária será criada. O aluno poderá redefinir a senha no primeiro acesso se necessário.</p>
                         </CardContent>
                     </Card>
 
@@ -445,4 +451,3 @@ export default function NovoAlunoPage() {
     </>
   );
 }
-
