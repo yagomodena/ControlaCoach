@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { LineChart, Activity, Loader2 } from 'lucide-react';
 import { auth, db } from '@/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, getDocs, collection } from 'firebase/firestore';
 import type { Student, PhysicalAssessment } from '@/types';
 import { format, parseISO } from 'date-fns';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
@@ -26,14 +26,23 @@ export default function StudentEvolutionPage() {
         return;
       }
       try {
-        // This is a simplified query. A real implementation needs to find the student
-        // across all coach subcollections, or have a global students collection.
-        // For now, we'll assume a direct lookup is possible.
-        const studentDocRef = doc(db, 'students', currentUser.uid); // Placeholder path
-        const docSnap = await getDoc(studentDocRef);
+        const coachesRef = collection(db, 'coaches');
+        const coachesSnapshot = await getDocs(coachesRef);
+        let studentData: Student | null = null;
+        let studentFound = false;
 
-        if (docSnap.exists()) {
-          setStudent({ ...docSnap.data(), id: docSnap.id } as Student);
+        for (const coachDoc of coachesSnapshot.docs) {
+          const studentDocRef = doc(db, 'coaches', coachDoc.id, 'students', currentUser.uid);
+          const studentDocSnap = await getDoc(studentDocRef);
+          if (studentDocSnap.exists()) {
+            studentData = { ...studentDocSnap.data(), id: studentDocSnap.id } as Student;
+            studentFound = true;
+            break;
+          }
+        }
+        
+        if (studentFound) {
+          setStudent(studentData);
         } else {
           setError("Dados do aluno não encontrados.");
         }
@@ -45,7 +54,16 @@ export default function StudentEvolutionPage() {
       }
     };
 
-    fetchStudentData();
+    const unsubscribe = auth.onAuthStateChanged(user => {
+      if (user) {
+        fetchStudentData();
+      } else {
+        setIsLoading(false);
+        setError("Usuário não autenticado.");
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
   
   const formatDateString = (dateString?: string) => {
@@ -171,5 +189,3 @@ export default function StudentEvolutionPage() {
     </div>
   );
 }
-
-    

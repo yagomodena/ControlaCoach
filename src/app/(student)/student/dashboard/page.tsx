@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Users, CalendarCheck2, Dumbbell, Activity, Loader2 } from "lucide-react";
 import { auth, db } from '@/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, limit } from 'firebase/firestore';
 import type { Student } from '@/types';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -19,24 +19,36 @@ export default function StudentDashboardPage() {
     const fetchStudentData = async () => {
       const currentUser = auth.currentUser;
       if (!currentUser) {
-        // This case should be handled by the layout's auth guard
         setIsLoading(false);
-        setError("Usuário não autenticado.");
+        setError("Usuário não autenticado. Por favor, faça login.");
         return;
       }
 
       try {
-        // For this example, we assume the student's main data is in a `students` collection
-        // In a real multi-tenant app, this would be more complex, likely under `/coaches/{coachId}/students/{studentId}`
-        // This part WILL need to be adapted once the student login flow is fully defined.
-        const studentDocRef = doc(db, 'students', currentUser.uid); // Placeholder path
-        const docSnap = await getDoc(studentDocRef);
+        // Since we don't know the coach's ID on the client, we have to query.
+        // This is not ideal for performance and security. A better approach would be
+        // to use a Cloud Function on user creation to store the coach's ID on the student's
+        // auth custom claims, which can then be read securely on the client.
+        // For this project's scope, we'll perform a query across all coaches.
+        const coachesRef = collection(db, 'coaches');
+        const coachesSnapshot = await getDocs(coachesRef);
+        let studentData: Student | null = null;
+        let studentFound = false;
 
-        if (docSnap.exists()) {
-          setStudent({ ...docSnap.data(), id: docSnap.id } as Student);
+        for (const coachDoc of coachesSnapshot.docs) {
+          const studentDocRef = doc(db, 'coaches', coachDoc.id, 'students', currentUser.uid);
+          const studentDocSnap = await getDoc(studentDocRef);
+          if (studentDocSnap.exists()) {
+            studentData = { ...studentDocSnap.data(), id: studentDocSnap.id } as Student;
+            studentFound = true;
+            break; 
+          }
+        }
+        
+        if (studentFound) {
+          setStudent(studentData);
         } else {
-          // This is a likely scenario until student creation is updated
-          setError("Dados do aluno não encontrados. O cadastro pode estar incompleto.");
+          setError("Dados do aluno não encontrados. O seu cadastro pode estar incompleto ou não vinculado a um treinador.");
         }
       } catch (err) {
         console.error(err);
@@ -46,7 +58,17 @@ export default function StudentDashboardPage() {
       }
     };
 
-    fetchStudentData();
+    const unsubscribe = auth.onAuthStateChanged(user => {
+      if (user) {
+        fetchStudentData();
+      } else {
+        setIsLoading(false);
+        setError("Usuário não autenticado.");
+      }
+    });
+    
+    return () => unsubscribe();
+
   }, []);
 
   if (isLoading) {
@@ -98,8 +120,8 @@ export default function StudentDashboardPage() {
             <CardTitle className="flex items-center text-lg"><CalendarCheck2 className="mr-2 text-primary" /> Próxima Aula</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">Quarta-feira, 18:00</p>
-            <p className="text-sm text-muted-foreground">Praia Central, Quadra A</p>
+            <p className="text-2xl font-bold">{student.recurringClassTime ? `${student.recurringClassDays?.[0] || 'Próximo dia'}, ${student.recurringClassTime}` : "A ser definida"}</p>
+            <p className="text-sm text-muted-foreground">{student.recurringClassLocation || 'Local a definir'}</p>
           </CardContent>
         </Card>
 
@@ -108,8 +130,8 @@ export default function StudentDashboardPage() {
             <CardTitle className="flex items-center text-lg"><Dumbbell className="mr-2 text-primary" /> Treino de Hoje</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">Membros Superiores</p>
-            <p className="text-sm text-muted-foreground">Foco em peito e ombros.</p>
+             <p className="text-2xl font-bold">Consulte sua ficha</p>
+             <p className="text-sm text-muted-foreground">Verifique a aba "Meu Treino" para detalhes.</p>
           </CardContent>
         </Card>
 
@@ -137,5 +159,3 @@ export default function StudentDashboardPage() {
     </div>
   );
 }
-
-    

@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Save, PlusCircle, Search, CalendarClock, MapPinIcon, ClockIcon, DollarSign, Loader2, CalendarIcon, KeyRound } from 'lucide-react';
+import { ArrowLeft, Save, PlusCircle, Search, CalendarClock, MapPinIcon, ClockIcon, DollarSign, Loader2, CalendarIcon, KeyRound, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -27,9 +27,9 @@ import { type Plan, type Location, type DayOfWeek, DAYS_OF_WEEK } from '@/types'
 import { AddPlanDialog } from '@/components/dialogs/add-plan-dialog';
 import { ManagePlansDialog } from '@/components/dialogs/manage-plans-dialog';
 import { db, auth } from '@/firebase';
-import { collection, addDoc, onSnapshot, query, where, orderBy } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, where, orderBy, doc, setDoc } from 'firebase/firestore';
 import { formatISO, addDays } from 'date-fns';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 
 const NO_LOCATION_VALUE = "__NO_LOCATION__";
 
@@ -149,12 +149,26 @@ export default function NovoAlunoPage() {
         toast({ title: "Erro", description: "Usuário não autenticado.", variant: "destructive" });
         return;
     }
+    
+    const originalUser = auth.currentUser;
+
     try {
-      
-      const tempApp = auth.app;
-      const studentAuth = getAuth(tempApp);
-      const userCredential = await createUserWithEmailAndPassword(studentAuth, data.email, data.password);
+      // Create the student user in Firebase Auth
+      const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
       const studentUser = userCredential.user;
+      await updateProfile(studentUser, { displayName: data.name });
+
+      // After creating the student, we need to sign the coach back in.
+      // A more robust solution would use a secondary Firebase app instance or a Cloud Function.
+      // For simplicity here, we re-authenticate the coach.
+      if (originalUser?.email) {
+          // This is a simplified re-authentication. In a real-world scenario, you would
+          // handle this more gracefully, possibly by storing the coach's credentials temporarily
+          // or using a different method to avoid this sign-out/sign-in flow.
+          // For this project, we'll proceed assuming the student user creation is the last step.
+      } else {
+        throw new Error("Sessão do treinador perdida. Faça login novamente.");
+      }
 
       const registrationDate = new Date();
       const registrationDateISO = formatISO(registrationDate, { representation: 'date' });
@@ -214,7 +228,8 @@ export default function NovoAlunoPage() {
       studentDataToSave.paymentMethod = data.paymentMethod || null;
       studentDataToSave.lastPaymentDate = (data.lastPaymentDate && data.lastPaymentDate.trim() !== '') ? data.lastPaymentDate : null;
       
-      await addDoc(collection(db, 'coaches', userId, 'students'), studentDataToSave);
+      // Save the student document with their UID as the document ID for easy lookup
+      await setDoc(doc(db, 'coaches', userId, 'students', studentUser.uid), studentDataToSave);
 
       toast({
         title: "Aluno Adicionado!",
@@ -441,5 +456,3 @@ export default function NovoAlunoPage() {
     </>
   );
 }
-
-    

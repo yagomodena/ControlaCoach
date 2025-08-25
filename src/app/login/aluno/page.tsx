@@ -10,12 +10,16 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Logo } from '@/components/logo';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { auth } from '@/firebase';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 
 export default function AlunoLoginPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [studentId, setStudentId] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -24,30 +28,31 @@ export default function AlunoLoginPage() {
     setError('');
     setIsLoading(true);
 
-    if (!studentId.trim()) {
-        setError("Por favor, preencha seu ID de Aluno.");
+    if (!email.trim() || !password.trim()) {
+        setError("Por favor, preencha seu email e senha.");
         setIsLoading(false);
         return;
     }
     
-    // In a real application, this is where you would implement
-    // the logic to verify the student ID against your database,
-    // likely using a serverless function for security.
-    // For now, we'll simulate a successful login and redirect.
-    
-    toast({
-        title: "Login em breve!",
-        description: "A funcionalidade de login do aluno está em desenvolvimento. Redirecionando para o painel de demonstração.",
-    });
-
-    // Simulate API call
-    setTimeout(() => {
-        // On success, redirect to the student dashboard
-        // The URL would likely be dynamic, e.g., /student/{studentId}
-        router.push('/student/dashboard'); // Placeholder redirect
-        setIsLoading(false);
-    }, 1500);
-
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      // On success, redirect to the student dashboard
+      router.push('/student/dashboard');
+    } catch (err: any) {
+      console.error('Student Login Error:', err);
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+        setError('Email ou senha inválidos.');
+      } else {
+        setError('Erro ao fazer login. Tente novamente mais tarde.');
+         toast({
+          title: 'Erro de Login',
+          description: err.message || 'Ocorreu um problema ao tentar fazer login.',
+          variant: 'destructive',
+        });
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -59,22 +64,49 @@ export default function AlunoLoginPage() {
           </div>
           <CardTitle className="text-2xl font-headline">Acesso do Aluno</CardTitle>
           <CardDescription>
-            Insira o seu ID de aluno para continuar.
+            Insira seu email e senha para continuar.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="studentId">Seu ID de Aluno</Label>
+              <Label htmlFor="email">Seu Email</Label>
                <Input
-                id="studentId"
-                placeholder="Seu ID ou código de acesso"
-                value={studentId}
-                onChange={(e) => setStudentId(e.target.value)}
+                id="email"
+                type="email"
+                placeholder="seu@email.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 required
                 className="bg-input"
                 disabled={isLoading}
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Sua Senha</Label>
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="********"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="bg-input pr-10"
+                  disabled={isLoading}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? "Esconder senha" : "Mostrar senha"}
+                  disabled={isLoading}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </Button>
+              </div>
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
             <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isLoading}>
