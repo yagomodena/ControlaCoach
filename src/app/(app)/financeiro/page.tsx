@@ -341,7 +341,7 @@ export default function FinanceiroPage() {
         try {
             await deleteDoc(doc(db, 'coaches', userId, 'expenses', expenseId));
             toast({ title: "Saída Excluída!" });
-            // The onSnapshot listener will automatically update the UI
+            // onSnapshot will handle the UI update
         } catch(error) {
             console.error("Error deleting expense:", error);
             toast({ title: "Erro ao Excluir Saída", variant: "destructive"});
