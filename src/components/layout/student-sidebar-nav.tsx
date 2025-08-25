@@ -8,7 +8,6 @@ import {
   Dumbbell,
   Activity,
   LogOut,
-  Settings,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -33,7 +32,6 @@ const navItems = [
   { href: '/student/dashboard', label: 'Meu Painel', icon: LayoutDashboard },
   { href: '/student/treino', label: 'Meu Treino', icon: Dumbbell },
   { href: '/student/evolucao', label: 'Minha Evolução', icon: Activity },
-  { href: '/configuracoes', label: 'Configurações', icon: Settings },
 ];
 
 export function StudentSidebarNav() {
@@ -51,7 +49,15 @@ export function StudentSidebarNav() {
 
   const handleLogout = async () => {
     try {
-      await signOut(auth);
+      // Clear student session storage
+      sessionStorage.removeItem('fitplanner_student_id');
+      
+      // Although students don't use Firebase Auth, signing out is good practice
+      // in case a coach's session is somehow active.
+      if (auth.currentUser) {
+        await signOut(auth);
+      }
+
       toast({
         title: 'Logout Realizado',
         description: 'Você foi desconectado com sucesso.',
@@ -100,7 +106,6 @@ export function StudentSidebarNav() {
               <SidebarMenuSkeleton showIcon />
               <SidebarMenuSkeleton showIcon />
               <SidebarMenuSkeleton showIcon />
-              <SidebarMenuSkeleton showIcon />
             </>
           )}
         </SidebarMenu>
@@ -115,5 +120,3 @@ export function StudentSidebarNav() {
     </Sidebar>
   );
 }
-
-    
