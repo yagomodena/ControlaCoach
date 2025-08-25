@@ -42,7 +42,6 @@ const targetAudienceItems = [
   "Professores de Futevôlei",
   "Professores de Vôlei",
   "Professores de Beach Tennis",
-  "Professores de Tênis",
   "Técnicos de Esportes",
   "Instrutores de modalidades individuais ou em grupo",
   "Coachs Esportivos",
