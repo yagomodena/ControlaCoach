@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
-import { ChevronLeft, ChevronRight, Users, Edit, PlusCircle, Clock, Trash2, Search, UserCircle, Loader2, MapPin, CalendarIcon, Settings } from "lucide-react";
+import { ChevronLeft, ChevronRight, Users, Edit, PlusCircle, Clock, Trash2, Search, UserCircle, Loader2, MapPin, CalendarIcon, Settings, CheckCircle, XCircle, HelpCircle } from "lucide-react";
 import Link from 'next/link';
 import { 
   Dialog,
@@ -44,8 +44,9 @@ import type { BookedClass, DailyAvailability, Student, Location, DayOfWeek, Coac
 import { getDayOfWeekName, DAYS_OF_WEEK } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { db, auth } from '@/firebase';
-import { collection, onSnapshot, query, orderBy, where, doc, getDoc, addDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, where, doc, getDoc, addDoc, updateDoc, deleteDoc, arrayUnion, writeBatch } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
 
 const generateHourIntervals = (startHour: number, endHour: number, intervalMinutes: number = 60): string[] => {
   const intervals: string[] = [];
@@ -62,6 +63,8 @@ const generateHourIntervals = (startHour: number, endHour: number, intervalMinut
   return intervals;
 };
 
+type AttendanceStatus = 'present' | 'absent' | 'pending';
+
 export default function AgendaPage() {
   const [currentWeekStartDate, setCurrentWeekStartDate] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [bookedClasses, setBookedClasses] = useState<BookedClass[]>([]);
@@ -77,6 +80,8 @@ export default function AgendaPage() {
   const [editedClassTitle, setEditedClassTitle] = useState('');
   const [editedClassLocation, setEditedClassLocation] = useState('');
   const [editedClassStudentIds, setEditedClassStudentIds] = useState<string[]>([]);
+  const [attendance, setAttendance] = useState<Record<string, AttendanceStatus>>({});
+
 
   const [allStudents, setAllStudents] = useState<Student[]>([]);
   const [activeStudentsList, setActiveStudentsList] = useState<Student[]>([]);
@@ -341,6 +346,11 @@ export default function AgendaPage() {
     }
     
     const locationForBooking = slotBeingBooked.location || 'A definir';
+    
+    const initialAttendance = selectedStudentIdsForBooking.reduce((acc, studentId) => {
+        acc[studentId] = 'pending';
+        return acc;
+    }, {} as Record<string, AttendanceStatus>);
 
     const newBookedClassData: Omit<BookedClass, 'id'> = {
       date: format(slotBeingBooked.date, 'yyyy-MM-dd'),
@@ -348,7 +358,8 @@ export default function AgendaPage() {
       title: classTitle, 
       location: locationForBooking,
       studentIds: selectedStudentIdsForBooking,
-      durationMinutes: 60, 
+      durationMinutes: 60,
+      attendance: initialAttendance,
     };
 
     try {
@@ -370,12 +381,26 @@ export default function AgendaPage() {
       setEditedClassTitle(classToEdit.title);
       setEditedClassLocation(classToEdit.location);
       setEditedClassStudentIds([...classToEdit.studentIds]);
+      setAttendance(classToEdit.attendance || {});
       setIsEditClassDialogOpen(true);
     }
+  };
+  
+  const handleAttendanceChange = (studentId: string, status: AttendanceStatus) => {
+    setAttendance(prev => ({ ...prev, [studentId]: status }));
   };
 
   const handleStudentSelectionChangeForEdit = (studentId: string, checked: boolean) => {
     setEditedClassStudentIds(prevSelectedIds => checked ? [...prevSelectedIds, studentId] : prevSelectedIds.filter(id => id !== studentId));
+     if (!checked) {
+      setAttendance(prev => {
+        const newAttendance = { ...prev };
+        delete newAttendance[studentId];
+        return newAttendance;
+      });
+    } else {
+      setAttendance(prev => ({ ...prev, [studentId]: 'pending' }));
+    }
   };
 
   const handleSaveChangesToClass = async () => {
@@ -384,20 +409,43 @@ export default function AgendaPage() {
       return;
     }
 
+    const batch = writeBatch(db);
+
     const classDocRef = doc(db, 'coaches', userId, 'bookedClasses', classBeingEdited.id);
     const updatedData = { 
       title: editedClassTitle, 
       location: editedClassLocation, 
-      studentIds: editedClassStudentIds 
+      studentIds: editedClassStudentIds,
+      attendance: attendance,
     };
+    batch.update(classDocRef, updatedData);
+
+    const originalStudentIds = classBeingEdited.studentIds || [];
+    const attendanceChanges = Object.keys(attendance).filter(studentId => 
+        (classBeingEdited.attendance?.[studentId] || 'pending') !== attendance[studentId]
+    );
+
+    attendanceChanges.forEach(studentId => {
+        const studentDocRef = doc(db, 'coaches', userId, 'students', studentId);
+        const newAttendanceRecord = {
+            date: classBeingEdited.date,
+            bookedClassId: classBeingEdited.id,
+            classId: classBeingEdited.classSessionId || 'avulsa',
+            status: attendance[studentId]
+        };
+        batch.update(studentDocRef, {
+            attendanceHistory: arrayUnion(newAttendanceRecord)
+        });
+    });
+
 
     try {
-      await updateDoc(classDocRef, updatedData);
-      toast({ title: "Aula Atualizada!", description: `A aula às ${classBeingEdited.time} foi atualizada.` });
+      await batch.commit();
+      toast({ title: "Aula Atualizada!", description: `A aula às ${classBeingEdited.time} foi atualizada com sucesso.` });
       setIsEditClassDialogOpen(false);
       setClassBeingEdited(null);
     } catch (error) {
-      console.error("Error updating class: ", error);
+      console.error("Error updating class and attendance: ", error);
       toast({ title: "Erro ao Atualizar Aula", variant: "destructive" });
     }
   };
@@ -418,6 +466,16 @@ export default function AgendaPage() {
   };
 
   const isLoading = isLoadingStudents || isLoadingLocations || isLoadingAvailability || isLoadingClassSessions || isLoadingBookedClasses || !userId;
+  
+  const getAttendanceButtonVariant = (studentId: string, status: AttendanceStatus) => {
+     const currentStatus = attendance[studentId] || 'pending';
+     if (currentStatus === status) {
+        if(status === 'present') return 'default';
+        if(status === 'absent') return 'destructive';
+        if(status === 'pending') return 'secondary';
+     }
+     return 'outline';
+  }
 
   return (
     <div className="container mx-auto py-8">
@@ -543,10 +601,11 @@ export default function AgendaPage() {
           <DialogHeader>
             <DialogTitle>Gerenciar Aula - {classBeingEdited?.time}</DialogTitle>
             <DialogDescription>
-              Edite os detalhes da aula de {classBeingEdited?.time} em {classBeingEdited ? format(parseISO(classBeingEdited.date), 'dd/MM/yyyy', { locale: ptBR }) : ''}.
+              Edite os detalhes e controle a presença para a aula de {classBeingEdited?.time} em {classBeingEdited ? format(parseISO(classBeingEdited.date), 'dd/MM/yyyy', { locale: ptBR }) : ''}.
             </DialogDescription>
           </DialogHeader>
           {classBeingEdited && (
+            <ScrollArea className="max-h-[70vh] pr-6">
             <div className="py-4 space-y-4">
               <div>
                 <Label htmlFor="editClassTitle" className="mb-1 block">Título da Aula</Label>
@@ -583,9 +642,38 @@ export default function AgendaPage() {
                   </Button>
                 </div>
               </div>
+              <Separator />
               <div>
-                <Label className="mb-2 block">Alunos Inscritos</Label>
-                <ScrollArea className="h-[180px] w-full rounded-md border p-4">
+                <Label className="text-base font-medium mb-2 block">Controle de Presença</Label>
+                <div className="space-y-3">
+                  {isLoadingStudents ? (
+                    <div className="flex justify-center items-center py-4"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+                  ) : editedClassStudentIds.length > 0 ? (
+                     editedClassStudentIds.map(studentId => {
+                      const student = allStudents.find(s => s.id === studentId);
+                      if (!student) return null;
+                      return (
+                        <div key={studentId} className="flex justify-between items-center p-2 rounded-md bg-muted/50">
+                            <Label htmlFor={`edit-student-${student.id}`} className="font-normal">
+                              {student.name}
+                            </Label>
+                            <div className="flex items-center gap-1">
+                                <Button size="sm" variant={getAttendanceButtonVariant(studentId, 'present')} onClick={() => handleAttendanceChange(studentId, 'present')} className="h-8 px-2"><CheckCircle className="h-4 w-4"/></Button>
+                                <Button size="sm" variant={getAttendanceButtonVariant(studentId, 'absent')} onClick={() => handleAttendanceChange(studentId, 'absent')} className="h-8 px-2"><XCircle className="h-4 w-4"/></Button>
+                                <Button size="sm" variant={getAttendanceButtonVariant(studentId, 'pending')} onClick={() => handleAttendanceChange(studentId, 'pending')} className="h-8 px-2"><HelpCircle className="h-4 w-4"/></Button>
+                            </div>
+                        </div>
+                      )
+                     })
+                  ) : (
+                    <p className="text-sm text-muted-foreground text-center py-2">Nenhum aluno inscrito nesta aula.</p>
+                  )}
+                </div>
+              </div>
+              <Separator />
+              <div>
+                <Label className="text-base font-medium mb-2 block">Editar Alunos Inscritos</Label>
+                <ScrollArea className="h-[150px] w-full rounded-md border p-4">
                  {isLoadingStudents ? (
                     <div className="flex justify-center items-center h-full">
                         <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -609,8 +697,9 @@ export default function AgendaPage() {
                 </ScrollArea>
               </div>
             </div>
+            </ScrollArea>
           )}
-          <DialogFooter className="sm:justify-between">
+          <DialogFooter className="sm:justify-between pt-4 border-t">
             <Button type="button" variant="destructive" onClick={handleDeleteClass} className="sm:mr-auto">
               <Trash2 className="mr-2 h-4 w-4" /> Excluir Aula
             </Button>
@@ -629,3 +718,4 @@ export default function AgendaPage() {
     </div>
   );
 }
+

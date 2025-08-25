@@ -79,7 +79,7 @@ export interface BookedClass {
   durationMinutes?: number; 
   location: string; 
   studentIds: string[]; 
-  attendance?: Record<string, Student['attendanceHistory'][0]['status']>;
+  attendance?: Record<string, 'present' | 'absent' | 'pending'>;
 }
 
 
@@ -144,3 +144,4 @@ export const getDayOfWeekName = (dayNumber: number): DayOfWeek | undefined => {
   };
   return map[dayNumber];
 };
+
