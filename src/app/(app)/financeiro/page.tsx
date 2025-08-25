@@ -3,7 +3,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
-import { DollarSign, Search, Filter, FileText, Users, AlertTriangle, CheckCircle, Clock, Printer, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { DollarSign, Search, Filter, FileText, Users, AlertTriangle, CheckCircle, Clock, Printer, ChevronLeft, ChevronRight, Loader2, PlusCircle, MinusCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -34,7 +34,8 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { ScrollArea } from '@/components/ui/scroll-area';
-import type { Student, Payment, Plan } from '@/types';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import type { Student, Payment, Plan, Expense } from '@/types';
 import { 
   format, 
   parseISO, 
@@ -57,8 +58,10 @@ import {
 import { ptBR } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { db, auth } from '@/firebase';
-import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, getDoc, addDoc, deleteDoc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
+import { AddExpenseDialog } from '@/components/dialogs/add-expense-dialog';
+
 
 interface PaymentEntry extends Payment {
   studentName: string;
@@ -71,8 +74,10 @@ interface MonthlyReportData {
   totalReceived: number;
   totalPending: number;
   totalOverdue: number;
+  totalExpenses: number;
   paidInMonth: PaymentEntry[];
   outstandingInMonth: PaymentEntry[];
+  expensesInMonth: Expense[];
 }
 
 export default function FinanceiroPage() {
@@ -81,6 +86,7 @@ export default function FinanceiroPage() {
     new Set(['pago', 'pendente', 'vencido']) 
   );
   const [payments, setPayments] = useState<PaymentEntry[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [allPlans, setAllPlans] = useState<Plan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [clientRendered, setClientRendered] = useState(false);
@@ -90,6 +96,7 @@ export default function FinanceiroPage() {
   const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
   const [reportData, setReportData] = useState<MonthlyReportData | null>(null);
   const [selectedMonthDate, setSelectedMonthDate] = useState(new Date());
+  const [isAddExpenseDialogOpen, setIsAddExpenseDialogOpen] = useState(false);
 
   useEffect(() => {
     setClientRendered(true);
@@ -110,10 +117,30 @@ export default function FinanceiroPage() {
     if (!userId) {
       setIsLoading(false);
       setPayments([]);
+      setExpenses([]);
       setAllPlans([]);
       return;
     }
     setIsLoading(true);
+
+    const monthStart = startOfMonth(selectedMonthDate);
+    const monthEnd = endOfMonth(selectedMonthDate);
+
+    // Fetch Expenses
+    const expensesQuery = query(
+        collection(db, 'coaches', userId, 'expenses'), 
+        where('date', '>=', dateFnsFormatISO(monthStart, { representation: 'date' })),
+        where('date', '<=', dateFnsFormatISO(monthEnd, { representation: 'date' })),
+        orderBy('date', 'desc')
+    );
+    const unsubscribeExpenses = onSnapshot(expensesQuery, (snapshot) => {
+        const expensesData = snapshot.docs.map(doc => ({...doc.doc.data(), id: doc.id} as Expense));
+        setExpenses(expensesData);
+    }, (error) => {
+        console.error("Error fetching expenses:", error);
+        toast({ title: "Erro ao Carregar Saídas", variant: "destructive"});
+    });
+
 
     const plansCollectionRef = collection(db, 'coaches', userId, 'plans');
     const qPlans = query(plansCollectionRef, orderBy('name'));
@@ -127,8 +154,6 @@ export default function FinanceiroPage() {
         const studentsData = studentSnapshot.docs.map(docSnap => ({ ...docSnap.data(), id: docSnap.id } as Student));
         
         const today = startOfDay(new Date());
-        const monthStart = startOfMonth(selectedMonthDate);
-        const monthEnd = endOfMonth(selectedMonthDate);
 
         const derivedPayments: PaymentEntry[] = [];
 
@@ -241,7 +266,10 @@ export default function FinanceiroPage() {
       setIsLoading(false);
     });
 
-    return () => unsubscribePlans();
+    return () => {
+        unsubscribePlans();
+        unsubscribeExpenses();
+    };
   }, [userId, toast, selectedMonthDate]);
 
 
@@ -293,6 +321,23 @@ export default function FinanceiroPage() {
     }
   };
 
+  const handleDeleteExpense = async (expenseId: string) => {
+    if (!userId) {
+      toast({ title: "Erro", description: "Usuário não autenticado.", variant: "destructive" });
+      return;
+    }
+    if (window.confirm("Tem certeza que deseja excluir esta saída?")) {
+        try {
+            await deleteDoc(doc(db, 'coaches', userId, 'expenses', expenseId));
+            toast({ title: "Saída Excluída!" });
+        } catch(error) {
+            console.error("Error deleting expense:", error);
+            toast({ title: "Erro ao Excluir Saída", variant: "destructive"});
+        }
+    }
+  };
+
+
   const filteredPayments = useMemo(() => {
     return payments.filter(payment => {
       const nameMatch = payment.studentName.toLowerCase().includes(searchTerm.toLowerCase());
@@ -300,6 +345,13 @@ export default function FinanceiroPage() {
       return nameMatch && statusMatch;
     });
   }, [payments, searchTerm, statusFilters]);
+  
+  const filteredExpenses = useMemo(() => {
+    return expenses.filter(expense => 
+      expense.description.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      expense.category.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [expenses, searchTerm]);
 
   const toggleStatusFilter = (status: Payment['status']) => {
     setStatusFilters(prev => {
@@ -323,34 +375,39 @@ export default function FinanceiroPage() {
   };
 
   const summaryStats = useMemo(() => {
-    return {
-      totalRecebidoMes: payments
+    const totalRecebidoMes = payments
         .filter(p => p.status === 'pago')
-        .reduce((sum, p) => sum + p.amount, 0),
+        .reduce((sum, p) => sum + p.amount, 0);
+
+    const totalSaidasMes = expenses
+        .reduce((sum, e) => sum + e.amount, 0);
+
+    return {
+      totalRecebidoMes,
       totalPendente: payments
         .filter(p => p.status === 'pendente')
         .reduce((sum, p) => sum + p.amount, 0),
       totalVencido: payments
         .filter(p => p.status === 'vencido')
         .reduce((sum, p) => sum + p.amount, 0),
+      totalSaidasMes,
+      saldoMes: totalRecebidoMes - totalSaidasMes,
     }
-  }, [payments]);
+  }, [payments, expenses]);
 
   const handleGenerateReport = () => {
     const paidInMonth = payments.filter(p => p.status === 'pago');
     const outstandingInMonth = payments.filter(p => p.status === 'pendente' || p.status === 'vencido');
     
-    const totalReceived = paidInMonth.reduce((sum, p) => sum + p.amount, 0);
-    const totalPending = outstandingInMonth.filter(p=> p.status === 'pendente').reduce((sum, p) => sum + p.amount, 0);
-    const totalOverdue = outstandingInMonth.filter(p=> p.status === 'vencido').reduce((sum, p) => sum + p.amount, 0);
-
     setReportData({
       monthYear: format(selectedMonthDate, 'MMMM yyyy', { locale: ptBR }),
-      totalReceived,
-      totalPending,
-      totalOverdue,
+      totalReceived: summaryStats.totalRecebidoMes,
+      totalPending: summaryStats.totalPendente,
+      totalOverdue: summaryStats.totalVencido,
+      totalExpenses: summaryStats.totalSaidasMes,
       paidInMonth,
       outstandingInMonth,
+      expensesInMonth: expenses,
     });
     setIsReportDialogOpen(true);
   };
@@ -436,19 +493,29 @@ export default function FinanceiroPage() {
           </Button>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-3 mb-8">
+        <div className="grid gap-6 md:grid-cols-4 mb-8">
           <Card className="shadow-md">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Recebido em {clientRendered ? format(selectedMonthDate, 'MMMM', { locale: ptBR }) : '...'}</CardTitle>
-              <CheckCircle className="h-5 w-5 text-green-500" />
+              <CardTitle className="text-sm font-medium text-muted-foreground">Saldo do Mês</CardTitle>
+              <DollarSign className={`h-5 w-5 ${summaryStats.saldoMes >= 0 ? 'text-green-500' : 'text-red-500'}`} />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-500">R$ {summaryStats.totalRecebidoMes.toFixed(2)}</div>
+              <div className={`text-2xl font-bold ${summaryStats.saldoMes >= 0 ? 'text-green-500' : 'text-red-500'}`}>R$ {summaryStats.saldoMes.toFixed(2)}</div>
+               <p className="text-xs text-muted-foreground">Recebido (R$ {summaryStats.totalRecebidoMes.toFixed(2)}) - Saídas (R$ {summaryStats.totalSaidasMes.toFixed(2)})</p>
+            </CardContent>
+          </Card>
+           <Card className="shadow-md">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Total de Saídas</CardTitle>
+              <MinusCircle className="h-5 w-5 text-red-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-red-500">R$ {summaryStats.totalSaidasMes.toFixed(2)}</div>
             </CardContent>
           </Card>
           <Card className="shadow-md">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Pendente em {clientRendered ? format(selectedMonthDate, 'MMMM', { locale: ptBR }) : '...'}</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Pendente</CardTitle>
               <Clock className="h-5 w-5 text-yellow-500" />
             </CardHeader>
             <CardContent>
@@ -457,7 +524,7 @@ export default function FinanceiroPage() {
           </Card>
           <Card className="shadow-md">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Vencido em {clientRendered ? format(selectedMonthDate, 'MMMM', { locale: ptBR }) : '...'}</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Vencido</CardTitle>
               <AlertTriangle className="h-5 w-5 text-red-500" />
             </CardHeader>
             <CardContent>
@@ -468,124 +535,184 @@ export default function FinanceiroPage() {
 
 
         <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle>Pagamentos com Vencimento em {clientRendered ? format(selectedMonthDate, 'MMMM yyyy', { locale: ptBR }) : '...'}</CardTitle>
-            <CardDescription>Acompanhe o status das mensalidades do mês selecionado.</CardDescription>
-            <div className="mt-4 flex flex-col sm:flex-row items-center gap-4">
-              <div className="relative w-full sm:w-auto flex-grow">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="search"
-                  placeholder="Buscar por aluno..."
-                  className="pl-8 w-full bg-background"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline">
-                    <Filter className="mr-2 h-4 w-4" /> Filtrar Status
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>Status de Pagamento</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  {(['pago', 'pendente', 'vencido'] as Payment['status'][]).map(statusValue => (
-                    <DropdownMenuCheckboxItem
-                      key={statusValue}
-                      checked={statusFilters.has(statusValue)}
-                      onCheckedChange={() => toggleStatusFilter(statusValue)}
-                      className="capitalize"
-                    >
-                      {statusValue === 'pago' ? 'Pago' : statusValue === 'pendente' ? 'Pendente' : 'Vencido'}
-                    </DropdownMenuCheckboxItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </CardHeader>
-          <CardContent className="px-0 xxs:px-2 sm:px-6">
-            {isLoading ? (
-                <div className="flex justify-center items-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                  <p className="ml-2 text-muted-foreground">Carregando pagamentos...</p>
+          <Tabs defaultValue="payments">
+             <CardHeader>
+                <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+                    <div>
+                        <CardTitle>Movimentações de {clientRendered ? format(selectedMonthDate, 'MMMM yyyy', { locale: ptBR }) : '...'}</CardTitle>
+                        <CardDescription>Acompanhe as entradas e saídas do mês selecionado.</CardDescription>
+                    </div>
+                    <TabsList>
+                        <TabsTrigger value="payments">Recebimentos</TabsTrigger>
+                        <TabsTrigger value="expenses">Saídas</TabsTrigger>
+                    </TabsList>
                 </div>
-            ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="px-2 py-3 sm:px-4">Aluno</TableHead>
-                  <TableHead className="hidden lg:table-cell px-2 py-3 sm:px-4">Valor</TableHead>
-                  <TableHead className="px-2 py-3 sm:px-4">Vencimento</TableHead>
-                  <TableHead className="px-2 py-3 sm:px-4">Status</TableHead>
-                  <TableHead className="hidden md:table-cell px-2 py-3 sm:px-4">Método</TableHead>
-                  <TableHead className="text-right px-2 py-3 sm:px-4">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredPayments.length > 0 ? (
-                  filteredPayments.map((payment) => (
-                    <TableRow key={payment.id}>
-                      <TableCell className="font-medium p-2 sm:p-4 truncate max-w-[80px] xxs:max-w-[100px] xs:max-w-[120px] sm:max-w-xs">
-                          {payment.studentName}
-                      </TableCell>
-                      <TableCell className="hidden lg:table-cell p-2 sm:p-4">R$ {payment.amount.toFixed(2)}</TableCell>
-                      <TableCell className="p-2 sm:p-4">
-                        {safeFormatDate(payment.dueDate)}
-                      </TableCell>
-                      <TableCell className="p-2 sm:p-4">{getPaymentStatusBadge(payment.status)}</TableCell>
-                      <TableCell className="hidden md:table-cell p-2 sm:p-4">{payment.method}</TableCell>
-                      <TableCell className="text-right p-1 sm:p-2">
-                        <div className="flex items-center justify-end space-x-0.5">
-                          {(payment.status === 'pendente' || payment.status === 'vencido') && (
-                            <>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-green-500 hover:text-green-600 sm:hidden" onClick={() => handleMarkAsPaid(payment)} title="Marcar como Pago">
-                                <CheckCircle className="h-4 w-4" />
-                              </Button>
-                              <Button variant="ghost" size="sm" className="hidden sm:inline-flex items-center text-green-500 hover:text-green-600" onClick={() => handleMarkAsPaid(payment)} title="Marcar como Pago">
-                                <CheckCircle className="h-4 w-4 mr-1" /> <span className="hidden xs:inline">Pago</span>
-                              </Button>
-                            </>
-                          )}
-                          <Button variant="ghost" size="icon" className="h-8 w-8 sm:hidden" asChild>
-                            <Link href={`/alunos/${payment.studentId}`} title="Ver Aluno">
-                              <Users className="h-4 w-4" />
-                            </Link>
-                          </Button>
-                          <Button variant="ghost" size="sm" className="hidden sm:inline-flex items-center" asChild>
-                            <Link href={`/alunos/${payment.studentId}`} title="Ver Aluno">
-                              <Users className="h-4 w-4 mr-1" /> <span className="hidden xs:inline">Aluno</span>
-                            </Link>
-                          </Button>
-
-                          <Button variant="ghost" size="icon" className="h-8 w-8 sm:hidden" asChild>
-                            <Link href={`/financeiro/lembrete/${payment.studentId}`} title="Gerar Lembrete">
-                              <DollarSign className="h-4 w-4" />
-                            </Link>
-                          </Button>
-                          <Button variant="ghost" size="sm" className="hidden sm:inline-flex items-center" asChild>
-                            <Link href={`/financeiro/lembrete/${payment.studentId}`} title="Gerar Lembrete">
-                              <DollarSign className="h-4 w-4 mr-1" /> <span className="hidden xs:inline">Lembrete</span>
-                            </Link>
-                          </Button>
+                <div className="mt-4 flex flex-col sm:flex-row items-center gap-4">
+                    <div className="relative w-full sm:w-auto flex-grow">
+                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                        type="search"
+                        placeholder="Buscar por aluno, descrição..."
+                        className="pl-8 w-full bg-background"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                        <Button variant="outline">
+                            <Filter className="mr-2 h-4 w-4" /> Filtrar Status
+                        </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Status de Pagamento</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {(['pago', 'pendente', 'vencido'] as Payment['status'][]).map(statusValue => (
+                            <DropdownMenuCheckboxItem
+                            key={statusValue}
+                            checked={statusFilters.has(statusValue)}
+                            onCheckedChange={() => toggleStatusFilter(statusValue)}
+                            className="capitalize"
+                            >
+                            {statusValue === 'pago' ? 'Pago' : statusValue === 'pendente' ? 'Pendente' : 'Vencido'}
+                            </DropdownMenuCheckboxItem>
+                        ))}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                    <Button onClick={() => setIsAddExpenseDialogOpen(true)}>
+                        <PlusCircle className="mr-2 h-4 w-4"/> Adicionar Saída
+                    </Button>
+                </div>
+            </CardHeader>
+            <CardContent className="px-0 xxs:px-2 sm:px-6">
+                 <TabsContent value="payments">
+                     {isLoading ? (
+                        <div className="flex justify-center items-center py-12">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        <p className="ml-2 text-muted-foreground">Carregando recebimentos...</p>
                         </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8 p-2 sm:p-4">
-                      Nenhum pagamento encontrado com os filtros atuais para o mês de {clientRendered ? format(selectedMonthDate, 'MMMM yyyy', { locale: ptBR }) : '...'}.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-            )}
-          </CardContent>
+                    ) : (
+                    <Table>
+                    <TableHeader>
+                        <TableRow>
+                        <TableHead className="px-2 py-3 sm:px-4">Aluno</TableHead>
+                        <TableHead className="hidden lg:table-cell px-2 py-3 sm:px-4">Valor</TableHead>
+                        <TableHead className="px-2 py-3 sm:px-4">Vencimento</TableHead>
+                        <TableHead className="px-2 py-3 sm:px-4">Status</TableHead>
+                        <TableHead className="hidden md:table-cell px-2 py-3 sm:px-4">Método</TableHead>
+                        <TableHead className="text-right px-2 py-3 sm:px-4">Ações</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {filteredPayments.length > 0 ? (
+                        filteredPayments.map((payment) => (
+                            <TableRow key={payment.id}>
+                            <TableCell className="font-medium p-2 sm:p-4 truncate max-w-[80px] xxs:max-w-[100px] xs:max-w-[120px] sm:max-w-xs">
+                                {payment.studentName}
+                            </TableCell>
+                            <TableCell className="hidden lg:table-cell p-2 sm:p-4">R$ {payment.amount.toFixed(2)}</TableCell>
+                            <TableCell className="p-2 sm:p-4">
+                                {safeFormatDate(payment.dueDate)}
+                            </TableCell>
+                            <TableCell className="p-2 sm:p-4">{getPaymentStatusBadge(payment.status)}</TableCell>
+                            <TableCell className="hidden md:table-cell p-2 sm:p-4">{payment.method}</TableCell>
+                            <TableCell className="text-right p-1 sm:p-2">
+                                <div className="flex items-center justify-end space-x-0.5">
+                                {(payment.status === 'pendente' || payment.status === 'vencido') && (
+                                    <>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-green-500 hover:text-green-600 sm:hidden" onClick={() => handleMarkAsPaid(payment)} title="Marcar como Pago">
+                                        <CheckCircle className="h-4 w-4" />
+                                    </Button>
+                                    <Button variant="ghost" size="sm" className="hidden sm:inline-flex items-center text-green-500 hover:text-green-600" onClick={() => handleMarkAsPaid(payment)} title="Marcar como Pago">
+                                        <CheckCircle className="h-4 w-4 mr-1" /> <span className="hidden xs:inline">Pago</span>
+                                    </Button>
+                                    </>
+                                )}
+                                <Button variant="ghost" size="icon" className="h-8 w-8 sm:hidden" asChild>
+                                    <Link href={`/alunos/${payment.studentId}`} title="Ver Aluno">
+                                    <Users className="h-4 w-4" />
+                                    </Link>
+                                </Button>
+                                <Button variant="ghost" size="sm" className="hidden sm:inline-flex items-center" asChild>
+                                    <Link href={`/alunos/${payment.studentId}`} title="Ver Aluno">
+                                    <Users className="h-4 w-4 mr-1" /> <span className="hidden xs:inline">Aluno</span>
+                                    </Link>
+                                </Button>
+
+                                <Button variant="ghost" size="icon" className="h-8 w-8 sm:hidden" asChild>
+                                    <Link href={`/financeiro/lembrete/${payment.studentId}`} title="Gerar Lembrete">
+                                    <DollarSign className="h-4 w-4" />
+                                    </Link>
+                                </Button>
+                                <Button variant="ghost" size="sm" className="hidden sm:inline-flex items-center" asChild>
+                                    <Link href={`/financeiro/lembrete/${payment.studentId}`} title="Gerar Lembrete">
+                                    <DollarSign className="h-4 w-4 mr-1" /> <span className="hidden xs:inline">Lembrete</span>
+                                    </Link>
+                                </Button>
+                                </div>
+                            </TableCell>
+                            </TableRow>
+                        ))
+                        ) : (
+                        <TableRow>
+                            <TableCell colSpan={6} className="text-center text-muted-foreground py-8 p-2 sm:p-4">
+                            Nenhum recebimento encontrado para {clientRendered ? format(selectedMonthDate, 'MMMM yyyy', { locale: ptBR }) : '...'}.
+                            </TableCell>
+                        </TableRow>
+                        )}
+                    </TableBody>
+                    </Table>
+                    )}
+                 </TabsContent>
+                 <TabsContent value="expenses">
+                     {isLoading ? (
+                        <div className="flex justify-center items-center py-12">
+                          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                          <p className="ml-2 text-muted-foreground">Carregando saídas...</p>
+                        </div>
+                    ) : (
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Descrição</TableHead>
+                                <TableHead>Categoria</TableHead>
+                                <TableHead>Data</TableHead>
+                                <TableHead className="text-right">Valor</TableHead>
+                                <TableHead className="text-right">Ações</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {filteredExpenses.length > 0 ? (
+                                filteredExpenses.map((expense) => (
+                                <TableRow key={expense.id}>
+                                    <TableCell className="font-medium">{expense.description}</TableCell>
+                                    <TableCell><Badge variant="outline">{expense.category}</Badge></TableCell>
+                                    <TableCell>{safeFormatDate(expense.date)}</TableCell>
+                                    <TableCell className="text-right">R$ {expense.amount.toFixed(2)}</TableCell>
+                                    <TableCell className="text-right">
+                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive/90" onClick={() => handleDeleteExpense(expense.id)}>
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                                ))
+                            ) : (
+                                <TableRow>
+                                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                                    Nenhuma saída registrada para {clientRendered ? format(selectedMonthDate, 'MMMM yyyy', { locale: ptBR }) : '...'}.
+                                </TableCell>
+                                </TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                    )}
+                 </TabsContent>
+            </CardContent>
+          </Tabs>
         </Card>
       </div>
+
+      <AddExpenseDialog open={isAddExpenseDialogOpen} onOpenChange={setIsAddExpenseDialogOpen} />
 
       <Dialog open={isReportDialogOpen} onOpenChange={setIsReportDialogOpen}>
         <DialogContent className="sm:max-w-3xl max-h-[90vh] flex flex-col">
@@ -604,25 +731,29 @@ export default function FinanceiroPage() {
                     <CardHeader>
                       <CardTitle className="text-lg">Resumo do Mês</CardTitle>
                     </CardHeader>
-                    <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div className="p-4 bg-green-500/10 rounded-lg">
+                        <p className="text-sm text-green-700 font-medium">Saldo do Mês</p>
+                        <p className={`text-2xl font-bold ${reportData.totalReceived - reportData.totalExpenses >= 0 ? 'text-green-600' : 'text-red-600'}`}>R$ {(reportData.totalReceived - reportData.totalExpenses).toFixed(2)}</p>
+                      </div>
                       <div className="p-4 bg-green-500/10 rounded-lg">
                         <p className="text-sm text-green-700 font-medium">Total Recebido</p>
                         <p className="text-2xl font-bold text-green-600">R$ {reportData.totalReceived.toFixed(2)}</p>
                       </div>
-                      <div className="p-4 bg-yellow-500/10 rounded-lg">
-                        <p className="text-sm text-yellow-700 font-medium">Total Pendente</p>
-                        <p className="text-2xl font-bold text-yellow-600">R$ {reportData.totalPending.toFixed(2)}</p>
-                      </div>
                       <div className="p-4 bg-red-500/10 rounded-lg">
-                        <p className="text-sm text-red-700 font-medium">Total Vencido</p>
-                        <p className="text-2xl font-bold text-red-600">R$ {reportData.totalOverdue.toFixed(2)}</p>
+                        <p className="text-sm text-red-700 font-medium">Total de Saídas</p>
+                        <p className="text-2xl font-bold text-red-600">R$ {reportData.totalExpenses.toFixed(2)}</p>
+                      </div>
+                      <div className="p-4 bg-yellow-500/10 rounded-lg">
+                        <p className="text-sm text-yellow-700 font-medium">Total Pendente/Vencido</p>
+                        <p className="text-2xl font-bold text-yellow-600">R$ {(reportData.totalPending + reportData.totalOverdue).toFixed(2)}</p>
                       </div>
                     </CardContent>
                   </Card>
 
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-lg">Pagamentos Recebidos em {reportData?.monthYear}</CardTitle>
+                      <CardTitle className="text-lg">Recebimentos de {reportData?.monthYear}</CardTitle>
                     </CardHeader>
                     <CardContent>
                       {reportData.paidInMonth.length > 0 ? (
@@ -647,14 +778,46 @@ export default function FinanceiroPage() {
                           </TableBody>
                         </Table>
                       ) : (
-                        <p className="text-muted-foreground">Nenhum pagamento recebido em {reportData?.monthYear}.</p>
+                        <p className="text-muted-foreground">Nenhum recebimento em {reportData?.monthYear}.</p>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                   <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">Saídas de {reportData?.monthYear}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {reportData.expensesInMonth.length > 0 ? (
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Descrição</TableHead>
+                              <TableHead>Categoria</TableHead>
+                              <TableHead>Data</TableHead>
+                              <TableHead className="text-right">Valor (R$)</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {reportData.expensesInMonth.map(e => (
+                              <TableRow key={`exp-${e.id}`}>
+                                <TableCell>{e.description}</TableCell>
+                                <TableCell><Badge variant="outline">{e.category}</Badge></TableCell>
+                                <TableCell>{safeFormatDate(e.date)}</TableCell>
+                                <TableCell className="text-right">{e.amount.toFixed(2)}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      ) : (
+                        <p className="text-muted-foreground">Nenhuma saída registrada em {reportData?.monthYear}.</p>
                       )}
                     </CardContent>
                   </Card>
 
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-lg">Pagamentos Pendentes/Vencidos (Venc. em {reportData?.monthYear})</CardTitle>
+                      <CardTitle className="text-lg">Pendentes/Vencidos (Venc. em {reportData?.monthYear})</CardTitle>
                     </CardHeader>
                     <CardContent>
                       {reportData.outstandingInMonth.length > 0 ? (
@@ -700,6 +863,7 @@ export default function FinanceiroPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <AddExpenseDialog open={isAddExpenseDialogOpen} onOpenChange={setIsAddExpenseDialogOpen}/>
     </>
   );
 }

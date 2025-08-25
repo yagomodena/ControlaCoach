@@ -96,6 +96,17 @@ export interface Payment {
   receiptUrl?: string;
 }
 
+export interface Expense {
+  id: string; // Firestore document ID
+  description: string;
+  amount: number;
+  category: 'Aluguel de quadra' | 'Material esportivo' | 'Transporte' | 'Marketing' | 'Outros';
+  date: string; // ISO String YYYY-MM-DD
+}
+
+export const EXPENSE_CATEGORIES: Expense['category'][] = ['Aluguel de quadra', 'Material esportivo', 'Transporte', 'Marketing', 'Outros'];
+
+
 export interface AppSettings {
   coachName: string;
   defaultLocations: string[];
