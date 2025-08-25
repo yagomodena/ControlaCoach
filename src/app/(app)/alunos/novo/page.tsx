@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Save, PlusCircle, Search, CalendarClock, MapPinIcon, ClockIcon, DollarSign, Loader2, CalendarIcon } from 'lucide-react';
+import { ArrowLeft, Save, PlusCircle, Search, CalendarClock, MapPinIcon, ClockIcon, DollarSign, Loader2, CalendarIcon, KeyRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -29,12 +29,15 @@ import { ManagePlansDialog } from '@/components/dialogs/manage-plans-dialog';
 import { db, auth } from '@/firebase';
 import { collection, addDoc, onSnapshot, query, where, orderBy } from 'firebase/firestore';
 import { formatISO, addDays } from 'date-fns';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
 
 const NO_LOCATION_VALUE = "__NO_LOCATION__";
 
 const studentSchema = z.object({
   name: z.string().min(3, { message: 'Nome deve ter pelo menos 3 caracteres.' }),
   phone: z.string().min(10, { message: 'Telefone inválido.' }),
+  email: z.string().email({ message: 'Email inválido.' }),
+  password: z.string().min(6, { message: 'Senha deve ter pelo menos 6 caracteres.' }),
   plan: z.string().min(1, { message: 'Selecione um plano.' }),
   technicalLevel: z.enum(['Iniciante', 'Intermediário', 'Avançado'], { required_error: 'Selecione o nível técnico.' }),
   status: z.enum(['active', 'inactive'], { required_error: 'Selecione o status.' }),
@@ -123,6 +126,8 @@ export default function NovoAlunoPage() {
     defaultValues: {
       name: '',
       phone: '',
+      email: '',
+      password: '',
       plan: undefined,
       technicalLevel: undefined,
       status: 'active',
@@ -145,6 +150,12 @@ export default function NovoAlunoPage() {
         return;
     }
     try {
+      
+      const tempApp = auth.app;
+      const studentAuth = getAuth(tempApp);
+      const userCredential = await createUserWithEmailAndPassword(studentAuth, data.email, data.password);
+      const studentUser = userCredential.user;
+
       const registrationDate = new Date();
       const registrationDateISO = formatISO(registrationDate, { representation: 'date' });
       const selectedPlanDetails = activePlans.find(p => p.name === data.plan);
@@ -162,6 +173,8 @@ export default function NovoAlunoPage() {
       }
 
       const studentDataToSave: Record<string, any> = {
+        authId: studentUser.uid,
+        email: data.email,
         name: data.name,
         phone: data.phone,
         plan: data.plan,
@@ -194,7 +207,6 @@ export default function NovoAlunoPage() {
         studentDataToSave.recurringClassLocation = null; 
       }
       
-      // Override defaults if form values are explicitly set for payment
       if (data.paymentStatus && data.paymentStatus !== 'pendente') studentDataToSave.paymentStatus = data.paymentStatus;
       if (data.dueDate && data.dueDate.trim() !== '' && data.dueDate !== formatISO(initialDueDate, { representation: 'date' })) studentDataToSave.dueDate = data.dueDate;
       if (typeof data.amountDue === 'number' && !isNaN(data.amountDue) && data.amountDue !== selectedPlanDetails.price) studentDataToSave.amountDue = data.amountDue;
@@ -202,7 +214,6 @@ export default function NovoAlunoPage() {
       studentDataToSave.paymentMethod = data.paymentMethod || null;
       studentDataToSave.lastPaymentDate = (data.lastPaymentDate && data.lastPaymentDate.trim() !== '') ? data.lastPaymentDate : null;
       
-
       await addDoc(collection(db, 'coaches', userId, 'students'), studentDataToSave);
 
       toast({
@@ -210,11 +221,15 @@ export default function NovoAlunoPage() {
         description: `${data.name} foi cadastrado com sucesso.`,
       });
       router.push('/alunos');
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error adding student: ", error);
+      let description = "Não foi possível cadastrar o aluno. Tente novamente.";
+      if (error.code === 'auth/email-already-in-use') {
+        description = "Este email já está em uso por outra conta.";
+      }
       toast({
         title: "Erro ao Adicionar Aluno",
-        description: "Não foi possível cadastrar o aluno. Tente novamente.",
+        description: description,
         variant: "destructive",
       });
     }
@@ -222,15 +237,7 @@ export default function NovoAlunoPage() {
 
   const handlePlansManaged = () => {
     if (!userId) return;
-    const currentPlanValue = watch('plan');
-    fetchActivePlans(userId); // Re-fetch to ensure list is up-to-date
-    const currentPlanExistsAndIsActive = activePlans.some(p => p.name === currentPlanValue && p.status === 'active');
-    if (!currentPlanExistsAndIsActive && activePlans.length > 0) {
-      // Optionally, auto-select the first active plan or clear the field
-      // For now, just ensures the list is fresh
-    } else if (!currentPlanExistsAndIsActive) {
-      setValue('plan', ''); // Clear plan if the current one is no longer valid
-    }
+    fetchActivePlans(userId);
   };
 
   if (isLoadingPlans || isLoadingLocations || !userId) {
@@ -257,312 +264,182 @@ export default function NovoAlunoPage() {
           </div>
         </div>
 
-        <Card className="max-w-3xl mx-auto shadow-lg">
-          <form onSubmit={handleSubmit(onSubmit)}>
-            <CardHeader>
-              <CardTitle>Informações do Aluno</CardTitle>
-              <CardDescription>Insira os detalhes básicos.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                 <div className="space-y-2">
-                    <Label htmlFor="name">Nome Completo</Label>
-                    <Controller
-                    name="name"
-                    control={control}
-                    render={({ field }) => <Input id="name" placeholder="Ex: João da Silva" {...field} value={field.value ?? ''} />}
-                    />
-                    {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
-                </div>
-                 <div className="space-y-2">
-                    <Label htmlFor="phone">Telefone (WhatsApp)</Label>
-                    <Controller
-                    name="phone"
-                    control={control}
-                    render={({ field }) => <Input id="phone" type="tel" placeholder="(XX) XXXXX-XXXX" {...field} value={field.value ?? ''} />}
-                    />
-                    {errors.phone && <p className="text-sm text-destructive">{errors.phone.message}</p>}
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="birthDate" className="flex items-center"><CalendarIcon className="mr-1 h-4 w-4"/>Data de Nascimento</Label>
-                  <Controller name="birthDate" control={control} render={({ field }) => <Input id="birthDate" type="date" {...field} value={field.value ?? ''} />} />
-                  {errors.birthDate && <p className="text-sm text-destructive">{errors.birthDate.message}</p>}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="technicalLevel">Nível Técnico</Label>
-                  <Controller
-                    name="technicalLevel"
-                    control={control}
-                    render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value ?? ''} >
-                        <SelectTrigger id="technicalLevel">
-                          <SelectValue placeholder="Selecione o nível" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Iniciante">Iniciante</SelectItem>
-                          <SelectItem value="Intermediário">Intermediário</SelectItem>
-                          <SelectItem value="Avançado">Avançado</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-                  {errors.technicalLevel && <p className="text-sm text-destructive">{errors.technicalLevel.message}</p>}
-                </div>
-              </div>
+        <form onSubmit={handleSubmit(onSubmit)}>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <Card className="lg:col-span-2 shadow-lg">
+                    <CardHeader>
+                        <CardTitle>Informações do Aluno</CardTitle>
+                        <CardDescription>Insira os detalhes básicos, informações de contato e esportivas.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-2">
+                                <Label htmlFor="name">Nome Completo</Label>
+                                <Controller name="name" control={control} render={({ field }) => <Input id="name" placeholder="Ex: João da Silva" {...field} />} />
+                                {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="phone">Telefone (WhatsApp)</Label>
+                                <Controller name="phone" control={control} render={({ field }) => <Input id="phone" type="tel" placeholder="(XX) XXXXX-XXXX" {...field} />} />
+                                {errors.phone && <p className="text-sm text-destructive">{errors.phone.message}</p>}
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-2">
+                                <Label htmlFor="birthDate" className="flex items-center"><CalendarIcon className="mr-1 h-4 w-4"/>Data de Nascimento</Label>
+                                <Controller name="birthDate" control={control} render={({ field }) => <Input id="birthDate" type="date" {...field} value={field.value ?? ''} />} />
+                                {errors.birthDate && <p className="text-sm text-destructive">{errors.birthDate.message}</p>}
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="technicalLevel">Nível Técnico</Label>
+                                <Controller name="technicalLevel" control={control} render={({ field }) => (
+                                    <Select onValueChange={field.onChange} value={field.value}><SelectTrigger id="technicalLevel"><SelectValue placeholder="Selecione o nível" /></SelectTrigger>
+                                    <SelectContent><SelectItem value="Iniciante">Iniciante</SelectItem><SelectItem value="Intermediário">Intermediário</SelectItem><SelectItem value="Avançado">Avançado</SelectItem></SelectContent>
+                                    </Select>
+                                )} />
+                                {errors.technicalLevel && <p className="text-sm text-destructive">{errors.technicalLevel.message}</p>}
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="objective">Objetivo</Label>
+                            <Controller name="objective" control={control} render={({ field }) => <Textarea id="objective" placeholder="Descreva o objetivo do aluno..." {...field} value={field.value ?? ''} />} />
+                            {errors.objective && <p className="text-sm text-destructive">{errors.objective.message}</p>}
+                        </div>
+                    </CardContent>
+                </Card>
 
+                <div className="space-y-8">
+                    <Card className="shadow-lg">
+                        <CardHeader>
+                            <CardTitle className="flex items-center"><KeyRound className="mr-2 h-5 w-5 text-primary"/>Acesso do Aluno</CardTitle>
+                            <CardDescription>Crie as credenciais para o aluno acessar o portal.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            <div className="space-y-2">
+                                <Label htmlFor="email">Email de Acesso</Label>
+                                <Controller name="email" control={control} render={({ field }) => <Input id="email" type="email" placeholder="aluno@email.com" {...field} />} />
+                                {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="password">Senha de Acesso</Label>
+                                <Controller name="password" control={control} render={({ field }) => <Input id="password" type="password" placeholder="Mínimo 6 caracteres" {...field} />} />
+                                {errors.password && <p className="text-sm text-destructive">{errors.password.message}</p>}
+                            </div>
+                        </CardContent>
+                    </Card>
 
-              <div className="space-y-2">
-                <Label htmlFor="plan">Plano</Label>
-                <div className="flex items-center gap-2">
-                  <div className="flex-grow">
-                    <Controller
-                      name="plan"
-                      control={control}
-                      render={({ field }) => (
-                        <Select 
-                          onValueChange={(value) => {
-                              field.onChange(value);
-                              const selectedPlan = activePlans.find(p => p.name === value);
-                              if (selectedPlan) {
-                                  setValue('amountDue', selectedPlan.price);
-                                  // Set initial due date based on plan's chargeOnEnrollment
-                                  const regDate = new Date();
-                                  let initialDueDateValue: Date;
-                                  if (selectedPlan.chargeOnEnrollment) {
-                                      initialDueDateValue = regDate;
-                                  } else {
-                                      initialDueDateValue = addDays(regDate, selectedPlan.durationDays);
-                                  }
-                                  setValue('dueDate', formatISO(initialDueDateValue, { representation: 'date' }));
-
-                              } else {
-                                  setValue('amountDue', undefined);
-                                  setValue('dueDate', '');
-                              }
-                          }} 
-                          value={field.value ?? ''} 
-                          disabled={isLoadingPlans}
-                        >
-                          <SelectTrigger id="plan">
-                            <SelectValue placeholder={isLoadingPlans ? "Carregando..." : "Selecione o plano"} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {activePlans.length > 0 ? (
-                              activePlans.map(p => (
-                                <SelectItem key={p.id} value={p.name}>{p.name} - R$ {p.price.toFixed(2)}</SelectItem>
-                              ))
-                            ) : (
-                              <SelectItem value="no-plans" disabled>{isLoadingPlans ? "Carregando..." : "Nenhum plano ativo"}</SelectItem>
-                            )}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    />
-                  </div>
-                  <Button variant="outline" size="icon" type="button" onClick={() => setIsAddPlanDialogOpen(true)}>
-                    <PlusCircle className="h-4 w-4" />
-                    <span className="sr-only">Adicionar Novo Plano</span>
-                  </Button>
-                  <Button variant="outline" size="icon" type="button" onClick={() => setIsManagePlansDialogOpen(true)}>
-                    <Search className="h-4 w-4" />
-                    <span className="sr-only">Consultar Planos</span>
-                  </Button>
+                    <Card className="shadow-lg">
+                        <CardHeader>
+                            <CardTitle>Status</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="space-y-2">
+                                <Label htmlFor="status">Status do Aluno</Label>
+                                <Controller name="status" control={control} render={({ field }) => (
+                                    <Select onValueChange={field.onChange} value={field.value}><SelectTrigger id="status"><SelectValue placeholder="Selecione o status" /></SelectTrigger>
+                                    <SelectContent><SelectItem value="active">Ativo</SelectItem><SelectItem value="inactive">Inativo</SelectItem></SelectContent>
+                                    </Select>
+                                )} />
+                                {errors.status && <p className="text-sm text-destructive">{errors.status.message}</p>}
+                            </div>
+                        </CardContent>
+                    </Card>
                 </div>
-                {errors.plan && <p className="text-sm text-destructive">{errors.plan.message}</p>}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="status">Status</Label>
-                <Controller
-                    name="status"
-                    control={control}
-                    render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value ?? ''}>
-                        <SelectTrigger id="status">
-                          <SelectValue placeholder="Selecione o status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="active">Ativo</SelectItem>
-                          <SelectItem value="inactive">Inativo</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-                {errors.status && <p className="text-sm text-destructive">{errors.status.message}</p>}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="objective">Objetivo</Label>
-                <Controller
-                  name="objective"
-                  control={control}
-                  render={({ field }) => <Textarea id="objective" placeholder="Descreva o objetivo do aluno..." {...field} value={field.value ?? ''} />}
-                />
-                {errors.objective && <p className="text-sm text-destructive">{errors.objective.message}</p>}
-              </div>
-            </CardContent>
-
-            <Separator className="my-6" />
-
-            <CardHeader className="pt-0">
-              <CardTitle className="flex items-center"><CalendarClock className="mr-2 h-5 w-5 text-primary"/>Horários e Dias de Aula Recorrentes</CardTitle>
-              <CardDescription>Defina o horário e os dias fixos para as aulas deste aluno. (Opcional)</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="recurringClassTime" className="flex items-center"><ClockIcon className="mr-1 h-4 w-4"/>Horário da Aula</Label>
-                  <Controller
-                    name="recurringClassTime"
-                    control={control}
-                    render={({ field }) => <Input id="recurringClassTime" type="time" {...field} value={field.value ?? ''}/>}
-                  />
-                  {errors.recurringClassTime && <p className="text-sm text-destructive">{errors.recurringClassTime.message}</p>}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="recurringClassLocation" className="flex items-center"><MapPinIcon className="mr-1 h-4 w-4"/>Local da Aula</Label>
-                  <Controller
-                    name="recurringClassLocation"
-                    control={control}
-                    render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value ?? NO_LOCATION_VALUE} disabled={isLoadingLocations}>
-                        <SelectTrigger id="recurringClassLocation">
-                          <SelectValue placeholder={isLoadingLocations ? "Carregando..." : "Selecione o local"} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={NO_LOCATION_VALUE}>Nenhum local específico</SelectItem>
-                          {activeLocations.map(loc => (
-                            <SelectItem key={loc.id} value={loc.name}>{loc.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-                  {errors.recurringClassLocation && <p className="text-sm text-destructive">{errors.recurringClassLocation.message}</p>}
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Dias da Semana para Aula Recorrente</Label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 pt-2">
-                  {DAYS_OF_WEEK.map((day) => (
-                    <Controller
-                      key={day}
-                      name="recurringClassDays"
-                      control={control}
-                      render={({ field }) => {
-                        const currentDays = field.value || [];
-                        return (
-                          <div className="flex items-center space-x-2">
-                            <Checkbox
-                              id={`day-${day}`}
-                              checked={currentDays.includes(day)}
-                              onCheckedChange={(checked) => {
-                                const newDays = checked
-                                  ? [...currentDays, day]
-                                  : currentDays.filter((d) => d !== day);
-                                field.onChange(newDays);
-                              }}
-                            />
-                            <Label htmlFor={`day-${day}`} className="font-normal">
-                              {day}
-                            </Label>
-                          </div>
-                        );
-                      }}
-                    />
-                  ))}
-                </div>
-                {errors.recurringClassDays && <p className="text-sm text-destructive">{errors.recurringClassDays.message}</p>}
-              </div>
-            </CardContent>
-
-            <Separator className="my-6" />
-
-            <CardHeader className="pt-0">
-                <CardTitle className="flex items-center"><DollarSign className="mr-2 h-5 w-5 text-primary"/>Informações de Pagamento Iniciais</CardTitle>
-                <CardDescription>
-                  Os dados de pagamento serão baseados no plano selecionado e na opção "Cobrar ao Iniciar" do plano.
-                  Você pode ajustar manually se necessário.
-                </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            </div>
+            
+            <Card className="mt-8 shadow-lg">
+                <CardHeader>
+                    <CardTitle>Plano e Pagamento</CardTitle>
+                    <CardDescription>Defina o plano e as condições de pagamento iniciais.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
                     <div className="space-y-2">
-                        <Label htmlFor="paymentStatus">Status do Pagamento (Inicial)</Label>
-                        <Controller name="paymentStatus" control={control} render={({ field }) => (
-                            <Select onValueChange={field.onChange} value={field.value || 'pendente'}>
-                            <SelectTrigger id="paymentStatus"><SelectValue placeholder="Pendente"/></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="pago">Pago</SelectItem>
-                                <SelectItem value="pendente">Pendente</SelectItem>
-                                <SelectItem value="vencido">Vencido</SelectItem>
-                            </SelectContent>
-                            </Select>
-                        )} />
-                        {errors.paymentStatus && <p className="text-sm text-destructive">{errors.paymentStatus.message}</p>}
+                        <Label htmlFor="plan">Plano</Label>
+                        <div className="flex items-center gap-2">
+                            <div className="flex-grow">
+                                <Controller name="plan" control={control} render={({ field }) => (
+                                    <Select onValueChange={(value) => {
+                                        field.onChange(value);
+                                        const selectedPlan = activePlans.find(p => p.name === value);
+                                        if (selectedPlan) {
+                                            setValue('amountDue', selectedPlan.price);
+                                            const regDate = new Date();
+                                            let initialDueDateValue: Date;
+                                            if (selectedPlan.chargeOnEnrollment) {
+                                                initialDueDateValue = regDate;
+                                            } else {
+                                                initialDueDateValue = addDays(regDate, selectedPlan.durationDays);
+                                            }
+                                            setValue('dueDate', formatISO(initialDueDateValue, { representation: 'date' }));
+                                        } else {
+                                            setValue('amountDue', undefined);
+                                            setValue('dueDate', '');
+                                        }
+                                    }} value={field.value} disabled={isLoadingPlans}>
+                                        <SelectTrigger id="plan"><SelectValue placeholder={isLoadingPlans ? "Carregando..." : "Selecione o plano"} /></SelectTrigger>
+                                        <SelectContent>
+                                            {activePlans.length > 0 ? (
+                                                activePlans.map(p => (<SelectItem key={p.id} value={p.name}>{p.name} - R$ {p.price.toFixed(2)}</SelectItem>))
+                                            ) : (
+                                                <SelectItem value="no-plans" disabled>{isLoadingPlans ? "Carregando..." : "Nenhum plano ativo"}</SelectItem>
+                                            )}
+                                        </SelectContent>
+                                    </Select>
+                                )} />
+                            </div>
+                            <Button variant="outline" size="icon" type="button" onClick={() => setIsAddPlanDialogOpen(true)}><PlusCircle className="h-4 w-4" /><span className="sr-only">Adicionar</span></Button>
+                            <Button variant="outline" size="icon" type="button" onClick={() => setIsManagePlansDialogOpen(true)}><Search className="h-4 w-4" /><span className="sr-only">Gerenciar</span></Button>
+                        </div>
+                        {errors.plan && <p className="text-sm text-destructive">{errors.plan.message}</p>}
                     </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="dueDate">Data de Vencimento (Inicial)</Label>
-                        <Controller name="dueDate" control={control} render={({ field }) => <Input id="dueDate" type="date" {...field} value={field.value ?? ''} />} />
-                         <p className="text-xs text-muted-foreground">Preenchido automaticamente com base no plano.</p>
-                        {errors.dueDate && <p className="text-sm text-destructive">{errors.dueDate.message}</p>}
-                    </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                        <Label htmlFor="amountDue">Valor Devido (R$)</Label>
-                        <Controller name="amountDue" control={control} render={({ field }) => <Input id="amountDue" type="number" step="0.01" {...field} value={field.value ?? ''}  onChange={e => { const val = e.target.value; field.onChange(val === '' ? undefined : parseFloat(val)); }} />} />
-                        <p className="text-xs text-muted-foreground">Preenchido automaticamente com base no plano.</p>
-                        {errors.amountDue && <p className="text-sm text-destructive">{errors.amountDue.message}</p>}
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="paymentMethod">Método de Pagamento</Label>
-                         <Controller name="paymentMethod" control={control} render={({ field }) => (
-                            <Select onValueChange={field.onChange} value={field.value || ''}>
-                            <SelectTrigger id="paymentMethod"><SelectValue placeholder="Selecione"/></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="PIX">PIX</SelectItem>
-                                <SelectItem value="Dinheiro">Dinheiro</SelectItem>
-                                <SelectItem value="Cartão">Cartão</SelectItem>
-                            </SelectContent>
-                            </Select>
-                        )} />
-                        {errors.paymentMethod && <p className="text-sm text-destructive">{errors.paymentMethod.message}</p>}
-                    </div>
-                </div>
-                 <div className="space-y-2 md:max-w-[calc(50%-0.75rem)]">
-                    <Label htmlFor="lastPaymentDate">Data do Último Pagamento (se houver)</Label>
-                    <Controller name="lastPaymentDate" control={control} render={({ field }) => <Input id="lastPaymentDate" type="date" {...field} value={field.value ?? ''} />} />
-                    {errors.lastPaymentDate && <p className="text-sm text-destructive">{errors.lastPaymentDate.message}</p>}
-                </div>
-            </CardContent>
 
-
-            <CardFooter className="flex justify-end gap-2 pt-6">
-              <Button variant="outline" type="button" onClick={() => router.back()}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={isSubmitting || isLoadingLocations || isLoadingPlans} className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                <Save className="mr-2 h-4 w-4" />
-                {isSubmitting ? 'Salvando...' : 'Salvar Aluno'}
-              </Button>
-            </CardFooter>
-          </form>
-        </Card>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <div className="space-y-2">
+                            <Label htmlFor="paymentStatus">Status (Inicial)</Label>
+                            <Controller name="paymentStatus" control={control} render={({ field }) => (
+                                <Select onValueChange={field.onChange} value={field.value || 'pendente'}><SelectTrigger id="paymentStatus"><SelectValue placeholder="Pendente"/></SelectTrigger>
+                                <SelectContent><SelectItem value="pago">Pago</SelectItem><SelectItem value="pendente">Pendente</SelectItem><SelectItem value="vencido">Vencido</SelectItem></SelectContent>
+                                </Select>
+                            )} />
+                            {errors.paymentStatus && <p className="text-sm text-destructive">{errors.paymentStatus.message}</p>}
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="dueDate">Vencimento (Inicial)</Label>
+                            <Controller name="dueDate" control={control} render={({ field }) => <Input id="dueDate" type="date" {...field} value={field.value ?? ''} />} />
+                            <p className="text-xs text-muted-foreground">Auto com base no plano.</p>
+                            {errors.dueDate && <p className="text-sm text-destructive">{errors.dueDate.message}</p>}
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="amountDue">Valor Devido (R$)</Label>
+                            <Controller name="amountDue" control={control} render={({ field }) => <Input id="amountDue" type="number" step="0.01" {...field} value={field.value ?? ''}  onChange={e => { const val = e.target.value; field.onChange(val === '' ? undefined : parseFloat(val)); }} />} />
+                            <p className="text-xs text-muted-foreground">Auto com base no plano.</p>
+                            {errors.amountDue && <p className="text-sm text-destructive">{errors.amountDue.message}</p>}
+                        </div>
+                         <div className="space-y-2">
+                            <Label htmlFor="paymentMethod">Método Pag.</Label>
+                            <Controller name="paymentMethod" control={control} render={({ field }) => (
+                                <Select onValueChange={field.onChange} value={field.value || ''}><SelectTrigger id="paymentMethod"><SelectValue placeholder="Selecione"/></SelectTrigger>
+                                <SelectContent><SelectItem value="PIX">PIX</SelectItem><SelectItem value="Dinheiro">Dinheiro</SelectItem><SelectItem value="Cartão">Cartão</SelectItem></SelectContent>
+                                </Select>
+                            )} />
+                            {errors.paymentMethod && <p className="text-sm text-destructive">{errors.paymentMethod.message}</p>}
+                        </div>
+                    </div>
+                </CardContent>
+                <CardFooter className="flex justify-end gap-2 pt-6">
+                    <Button variant="outline" type="button" onClick={() => router.back()}>Cancelar</Button>
+                    <Button type="submit" disabled={isSubmitting || isLoadingLocations || isLoadingPlans} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                        <Save className="mr-2 h-4 w-4" />{isSubmitting ? 'Salvando...' : 'Salvar Aluno'}
+                    </Button>
+                </CardFooter>
+            </Card>
+        </form>
       </div>
 
-      <AddPlanDialog
-        open={isAddPlanDialogOpen}
-        onOpenChange={setIsAddPlanDialogOpen}
-        onPlanAdded={handlePlansManaged}
-      />
-      <ManagePlansDialog
-        open={isManagePlansDialogOpen}
-        onOpenChange={setIsManagePlansDialogOpen}
-        onPlansManaged={handlePlansManaged}
-      />
+      <AddPlanDialog open={isAddPlanDialogOpen} onOpenChange={setIsAddPlanDialogOpen} onPlanAdded={handlePlansManaged} />
+      <ManagePlansDialog open={isManagePlansDialogOpen} onOpenChange={setIsManagePlansDialogOpen} onPlansManaged={handlePlansManaged} />
     </>
   );
 }
+
+    

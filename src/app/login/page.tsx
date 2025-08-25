@@ -9,10 +9,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Logo } from '@/components/logo';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, User } from 'lucide-react';
 import { auth } from '@/firebase'; // Import Firebase auth
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
+import { Separator } from '@/components/ui/separator';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -30,9 +31,6 @@ export default function LoginPage() {
     
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      // Successful login, Firebase auth state will change.
-      // Next step would be to use an AuthProvider to listen to this change
-      // and protect routes / redirect accordingly.
       router.push('/dashboard');
     } catch (err: any) {
       console.error('Login Error:', err);
@@ -58,7 +56,7 @@ export default function LoginPage() {
           <div className="mx-auto mb-6">
             <Logo />
           </div>
-          <CardTitle className="text-2xl font-headline">Bem-vindo de volta!</CardTitle>
+          <CardTitle className="text-2xl font-headline">Acesso do Treinador</CardTitle>
           <CardDescription>
             Acesse sua conta para gerenciar seus alunos e aulas.
           </CardDescription>
@@ -109,10 +107,16 @@ export default function LoginPage() {
               {isLoading ? 'Entrando...' : 'Entrar'}
             </Button>
           </form>
+          <Separator className="my-6" />
+           <Button variant="outline" className="w-full" asChild>
+              <Link href="/login/aluno">
+                <User className="mr-2 h-4 w-4" /> Sou Aluno
+              </Link>
+            </Button>
         </CardContent>
-        <CardFooter className="flex flex-col items-center text-sm">
+        <CardFooter className="flex flex-col items-center text-sm mt-4">
            <p className="text-muted-foreground mb-2">
-            Não tem uma conta?{' '}
+            Não tem uma conta de treinador?{' '}
             <Link href="/cadastro" className="font-medium text-primary hover:underline">
               Cadastre-se
             </Link>
@@ -128,3 +132,5 @@ export default function LoginPage() {
     </div>
   );
 }
+
+    

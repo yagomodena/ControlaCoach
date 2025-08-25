@@ -25,6 +25,8 @@ export interface TrainingSheet {
 
 export interface Student {
   id: string; // Firestore document ID
+  authId: string; // Firebase Auth User UID
+  email: string; // Student's login email
   name: string;
   phone: string;
   plan: string; 
@@ -156,3 +158,5 @@ export const getDayOfWeekName = (dayNumber: number): DayOfWeek | undefined => {
   };
   return map[dayNumber];
 };
+
+    
