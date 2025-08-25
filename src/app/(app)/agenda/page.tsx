@@ -48,6 +48,7 @@ import { db, auth } from '@/firebase';
 import { collection, onSnapshot, query, orderBy, where, doc, getDoc, addDoc, updateDoc, deleteDoc, arrayUnion, writeBatch, getDocs } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const generateHourIntervals = (startHour: number, endHour: number, intervalMinutes: number = 60): string[] => {
   const intervals: string[] = [];
@@ -261,11 +262,26 @@ export default function AgendaPage() {
         isSameDay(parseISO(c.date), day) && c.time === time
     );
     if (bookedClass) {
-      const bgColor = bookedClass.isRecurring ? 'bg-accent/80 hover:bg-accent' : 'bg-primary/80 hover:bg-primary';
-      const textColor = bookedClass.isRecurring ? 'text-accent-foreground' : 'text-primary-foreground';
-      const textMutedColor = bookedClass.isRecurring ? 'text-accent-foreground/80' : 'text-primary-foreground/80';
+      let bgColor = bookedClass.isRecurring ? 'bg-accent/80 hover:bg-accent' : 'bg-primary/80 hover:bg-primary';
+      let textColor = bookedClass.isRecurring ? 'text-accent-foreground' : 'text-primary-foreground';
+      let textMutedColor = bookedClass.isRecurring ? 'text-accent-foreground/80' : 'text-primary-foreground/80';
+      
+      const attendanceValues = Object.values(bookedClass.attendance || {});
+      const allPresent = attendanceValues.length > 0 && attendanceValues.every(s => s === 'present');
+      const anyAbsent = attendanceValues.some(s => s === 'absent');
+      
+      if (anyAbsent) {
+        bgColor = 'bg-red-500/80 hover:bg-red-500';
+        textColor = 'text-white';
+        textMutedColor = 'text-red-100';
+      } else if (allPresent) {
+        bgColor = 'bg-green-500/80 hover:bg-green-500';
+        textColor = 'text-white';
+        textMutedColor = 'text-green-100';
+      }
+
       return (
-        <div className={`${bgColor} p-1.5 rounded-md h-full flex flex-col justify-between text-xs cursor-pointer`} onClick={() => openEditClassDialog(bookedClass.id)}>
+        <div className={`${bgColor} p-1.5 rounded-md h-full flex flex-col justify-between text-xs cursor-pointer transition-colors`} onClick={() => openEditClassDialog(bookedClass.id)}>
           <div className={textColor}>
             <p className="font-semibold truncate">{bookedClass.title}</p>
             <p className={`truncate ${textMutedColor} flex items-center text-[10px]`}><MapPin className="h-2.5 w-2.5 mr-0.5"/>{bookedClass.location}</p>
@@ -532,6 +548,7 @@ export default function AgendaPage() {
   }
 
   return (
+    <TooltipProvider>
     <div className="container mx-auto py-8">
       {isHandlingRecurringClick && (
          <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">
@@ -718,9 +735,24 @@ export default function AgendaPage() {
                               {student.name}
                             </Label>
                             <div className="flex items-center gap-1">
-                                <Button size="sm" variant={getAttendanceButtonVariant(studentId, 'present')} onClick={() => handleAttendanceChange(studentId, 'present')} className="h-8 px-2"><CheckCircle className="h-4 w-4"/></Button>
-                                <Button size="sm" variant={getAttendanceButtonVariant(studentId, 'absent')} onClick={() => handleAttendanceChange(studentId, 'absent')} className="h-8 px-2"><XCircle className="h-4 w-4"/></Button>
-                                <Button size="sm" variant={getAttendanceButtonVariant(studentId, 'pending')} onClick={() => handleAttendanceChange(studentId, 'pending')} className="h-8 px-2"><HelpCircle className="h-4 w-4"/></Button>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button size="sm" variant={getAttendanceButtonVariant(studentId, 'present')} onClick={() => handleAttendanceChange(studentId, 'present')} className="h-8 px-2"><CheckCircle className="h-4 w-4"/></Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent><p>Marcar Presença</p></TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button size="sm" variant={getAttendanceButtonVariant(studentId, 'absent')} onClick={() => handleAttendanceChange(studentId, 'absent')} className="h-8 px-2"><XCircle className="h-4 w-4"/></Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent><p>Marcar Falta</p></TooltipContent>
+                                </Tooltip>
+                                 <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button size="sm" variant={getAttendanceButtonVariant(studentId, 'pending')} onClick={() => handleAttendanceChange(studentId, 'pending')} className="h-8 px-2"><HelpCircle className="h-4 w-4"/></Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent><p>Marcar como Pendente</p></TooltipContent>
+                                </Tooltip>
                             </div>
                         </div>
                       )
@@ -776,5 +808,6 @@ export default function AgendaPage() {
       </Dialog>
 
     </div>
+    </TooltipProvider>
   );
 }
