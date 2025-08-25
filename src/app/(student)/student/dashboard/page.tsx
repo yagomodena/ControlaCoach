@@ -18,11 +18,12 @@ export default function StudentDashboardPage() {
   const router = useRouter();
 
   useEffect(() => {
-    const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
-      if (user) {
-        // User is authenticated, now fetch their student data from the root collection
+    const studentId = sessionStorage.getItem('fitplanner_student_id');
+
+    if (studentId) {
+      const fetchStudentData = async () => {
         try {
-          const studentDocRef = doc(db, 'students', user.uid);
+          const studentDocRef = doc(db, 'students', studentId);
           const studentDocSnap = await getDoc(studentDocRef);
 
           if (studentDocSnap.exists()) {
@@ -36,15 +37,13 @@ export default function StudentDashboardPage() {
         } finally {
           setIsLoading(false);
         }
-      } else {
-        // User is not authenticated
-        setIsLoading(false);
-        setError("Sessão de aluno inválida. Por favor, faça login novamente.");
-        setTimeout(() => router.push('/login'), 2000);
-      }
-    });
-
-    return () => unsubscribeAuth();
+      };
+      fetchStudentData();
+    } else {
+      setIsLoading(false);
+      setError("Sessão de aluno inválida. Por favor, faça login novamente.");
+      setTimeout(() => router.push('/login/aluno'), 2000);
+    }
   }, [router]);
 
   if (isLoading) {
