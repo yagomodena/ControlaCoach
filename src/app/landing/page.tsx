@@ -67,13 +67,13 @@ export default function LandingPage() {
       {/* Header */}
       <header className="sticky top-0 z-50 py-4 px-6 md:px-10 flex justify-between items-center bg-white shadow-md">
         <Link href="/landing" className="flex items-center gap-2 group">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#FF6B00" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="10" />
-            <path d="M12 2a10 10 0 0 0-3.91 19.48M12 22a10 10 0 0 0 3.91-19.48" />
-            <path d="M2 12h20" />
-            <path d="M12 2a10 10 0 0 0-7.79 3.94" />
-            <path d="M12 22a10 10 0 0 1-7.79-3.94" />
-          </svg>
+        <Image
+          src="/images/FP-SB.png"   // caminho relativo à pasta public
+          alt="FitPlanner Logo"
+          width={80}               // largura da logo
+          height={40}               // altura da logo
+          priority
+        />
           <span className="font-headline text-xl font-bold">
             <span className="text-[#FF6B00]">Fit</span>
             <span className="text-[#0D0D0D]">Planner</span>
