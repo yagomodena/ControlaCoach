@@ -22,8 +22,11 @@ import { signOut } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 
+interface NavbarProps {
+  userType?: 'coach' | 'student';
+}
 
-export function Navbar() {
+export function Navbar({ userType = 'coach' }: NavbarProps) {
   const { toggleSidebar, isMobile } = useSidebar();
   const { toast } = useToast();
   const router = useRouter();
@@ -31,6 +34,8 @@ export function Navbar() {
   const handleLogout = async () => {
     try {
       await signOut(auth);
+      // Also clear student session if it exists
+      sessionStorage.removeItem('fitplanner_student_id');
       toast({
         title: 'Logout Realizado',
         description: 'Você foi desconectado com sucesso.',
@@ -80,17 +85,21 @@ export function Navbar() {
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Minha Conta</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <Link href="/configuracoes" passHref>
-              <DropdownMenuItem asChild>
-                <span>Perfil</span>
-              </DropdownMenuItem>
-            </Link>
-            <Link href="/configuracoes" passHref>
-              <DropdownMenuItem asChild>
-                <span>Configurações</span>
-              </DropdownMenuItem>
-            </Link>
-            <DropdownMenuSeparator />
+            {userType === 'coach' && (
+              <>
+                <Link href="/configuracoes" passHref>
+                  <DropdownMenuItem asChild>
+                    <span>Perfil</span>
+                  </DropdownMenuItem>
+                </Link>
+                <Link href="/configuracoes" passHref>
+                  <DropdownMenuItem asChild>
+                    <span>Configurações</span>
+                  </DropdownMenuItem>
+                </Link>
+                <DropdownMenuSeparator />
+              </>
+            )}
             <DropdownMenuItem onClick={handleLogout}>Sair</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -98,4 +107,3 @@ export function Navbar() {
     </header>
   );
 }
-

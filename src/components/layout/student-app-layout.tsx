@@ -15,7 +15,7 @@ export function StudentAppLayout({ children }: StudentAppLayoutProps) {
         <div className="flex flex-1">
           <StudentSidebarNav />
           <SidebarInset className="flex flex-col flex-1">
-            <Navbar />
+            <Navbar userType="student" />
             <main className="flex-1 overflow-auto p-4 md:p-6 lg:p-8 bg-background">
               {children}
             </main>
@@ -25,5 +25,3 @@ export function StudentAppLayout({ children }: StudentAppLayoutProps) {
     </SidebarProvider>
   );
 }
-
-    
