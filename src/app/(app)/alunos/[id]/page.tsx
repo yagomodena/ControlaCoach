@@ -153,23 +153,21 @@ export default function AlunoDetailPage() {
         if (studentDocSnap.exists()) {
           const studentData = { ...studentDocSnap.data(), id: studentDocSnap.id } as Student;
           setStudent(studentData);
-          if (!isEditMode) { // Only reset if not in edit mode to preserve form state
-            reset({
-              ...studentData,
-              birthDate: studentData.birthDate || '',
-              photoURL: studentData.photoURL || null,
-              trainingSheetWorkouts: studentData.trainingSheet?.workouts || {},
-              recurringClassTime: studentData.recurringClassTime || '',
-              recurringClassDays: studentData.recurringClassDays || [],
-              recurringClassLocation: studentData.recurringClassLocation || NO_LOCATION_VALUE,
-              objective: studentData.objective || '',
-              dueDate: studentData.dueDate ? (studentData.dueDate.includes('T') ? studentData.dueDate.split('T')[0] : studentData.dueDate) : '',
-              lastPaymentDate: studentData.lastPaymentDate ? (studentData.lastPaymentDate.includes('T') ? studentData.lastPaymentDate.split('T')[0] : studentData.lastPaymentDate) : '',
-              amountDue: studentData.amountDue === null || studentData.amountDue === undefined ? undefined : studentData.amountDue,
-              paymentStatus: studentData.paymentStatus || undefined,
-              paymentMethod: studentData.paymentMethod || undefined,
-            });
-          }
+          reset({
+            ...studentData,
+            birthDate: studentData.birthDate || '',
+            photoURL: studentData.photoURL || null,
+            trainingSheetWorkouts: studentData.trainingSheet?.workouts || {},
+            recurringClassTime: studentData.recurringClassTime || '',
+            recurringClassDays: studentData.recurringClassDays || [],
+            recurringClassLocation: studentData.recurringClassLocation || NO_LOCATION_VALUE,
+            objective: studentData.objective || '',
+            dueDate: studentData.dueDate ? (studentData.dueDate.includes('T') ? studentData.dueDate.split('T')[0] : studentData.dueDate) : '',
+            lastPaymentDate: studentData.lastPaymentDate ? (studentData.lastPaymentDate.includes('T') ? studentData.lastPaymentDate.split('T')[0] : studentData.lastPaymentDate) : '',
+            amountDue: studentData.amountDue === null || studentData.amountDue === undefined ? undefined : studentData.amountDue,
+            paymentStatus: studentData.paymentStatus || undefined,
+            paymentMethod: studentData.paymentMethod || undefined,
+          });
         } else {
           toast({ title: "Erro", description: "Aluno não encontrado.", variant: "destructive" });
           router.push('/alunos');
@@ -185,7 +183,7 @@ export default function AlunoDetailPage() {
 
   useEffect(() => {
     fetchStudent();
-  }, [studentId, userId, isEditMode]); // re-fetch if isEditMode changes to reload data when cancelling
+  }, [studentId, userId]); 
 
   useEffect(() => {
     setIsEditMode(searchParams.get('edit') === 'true');
