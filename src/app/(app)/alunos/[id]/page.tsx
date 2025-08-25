@@ -935,3 +935,5 @@ export default function AlunoDetailPage() {
     </>
   );
 }
+
+    
