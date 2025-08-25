@@ -49,6 +49,7 @@ import { collection, onSnapshot, query, orderBy, where, doc, getDoc, addDoc, upd
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 
 const generateHourIntervals = (startHour: number, endHour: number, intervalMinutes: number = 60): string[] => {
   const intervals: string[] = [];
@@ -537,10 +538,9 @@ export default function AgendaPage() {
 
   const isLoading = isLoadingStudents || isLoadingLocations || isLoadingAvailability || isLoadingClassSessions || isLoadingBookedClasses || !userId || isHandlingRecurringClick;
   
-  const getAttendanceButtonVariant = (studentId: string, status: AttendanceStatus) => {
+  const getAttendanceButtonVariant = (studentId: string, status: AttendanceStatus): 'destructive' | 'secondary' | 'outline' => {
      const currentStatus = attendance[studentId] || 'pending';
      if (currentStatus === status) {
-        if(status === 'present') return 'default';
         if(status === 'absent') return 'destructive';
         if(status === 'pending') return 'secondary';
      }
@@ -729,6 +729,7 @@ export default function AgendaPage() {
                      editedClassStudentIds.map(studentId => {
                       const student = allStudents.find(s => s.id === studentId);
                       if (!student) return null;
+                      const isPresent = attendance[studentId] === 'present';
                       return (
                         <div key={studentId} className="flex justify-between items-center p-2 rounded-md bg-muted/50">
                             <Label htmlFor={`edit-student-${student.id}`} className="font-normal">
@@ -737,7 +738,14 @@ export default function AgendaPage() {
                             <div className="flex items-center gap-1">
                                 <Tooltip>
                                     <TooltipTrigger asChild>
-                                        <Button size="sm" variant={getAttendanceButtonVariant(studentId, 'present')} onClick={() => handleAttendanceChange(studentId, 'present')} className="h-8 px-2"><CheckCircle className="h-4 w-4"/></Button>
+                                        <Button 
+                                            size="sm" 
+                                            variant={isPresent ? 'default' : 'outline'}
+                                            onClick={() => handleAttendanceChange(studentId, 'present')} 
+                                            className={cn("h-8 px-2", isPresent && "bg-green-500 hover:bg-green-600 text-white")}
+                                        >
+                                            <CheckCircle className="h-4 w-4"/>
+                                        </Button>
                                     </TooltipTrigger>
                                     <TooltipContent><p>Marcar Presença</p></TooltipContent>
                                 </Tooltip>
