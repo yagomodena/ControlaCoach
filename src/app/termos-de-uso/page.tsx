@@ -16,7 +16,10 @@ const Header = () => (
         <path d="M12 2a10 10 0 0 0-7.79 3.94" />
         <path d="M12 22a10 10 0 0 1-7.79-3.94" />
       </svg>
-      <span className="font-headline text-xl font-bold text-[#0D0D0D]">ControlaCoach</span>
+      <span className="font-headline text-xl font-bold">
+        <span className="text-[#FF6B00]">Fit</span>
+        <span className="text-[#0D0D0D]">Planner</span>
+      </span>
     </Link>
     <Link href="/login" passHref>
       <Button variant="outline" className="border-[#FF6B00] text-[#FF6B00] hover:bg-[#FF6B00] hover:text-white focus:ring-[#FF8C42]">
@@ -45,7 +48,7 @@ const Footer = () => (
           <Twitter className="h-6 w-6" />
         </Link>
       </div>
-      <p>&copy; {new Date().getFullYear()} ControlaCoach. Todos os direitos reservados.</p>
+      <p>&copy; {new Date().getFullYear()} FitPlanner. Todos os direitos reservados.</p>
       <p className="mt-1 text-xs">Feito com ❤️ para treinadores apaixonados.</p>
     </div>
   </footer>
@@ -66,12 +69,12 @@ export default function TermosDeUsoPage() {
 
             <section>
               <h2 className="text-xl font-semibold text-[#0D0D0D] mb-2">1. Aceitação dos Termos</h2>
-              <p>Ao acessar e usar o ControlaCoach ("Serviço"), você concorda em cumprir e estar vinculado a estes Termos de Uso ("Termos"). Se você não concorda com estes Termos, não use o Serviço.</p>
+              <p>Ao acessar e usar o FitPlanner ("Serviço"), você concorda em cumprir e estar vinculado a estes Termos de Uso ("Termos"). Se você não concorda com estes Termos, não use o Serviço.</p>
             </section>
 
             <section>
               <h2 className="text-xl font-semibold text-[#0D0D0D] mb-2">2. Descrição do Serviço</h2>
-              <p>O ControlaCoach é um sistema de gestão para treinadores, coachs e personal trainers, oferecendo funcionalidades para gerenciamento de alunos, aulas, agenda e finanças.</p>
+              <p>O FitPlanner é um sistema de gestão para treinadores, coachs e personal trainers, oferecendo funcionalidades para gerenciamento de alunos, aulas, agenda e finanças.</p>
             </section>
 
             <section>
@@ -86,7 +89,7 @@ export default function TermosDeUsoPage() {
             
             <section>
               <h2 className="text-xl font-semibold text-[#0D0D0D] mb-2">5. Propriedade Intelectual</h2>
-              <p>O Serviço e seu conteúdo original, recursos e funcionalidades são e permanecerão propriedade exclusiva do ControlaCoach e seus licenciadores. O Serviço é protegido por direitos autorais, marcas registradas e outras leis.</p>
+              <p>O Serviço e seu conteúdo original, recursos e funcionalidades são e permanecerão propriedade exclusiva do FitPlanner e seus licenciadores. O Serviço é protegido por direitos autorais, marcas registradas e outras leis.</p>
             </section>
 
             <section>
@@ -101,7 +104,7 @@ export default function TermosDeUsoPage() {
 
             <section>
               <h2 className="text-xl font-semibold text-[#0D0D0D] mb-2">8. Limitação de Responsabilidade</h2>
-              <p>Em nenhuma circunstância o ControlaCoach, nem seus diretores, funcionários, parceiros, agentes, fornecedores ou afiliados, serão responsáveis por quaisquer danos indiretos, incidentais, especiais, consequenciais ou punitivos, incluindo, sem limitação, perda de lucros, dados, uso, boa vontade ou outras perdas intangíveis.</p>
+              <p>Em nenhuma circunstância o FitPlanner, nem seus diretores, funcionários, parceiros, agentes, fornecedores ou afiliados, serão responsáveis por quaisquer danos indiretos, incidentais, especiais, consequenciais ou punitivos, incluindo, sem limitação, perda de lucros, dados, uso, boa vontade ou outras perdas intangíveis.</p>
             </section>
 
             <section>
@@ -111,7 +114,7 @@ export default function TermosDeUsoPage() {
 
             <section>
               <h2 className="text-xl font-semibold text-[#0D0D0D] mb-2">10. Contato</h2>
-              <p>Se você tiver alguma dúvida sobre estes Termos, entre em contato conosco em contato@controlacoach.com.br ou através da nossa <Link href="/contato" className="text-[#FF6B00] hover:underline">página de contato</Link>.</p>
+              <p>Se você tiver alguma dúvida sobre estes Termos, entre em contato conosco em contato@fitplanner.com.br ou através da nossa <Link href="/contato" className="text-[#FF6B00] hover:underline">página de contato</Link>.</p>
             </section>
           </div>
         </div>

@@ -22,7 +22,7 @@
     --muted: 218 50% 90%; /* Muted blue-gray */
     --muted-foreground: 220 25% 45%; /* Slightly lighter muted text */
 
-    --accent: 35 100% 58%; /* Orange */
+    --accent: 25 95% 53%; /* Orange - Updated to a more vibrant orange */
     --accent-foreground: 0 0% 100%; /* White for text on orange */
 
     --destructive: 0 72% 51%; /* Adjusted for better contrast */
@@ -33,7 +33,7 @@
     --ring: 217 89% 61%; /* Primary blue for ring */
 
     --chart-1: 217 89% 61%; /* Blue */
-    --chart-2: 35 100% 58%; /* Orange (new accent) */
+    --chart-2: 25 95% 53%; /* Orange (new accent) */
     --chart-3: 173 58% 39%; /* Green */
     --chart-4: 35 100% 70%; /* Lighter Orange */
     --chart-5: 25 95% 60%; /* Different shade of Orange (e.g., reddish-orange) */
@@ -69,7 +69,7 @@
     --muted: 218 30% 25%;
     --muted-foreground: 218 50% 70%;
 
-    --accent: 35 100% 58%; /* Orange */
+    --accent: 25 95% 53%; /* Orange */
     --accent-foreground: 0 0% 100%; /* White for text on orange */
 
     --destructive: 0 63% 40%;
@@ -80,7 +80,7 @@
     --ring: 217 89% 61%;
 
     --chart-1: 217 89% 61%; /* Blue */
-    --chart-2: 35 100% 58%; /* Orange (new accent) */
+    --chart-2: 25 95% 53%; /* Orange (new accent) */
     /* chart-3, chart-4, chart-5 will inherit from :root unless specified for dark mode */
 
     --sidebar-background: 220 25% 8%;

@@ -16,7 +16,10 @@ const Header = () => (
         <path d="M12 2a10 10 0 0 0-7.79 3.94" />
         <path d="M12 22a10 10 0 0 1-7.79-3.94" />
       </svg>
-      <span className="font-headline text-xl font-bold text-[#0D0D0D]">ControlaCoach</span>
+      <span className="font-headline text-xl font-bold">
+        <span className="text-[#FF6B00]">Fit</span>
+        <span className="text-[#0D0D0D]">Planner</span>
+      </span>
     </Link>
     <Link href="/login" passHref>
       <Button variant="outline" className="border-[#FF6B00] text-[#FF6B00] hover:bg-[#FF6B00] hover:text-white focus:ring-[#FF8C42]">
@@ -45,7 +48,7 @@ const Footer = () => (
           <Twitter className="h-6 w-6" />
         </Link>
       </div>
-      <p>&copy; {new Date().getFullYear()} ControlaCoach. Todos os direitos reservados.</p>
+      <p>&copy; {new Date().getFullYear()} FitPlanner. Todos os direitos reservados.</p>
       <p className="mt-1 text-xs">Feito com ❤️ para treinadores apaixonados.</p>
     </div>
   </footer>
@@ -71,8 +74,8 @@ export default function ContatoPage() {
               <Mail className="h-8 w-8 text-[#FF6B00] mr-4" />
               <div>
                 <h2 className="text-xl font-semibold text-[#0D0D0D]">Email</h2>
-                <a href="mailto:contato@controlacoach.com.br" className="text-gray-700 hover:text-[#FF6B00] hover:underline">
-                  contato@controlacoach.com.br
+                <a href="mailto:contato@fitplanner.com.br" className="text-gray-700 hover:text-[#FF6B00] hover:underline">
+                  contato@fitplanner.com.br
                 </a>
                 <p className="text-sm text-gray-500">Para dúvidas gerais e suporte.</p>
               </div>

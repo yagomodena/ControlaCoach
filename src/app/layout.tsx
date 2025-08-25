@@ -4,7 +4,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { Providers } from '@/components/providers';
 
 export const metadata: Metadata = {
-  title: 'ControlaCoach',
+  title: 'FitPlanner',
   description: 'Sistema de gestão para treinadores, coachs e personal trainer',
 };
 

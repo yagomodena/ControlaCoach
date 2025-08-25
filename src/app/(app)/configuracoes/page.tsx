@@ -73,7 +73,7 @@ export default function ConfiguracoesPage() {
     const unsubscribeAuth = auth.onAuthStateChanged(currentUser => {
       if (currentUser) {
         setUserId(currentUser.uid);
-        setCoachName(currentUser.displayName || 'ControlaCoach User');
+        setCoachName(currentUser.displayName || 'FitPlanner User');
         setCoachEmail(currentUser.email || 'seuemail@example.com');
       } else {
         setUserId(null);
@@ -101,7 +101,7 @@ export default function ConfiguracoesPage() {
         const firestoreData = profileDocSnap.exists() ? profileDocSnap.data() as CoachProfileSettings : null;
 
         // Prioritize Firebase Auth for name and email, then Firestore, then defaults
-        setCoachName(currentUser?.displayName || firestoreData?.coachName || 'ControlaCoach User');
+        setCoachName(currentUser?.displayName || firestoreData?.coachName || 'FitPlanner User');
         setCoachEmail(currentUser?.email || firestoreData?.coachEmail || 'seuemail@example.com');
         
         if (firestoreData) {
@@ -116,10 +116,10 @@ export default function ConfiguracoesPage() {
         console.error("Error fetching profile/notification settings: ", error);
         toast({ title: "Erro ao carregar perfil/notificações", variant: "destructive" });
         if (currentUser) {
-            setCoachName(currentUser.displayName || 'ControlaCoach User');
+            setCoachName(currentUser.displayName || 'FitPlanner User');
             setCoachEmail(currentUser.email || 'seuemail@example.com');
         } else {
-            setCoachName('ControlaCoach User');
+            setCoachName('FitPlanner User');
             setCoachEmail('seuemail@example.com');
         }
         setNotificationsEnabled(true);
@@ -227,7 +227,7 @@ export default function ConfiguracoesPage() {
       const existingData = docSnap.exists() ? docSnap.data() as Partial<CoachProfileSettings> : {};
 
       const dataToSave: CoachProfileSettings = {
-        coachName: currentUser?.displayName || existingData.coachName || 'ControlaCoach User',
+        coachName: currentUser?.displayName || existingData.coachName || 'FitPlanner User',
         coachEmail: currentUser?.email || existingData.coachEmail || 'seuemail@example.com',
         notificationsEnabled: notificationsEnabled,
         defaultPaymentReminderDays: Number(defaultPaymentReminderDays),
@@ -296,7 +296,7 @@ export default function ConfiguracoesPage() {
     <div className="container mx-auto py-8">
       <div className="mb-8">
         <h1 className="text-3xl font-headline font-bold text-foreground">Configurações</h1>
-        <p className="text-muted-foreground">Ajuste as preferências do sistema ControlaCoach.</p>
+        <p className="text-muted-foreground">Ajuste as preferências do sistema FitPlanner.</p>
       </div>
       
       {isLoadingAny && !isSavingProfile && !isSavingNotifications && !isSavingAvailability && (

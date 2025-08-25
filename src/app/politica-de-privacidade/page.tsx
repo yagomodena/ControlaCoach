@@ -16,7 +16,10 @@ const Header = () => (
         <path d="M12 2a10 10 0 0 0-7.79 3.94" />
         <path d="M12 22a10 10 0 0 1-7.79-3.94" />
       </svg>
-      <span className="font-headline text-xl font-bold text-[#0D0D0D]">ControlaCoach</span>
+      <span className="font-headline text-xl font-bold">
+        <span className="text-[#FF6B00]">Fit</span>
+        <span className="text-[#0D0D0D]">Planner</span>
+      </span>
     </Link>
     <Link href="/login" passHref>
       <Button variant="outline" className="border-[#FF6B00] text-[#FF6B00] hover:bg-[#FF6B00] hover:text-white focus:ring-[#FF8C42]">
@@ -45,7 +48,7 @@ const Footer = () => (
           <Twitter className="h-6 w-6" />
         </Link>
       </div>
-      <p>&copy; {new Date().getFullYear()} ControlaCoach. Todos os direitos reservados.</p>
+      <p>&copy; {new Date().getFullYear()} FitPlanner. Todos os direitos reservados.</p>
       <p className="mt-1 text-xs">Feito com ❤️ para treinadores apaixonados.</p>
     </div>
   </footer>
@@ -66,7 +69,7 @@ export default function PoliticaDePrivacidadePage() {
 
             <section>
               <h2 className="text-xl font-semibold text-[#0D0D0D] mb-2">1. Introdução</h2>
-              <p>Bem-vindo ao ControlaCoach. A sua privacidade é importante para nós. Esta Política de Privacidade explica como coletamos, usamos, divulgamos e protegemos suas informações quando você usa nosso Serviço.</p>
+              <p>Bem-vindo ao FitPlanner. A sua privacidade é importante para nós. Esta Política de Privacidade explica como coletamos, usamos, divulgamos e protegemos suas informações quando você usa nosso Serviço.</p>
             </section>
 
             <section>
@@ -121,7 +124,7 @@ export default function PoliticaDePrivacidadePage() {
 
             <section>
               <h2 className="text-xl font-semibold text-[#0D0D0D] mb-2">9. Contato</h2>
-              <p>Se você tiver alguma dúvida sobre esta Política de Privacidade, entre em contato conosco em [Seu Email de Contato Aqui] ou através da nossa <Link href="/contato" className="text-[#FF6B00] hover:underline">página de contato</Link>.</p>
+              <p>Se você tiver alguma dúvida sobre esta Política de Privacidade, entre em contato conosco em contato@fitplanner.com.br ou através da nossa <Link href="/contato" className="text-[#FF6B00] hover:underline">página de contato</Link>.</p>
             </section>
           </div>
         </div>

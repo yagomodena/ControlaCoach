@@ -48,7 +48,7 @@ const targetAudienceItems = [
 
 const testimonials = [
   {
-    quote: "Organizei meus alunos em 1 dia! Não vivo mais sem o ControlaCoach. Facilitou demais minha rotina.",
+    quote: "Organizei meus alunos em 1 dia! Não vivo mais sem o FitPlanner. Facilitou demais minha rotina.",
     name: "João Alves",
     role: "Coach de Beach Tennis",
   },
@@ -72,7 +72,10 @@ export default function LandingPage() {
             <path d="M12 2a10 10 0 0 0-7.79 3.94" />
             <path d="M12 22a10 10 0 0 1-7.79-3.94" />
           </svg>
-          <span className="font-headline text-xl font-bold text-[#0D0D0D]">ControlaCoach</span>
+          <span className="font-headline text-xl font-bold">
+            <span className="text-[#FF6B00]">Fit</span>
+            <span className="text-[#0D0D0D]">Planner</span>
+          </span>
         </Link>
         <Link href="/login" passHref>
           <Button variant="outline" className="border-[#FF6B00] text-[#FF6B00] hover:bg-[#FF6B00] hover:text-white focus:ring-[#FF8C42]">
@@ -88,7 +91,7 @@ export default function LandingPage() {
             A Gestão <span className="text-[#FF6B00]">Simples e Profissional</span> que Seu Treino Merece
           </h1>
           <p className="mt-6 text-lg sm:text-xl text-gray-700 max-w-2xl mx-auto">
-            Controle seus alunos, aulas e finanças com o ControlaCoach. Tudo em um só lugar, de forma simples e 100% online.
+            Controle seus alunos, aulas e finanças com o FitPlanner. Tudo em um só lugar, de forma simples e 100% online.
           </p>
           <div className="mt-10">
             <Link href="/cadastro" passHref>
@@ -101,7 +104,7 @@ export default function LandingPage() {
         <div className="mt-12 md:mt-16 max-w-4xl mx-auto">
           <Image
             src={bannerImageUrl}
-            alt="Profissionais de educação física sorrindo e treinando com o logo ControlaCoach"
+            alt="Profissionais de educação física sorrindo e treinando com o logo FitPlanner"
             width={1280}
             height={720}
             className="rounded-xl shadow-2xl object-cover"
@@ -132,7 +135,7 @@ export default function LandingPage() {
       <section id="para-quem" className="py-16 md:py-20 bg-white px-4 sm:px-6 lg:px-8">
         <div className="max-w-3xl mx-auto text-center">
           <h2 className="text-3xl sm:text-4xl font-bold font-headline text-[#0D0D0D] mb-10">
-            Para quem é o <span className="text-[#FF6B00]">ControlaCoach?</span>
+            Para quem é o <span className="text-[#FF6B00]">FitPlanner?</span>
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 text-left">
             {targetAudienceItems.map((item, index) => (
@@ -220,7 +223,7 @@ export default function LandingPage() {
             Pronto para <span className="text-[#FF6B00]">profissionalizar</span> sua gestão?
           </h2>
           <p className="text-lg text-gray-700 mb-10">
-            Junte-se a centenas de treinadores que já estão economizando tempo e organizando suas vidas com o ControlaCoach.
+            Junte-se a centenas de treinadores que já estão economizando tempo e organizando suas vidas com o FitPlanner.
           </p>
           <Link href="/cadastro" passHref>
             <Button size="lg" className="bg-[#FF6B00] text-white hover:bg-[#FF8C42] px-10 py-4 text-lg font-semibold rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 focus:ring-[#FF8C42] focus:ring-offset-2">
@@ -249,7 +252,7 @@ export default function LandingPage() {
               <Twitter className="h-6 w-6" />
             </Link>
           </div>
-          <p>&copy; {new Date().getFullYear()} ControlaCoach. Todos os direitos reservados.</p>
+          <p>&copy; {new Date().getFullYear()} FitPlanner. Todos os direitos reservados.</p>
           <p className="mt-1 text-xs">Feito com ❤️ para treinadores apaixonados.</p>
         </div>
       </footer>
