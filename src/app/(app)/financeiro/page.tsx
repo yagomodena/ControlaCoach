@@ -25,6 +25,17 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -98,6 +109,8 @@ export default function FinanceiroPage() {
   const [reportData, setReportData] = useState<MonthlyReportData | null>(null);
   const [selectedMonthDate, setSelectedMonthDate] = useState(new Date());
   const [isAddExpenseDialogOpen, setIsAddExpenseDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null);
 
   useEffect(() => {
     setClientRendered(true);
@@ -334,20 +347,25 @@ export default function FinanceiroPage() {
     }
   };
 
-  const handleDeleteExpense = async (expenseId: string) => {
-    if (!userId) {
-      toast({ title: "Erro", description: "Usuário não autenticado.", variant: "destructive" });
+  const confirmDeleteExpense = (expense: Expense) => {
+    setExpenseToDelete(expense);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeleteExpense = async () => {
+    if (!userId || !expenseToDelete) {
+      toast({ title: "Erro", description: "Nenhuma saída selecionada para excluir.", variant: "destructive" });
       return;
     }
-    if (window.confirm("Tem certeza que deseja excluir esta saída?")) {
-        try {
-            await deleteDoc(doc(db, 'coaches', userId, 'expenses', expenseId));
-            toast({ title: "Saída Excluída!" });
-            // onSnapshot will handle the UI update
-        } catch(error) {
-            console.error("Error deleting expense:", error);
-            toast({ title: "Erro ao Excluir Saída", variant: "destructive"});
-        }
+    try {
+        await deleteDoc(doc(db, 'coaches', userId, 'expenses', expenseToDelete.id));
+        toast({ title: "Saída Excluída!" });
+    } catch(error) {
+        console.error("Error deleting expense:", error);
+        toast({ title: "Erro ao Excluir Saída", variant: "destructive"});
+    } finally {
+        setIsDeleteDialogOpen(false);
+        setExpenseToDelete(null);
     }
   };
 
@@ -704,7 +722,7 @@ export default function FinanceiroPage() {
                                     <TableCell>{safeFormatDate(expense.date)}</TableCell>
                                     <TableCell className="text-right">R$ {expense.amount.toFixed(2)}</TableCell>
                                     <TableCell className="text-right">
-                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive/90" onClick={() => handleDeleteExpense(expense.id)}>
+                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive/90" onClick={() => confirmDeleteExpense(expense)}>
                                             <Trash2 className="h-4 w-4" />
                                         </Button>
                                     </TableCell>
@@ -730,10 +748,26 @@ export default function FinanceiroPage() {
         open={isAddExpenseDialogOpen}
         onOpenChange={setIsAddExpenseDialogOpen}
         onExpenseAdded={() => {
-          // Re-fetch expenses for the current month.
           if(userId) fetchExpenses(userId, selectedMonthDate);
         }}
       />
+
+       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+            <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
+            <AlertDialogDescription>
+                Esta ação não pode ser desfeita. Isso excluirá permanentemente a despesa: <br/>
+                <span className="font-medium text-foreground">"{expenseToDelete?.description}"</span>.
+            </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setExpenseToDelete(null)}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteExpense}>Continuar</AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+       </AlertDialog>
+
 
       <Dialog open={isReportDialogOpen} onOpenChange={setIsReportDialogOpen}>
         <DialogContent className="sm:max-w-3xl max-h-[90vh] flex flex-col">
