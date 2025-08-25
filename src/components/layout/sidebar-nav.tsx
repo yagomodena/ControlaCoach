@@ -85,7 +85,7 @@ export function SidebarNav() {
   return (
     <Sidebar collapsible="icon" variant="sidebar" side="left">
       <SidebarHeader className="p-4">
-        <Logo collapsed={isCollapsed} />
+        <Logo collapsed={isCollapsed} userType="coach" />
       </SidebarHeader>
       <Separator className="mb-2" />
       <SidebarContent className="p-2">

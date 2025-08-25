@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -7,9 +8,10 @@ import { useEffect, useState } from 'react';
 
 type LogoProps = {
   collapsed?: boolean;
+  userType?: 'coach' | 'student';
 };
 
-export function Logo({ collapsed = false }: LogoProps) {
+export function Logo({ collapsed = false, userType = 'coach' }: LogoProps) {
   const { theme, systemTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
@@ -18,17 +20,13 @@ export function Logo({ collapsed = false }: LogoProps) {
   }, []);
 
   const currentTheme = theme === 'system' ? systemTheme : theme;
-
-  // Alterna entre logo branca e preta
-  const logoSrc =
-    currentTheme === 'dark' ? '/images/FP-SP.png' : '/images/FP-SB.png';
-
-  // Fallback inicial (antes do hook montar)
-  const placeholderSrc = '/images/FP-SP.png';
+  const logoSrc = currentTheme === 'dark' ? '/images/FP-Branco.png' : '/images/FP-Preto.png';
+  const placeholderSrc = '/images/FP-Preto.png';
+  const homeUrl = userType === 'student' ? '/student/dashboard' : '/dashboard';
 
   return (
     <Link
-      href="/dashboard"
+      href={homeUrl}
       className="flex items-center gap-2 group"
       aria-label="FitPlanner Home"
     >
