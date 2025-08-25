@@ -37,14 +37,15 @@ import {
   isAfter,
   isEqual,
   parseISO,
-  parse
+  parse,
+  formatISO
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { BookedClass, DailyAvailability, Student, Location, DayOfWeek, CoachAvailability, ClassSession } from '@/types';
 import { getDayOfWeekName, DAYS_OF_WEEK } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { db, auth } from '@/firebase';
-import { collection, onSnapshot, query, orderBy, where, doc, getDoc, addDoc, updateDoc, deleteDoc, arrayUnion, writeBatch } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, where, doc, getDoc, addDoc, updateDoc, deleteDoc, arrayUnion, writeBatch, getDocs } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 
@@ -94,6 +95,7 @@ export default function AgendaPage() {
   const [isLoadingAvailability, setIsLoadingAvailability] = useState(true);
   const [isLoadingClassSessions, setIsLoadingClassSessions] = useState(true);
   const [isLoadingBookedClasses, setIsLoadingBookedClasses] = useState(true);
+  const [isHandlingRecurringClick, setIsHandlingRecurringClick] = useState(false);
 
   useEffect(() => {
     const unsubscribeAuth = auth.onAuthStateChanged(user => {
@@ -206,6 +208,50 @@ export default function AgendaPage() {
 
   const timeIntervals = useMemo(() => generateHourIntervals(6, 23), []); 
 
+  const handleRecurringClassClick = async (day: Date, time: string, student: Student) => {
+    if (!userId) return;
+    setIsHandlingRecurringClick(true);
+    try {
+      const dateString = format(day, 'yyyy-MM-dd');
+      
+      const q = query(
+        collection(db, 'coaches', userId, 'bookedClasses'),
+        where('date', '==', dateString),
+        where('time', '==', time),
+        where('studentIds', 'array-contains', student.id)
+      );
+
+      const querySnapshot = await getDocs(q);
+      
+      if (!querySnapshot.empty) {
+        // A booked class already exists for this recurring slot, open it for editing
+        const existingClass = { ...querySnapshot.docs[0].data(), id: querySnapshot.docs[0].id } as BookedClass;
+        openEditClassDialog(existingClass.id);
+      } else {
+        // No booked class exists, create one on the fly
+        const newBookedClassData: Omit<BookedClass, 'id'> = {
+          date: dateString,
+          time: time,
+          title: `Aula Fixa - ${student.name}`,
+          location: student.recurringClassLocation || 'A definir',
+          studentIds: [student.id],
+          durationMinutes: 60,
+          attendance: { [student.id]: 'pending' },
+        };
+        
+        const docRef = await addDoc(collection(db, 'coaches', userId, 'bookedClasses'), newBookedClassData);
+        openEditClassDialog(docRef.id);
+      }
+
+    } catch (error) {
+      console.error("Error handling recurring class click:", error);
+      toast({ title: "Erro ao processar aula recorrente.", variant: "destructive" });
+    } finally {
+      setIsHandlingRecurringClick(false);
+    }
+  };
+
+
   const getSlotContent = (day: Date, time: string) => {
     const currentSlotDateTime = parse(time, 'HH:mm', day);
     currentSlotDateTime.setSeconds(0,0);
@@ -233,7 +279,10 @@ export default function AgendaPage() {
     );
     if (recurringStudent) {
       return (
-        <div className="bg-accent/70 text-accent-foreground p-1.5 rounded-md h-full flex flex-col justify-between text-xs">
+        <div 
+          className="bg-accent/70 text-accent-foreground p-1.5 rounded-md h-full flex flex-col justify-between text-xs cursor-pointer hover:bg-accent transition-colors"
+          onClick={() => handleRecurringClassClick(day, time, recurringStudent)}
+        >
            <div>
             <p className="font-semibold truncate">Rec: {recurringStudent.name}</p>
             <p className="truncate text-accent-foreground/80 flex items-center text-[10px]"><MapPin className="h-2.5 w-2.5 mr-0.5"/>{recurringStudent.recurringClassLocation || 'N/D'}</p>
@@ -465,7 +514,7 @@ export default function AgendaPage() {
     }
   };
 
-  const isLoading = isLoadingStudents || isLoadingLocations || isLoadingAvailability || isLoadingClassSessions || isLoadingBookedClasses || !userId;
+  const isLoading = isLoadingStudents || isLoadingLocations || isLoadingAvailability || isLoadingClassSessions || isLoadingBookedClasses || !userId || isHandlingRecurringClick;
   
   const getAttendanceButtonVariant = (studentId: string, status: AttendanceStatus) => {
      const currentStatus = attendance[studentId] || 'pending';
@@ -479,6 +528,12 @@ export default function AgendaPage() {
 
   return (
     <div className="container mx-auto py-8">
+      {isHandlingRecurringClick && (
+         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">
+            <Loader2 className="h-10 w-10 animate-spin text-primary" />
+            <p className="ml-3 text-lg text-foreground">Processando aula recorrente...</p>
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
         <div>
           <h1 className="text-3xl font-headline font-bold text-foreground">Agenda Semanal</h1>
@@ -499,7 +554,7 @@ export default function AgendaPage() {
         </div>
       </div>
 
-      {isLoading ? (
+      {isLoading && !isHandlingRecurringClick ? (
         <div className="flex justify-center items-center py-20">
           <Loader2 className="h-12 w-12 animate-spin text-primary" />
           <p className="ml-3 text-xl text-muted-foreground">Carregando dados da agenda...</p>
