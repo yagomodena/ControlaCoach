@@ -80,6 +80,7 @@ export interface BookedClass {
   location: string; 
   studentIds: string[]; 
   attendance?: Record<string, 'present' | 'absent' | 'pending'>;
+  isRecurring?: boolean;
 }
 
 
@@ -144,4 +145,3 @@ export const getDayOfWeekName = (dayNumber: number): DayOfWeek | undefined => {
   };
   return map[dayNumber];
 };
-

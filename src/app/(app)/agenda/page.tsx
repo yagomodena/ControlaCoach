@@ -237,6 +237,7 @@ export default function AgendaPage() {
           studentIds: [student.id],
           durationMinutes: 60,
           attendance: { [student.id]: 'pending' },
+          isRecurring: true,
         };
         
         const docRef = await addDoc(collection(db, 'coaches', userId, 'bookedClasses'), newBookedClassData);
@@ -256,17 +257,20 @@ export default function AgendaPage() {
     const currentSlotDateTime = parse(time, 'HH:mm', day);
     currentSlotDateTime.setSeconds(0,0);
 
-    const oneOffClass = bookedClasses.find(c => 
+    const bookedClass = bookedClasses.find(c => 
         isSameDay(parseISO(c.date), day) && c.time === time
     );
-    if (oneOffClass) {
+    if (bookedClass) {
+      const bgColor = bookedClass.isRecurring ? 'bg-accent/80 hover:bg-accent' : 'bg-primary/80 hover:bg-primary';
+      const textColor = bookedClass.isRecurring ? 'text-accent-foreground' : 'text-primary-foreground';
+      const textMutedColor = bookedClass.isRecurring ? 'text-accent-foreground/80' : 'text-primary-foreground/80';
       return (
-        <div className="bg-primary/80 text-primary-foreground p-1.5 rounded-md h-full flex flex-col justify-between text-xs cursor-pointer hover:bg-primary" onClick={() => openEditClassDialog(oneOffClass.id)}>
-          <div>
-            <p className="font-semibold truncate">{oneOffClass.title}</p>
-            <p className="truncate text-primary-foreground/80 flex items-center text-[10px]"><MapPin className="h-2.5 w-2.5 mr-0.5"/>{oneOffClass.location}</p>
+        <div className={`${bgColor} p-1.5 rounded-md h-full flex flex-col justify-between text-xs cursor-pointer`} onClick={() => openEditClassDialog(bookedClass.id)}>
+          <div className={textColor}>
+            <p className="font-semibold truncate">{bookedClass.title}</p>
+            <p className={`truncate ${textMutedColor} flex items-center text-[10px]`}><MapPin className="h-2.5 w-2.5 mr-0.5"/>{bookedClass.location}</p>
           </div>
-          <p className="text-[10px] flex items-center"><Users className="h-2.5 w-2.5 mr-0.5"/>{oneOffClass.studentIds.length} aluno(s)</p>
+          <p className={`${textColor} text-[10px] flex items-center`}><Users className="h-2.5 w-2.5 mr-0.5"/>{bookedClass.studentIds.length} aluno(s)</p>
         </div>
       );
     }
@@ -409,6 +413,7 @@ export default function AgendaPage() {
       studentIds: selectedStudentIdsForBooking,
       durationMinutes: 60,
       attendance: initialAttendance,
+      isRecurring: false,
     };
 
     try {
@@ -773,4 +778,3 @@ export default function AgendaPage() {
     </div>
   );
 }
-
