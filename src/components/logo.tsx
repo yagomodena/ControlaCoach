@@ -1,4 +1,3 @@
-
 'use client';
 
 import Link from 'next/link';
@@ -19,41 +18,44 @@ export function Logo({ collapsed = false }: LogoProps) {
   }, []);
 
   const currentTheme = theme === 'system' ? systemTheme : theme;
-  
-  // Use a placeholder or the light logo by default to avoid layout shift,
-  // then render the correct one once mounted on the client.
-  const logoSrc = currentTheme === 'dark' ? '/images/FP-Branco.png' : '/images/FP-Preto.png';
-  const placeholderSrc = '/images/FP-Preto.png'; // Fallback for initial render
+
+  // Alterna entre logo branca e preta
+  const logoSrc =
+    currentTheme === 'dark' ? '/images/FP-SP.png' : '/images/FP-SB.png';
+
+  // Fallback inicial (antes do hook montar)
+  const placeholderSrc = '/images/FP-SP.png';
 
   return (
-    <Link 
-      href="/dashboard" 
-      className="flex items-center gap-2 group" 
+    <Link
+      href="/dashboard"
+      className="flex items-center gap-2 group"
       aria-label="FitPlanner Home"
     >
       {mounted ? (
         <Image
           src={logoSrc}
           alt="FitPlanner Logo"
-          width={32}
-          height={32}
-          className="group-hover:opacity-90 transition-opacity duration-200"
-          unoptimized // Add this if you don't want Next.js to optimize SVGs or want to ensure dynamic src works flawlessly
+          width={120}
+          height={40}
+          className="group-hover:opacity-90 transition-opacity duration-200 object-contain"
+          priority
         />
       ) : (
-         <Image
+        <Image
           src={placeholderSrc}
           alt="FitPlanner Logo"
-          width={32}
-          height={32}
-          aria-hidden="true" // Hide from screen readers during hydration
-          className="group-hover:opacity-90 transition-opacity duration-200"
+          width={120}
+          height={40}
+          aria-hidden="true"
+          className="group-hover:opacity-90 transition-opacity duration-200 object-contain"
         />
       )}
-      
+
       {!collapsed && (
-        <span className="font-headline text-xl font-bold text-primary transition-colors duration-200">
-          <span className="text-accent">Fit</span>Planner
+        <span className="font-headline text-xl font-bold transition-colors duration-200 flex">
+          <span className="text-accent">Fit</span>
+          <span className="text-black dark:text-white">Planner</span>
         </span>
       )}
     </Link>
