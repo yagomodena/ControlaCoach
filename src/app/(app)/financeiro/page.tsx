@@ -88,6 +88,7 @@ export default function FinanceiroPage() {
   const [payments, setPayments] = useState<PaymentEntry[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [allPlans, setAllPlans] = useState<Plan[]>([]);
+  const [allStudents, setAllStudents] = useState<Student[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [clientRendered, setClientRendered] = useState(false);
   const { toast } = useToast();
@@ -119,158 +120,168 @@ export default function FinanceiroPage() {
       setPayments([]);
       setExpenses([]);
       setAllPlans([]);
+      setAllStudents([]);
       return;
     }
+    
     setIsLoading(true);
 
-    const monthStart = startOfMonth(selectedMonthDate);
-    const monthEnd = endOfMonth(selectedMonthDate);
+    const plansQuery = query(collection(db, 'coaches', userId, 'plans'), orderBy('name'));
+    const studentsQuery = query(collection(db, 'coaches', userId, 'students'), orderBy('name'));
 
-    // Fetch Expenses
-    const expensesQuery = query(
-        collection(db, 'coaches', userId, 'expenses'), 
-        where('date', '>=', dateFnsFormatISO(monthStart, { representation: 'date' })),
-        where('date', '<=', dateFnsFormatISO(monthEnd, { representation: 'date' })),
-        orderBy('date', 'desc')
-    );
-    const unsubscribeExpenses = onSnapshot(expensesQuery, (snapshot) => {
-        const expensesData = snapshot.docs.map(doc => ({...doc.data(), id: doc.id} as Expense));
-        setExpenses(expensesData);
-    }, (error) => {
-        console.error("Error fetching expenses:", error);
-        toast({ title: "Erro ao Carregar Saídas", variant: "destructive"});
-    });
-
-
-    const plansCollectionRef = collection(db, 'coaches', userId, 'plans');
-    const qPlans = query(plansCollectionRef, orderBy('name'));
-    const unsubscribePlans = onSnapshot(qPlans, (snapshot) => {
-      const plansData = snapshot.docs.map(docSnap => ({ ...docSnap.data(), id: docSnap.id } as Plan));
-      setAllPlans(plansData);
-
-      const studentsCollectionRef = collection(db, 'coaches', userId, 'students');
-      const qStudents = query(studentsCollectionRef, orderBy('name')); 
-      const unsubscribeStudents = onSnapshot(qStudents, (studentSnapshot) => {
-        const studentsData = studentSnapshot.docs.map(docSnap => ({ ...docSnap.data(), id: docSnap.id } as Student));
-        
-        const today = startOfDay(new Date());
-
-        const derivedPayments: PaymentEntry[] = [];
-
-        studentsData.forEach(student => {
-            if (student.status !== 'active' || !student.registrationDate) return;
-
-            const planDetails = plansData.find(p => p.name === student.plan);
-            if (!planDetails || !planDetails.durationDays || planDetails.durationDays <= 0) {
-                return;
-            }
-
-            let firstPaymentCycleStartDate: Date;
-            if (planDetails.chargeOnEnrollment) {
-              firstPaymentCycleStartDate = startOfDay(parseISO(student.registrationDate));
-            } else {
-              firstPaymentCycleStartDate = addDays(startOfDay(parseISO(student.registrationDate)), planDetails.durationDays);
-            }
-            
-            let currentCycleEffectiveDueDate = firstPaymentCycleStartDate;
-            
-            while (isBefore(currentCycleEffectiveDueDate, addMonths(monthEnd, 2))) { 
-                
-                if (isAfter(currentCycleEffectiveDueDate, addDays(monthEnd, planDetails.durationDays * 2))) {
-                     break; 
-                }
-
-                if (isWithinInterval(currentCycleEffectiveDueDate, { start: monthStart, end: monthEnd })) {
-                    let entryStatus: Payment['status'] = 'pendente';
-                    let entryPaymentDate: string | undefined = undefined;
-
-                    const studentLastPaymentDate = student.lastPaymentDate ? startOfDay(parseISO(student.lastPaymentDate)) : null;
-                    
-                    // Check if this cycle is covered by a payment
-                    if (studentLastPaymentDate && 
-                        (isEqual(studentLastPaymentDate, currentCycleEffectiveDueDate) || 
-                         (isAfter(studentLastPaymentDate, currentCycleEffectiveDueDate) && isBefore(studentLastPaymentDate, addDays(currentCycleEffectiveDueDate, planDetails.durationDays)))
-                        )
-                       ) {
-                         // This specific cycle was paid for
-                         if (student.paymentStatus === 'pago') { //And overall student status for next due date is paid
-                            const studentOverallDueDate = student.dueDate ? startOfDay(parseISO(student.dueDate)) : null;
-                            if (studentOverallDueDate && isAfter(studentOverallDueDate, currentCycleEffectiveDueDate)) {
-                                entryStatus = 'pago';
-                                entryPaymentDate = student.lastPaymentDate;
-                            }
-                         } else if (isEqual(studentLastPaymentDate, currentCycleEffectiveDueDate)){
-                            entryStatus = 'pago';
-                            entryPaymentDate = student.lastPaymentDate;
-                         }
-                    }
-                    
-                    if (entryStatus !== 'pago') { 
-                        if (isBefore(currentCycleEffectiveDueDate, today)) {
-                            entryStatus = 'vencido';
-                        } else {
-                            entryStatus = 'pendente';
-                        }
-                    }
-                    
-                    const studentOverallDueDate = student.dueDate ? startOfDay(parseISO(student.dueDate)) : null;
-                    if (studentOverallDueDate && isEqual(currentCycleEffectiveDueDate, studentOverallDueDate)) {
-                        if (student.paymentStatus === 'vencido') entryStatus = 'vencido';
-                        else if (student.paymentStatus === 'pendente' && entryStatus !== 'vencido') entryStatus = 'pendente';
-                        else if (student.paymentStatus === 'pago' && entryStatus !== 'vencido') {
-                           entryStatus = 'pago'; // If overall student due date matches this cycle's, and student is 'pago'
-                           entryPaymentDate = student.lastPaymentDate; // Assume last payment date is relevant
-                        }
-                    }
-
-
-                    derivedPayments.push({
-                        id: `pay-${student.id}-${dateFnsFormatISO(currentCycleEffectiveDueDate, { representation: 'date' })}`,
-                        studentId: student.id,
-                        studentName: student.name,
-                        studentPhone: student.phone,
-                        studentPlanName: student.plan,
-                        amount: planDetails.price, 
-                        paymentDate: entryPaymentDate,
-                        dueDate: dateFnsFormatISO(currentCycleEffectiveDueDate, { representation: 'date' }),
-                        status: entryStatus,
-                        method: student.paymentMethod || 'PIX',
-                        referenceMonth: format(currentCycleEffectiveDueDate, 'yyyy-MM'),
-                    });
-                }
-                
-                currentCycleEffectiveDueDate = addDays(currentCycleEffectiveDueDate, planDetails.durationDays);
-            }
-        });
-        
-        const uniquePayments = Array.from(new Map(derivedPayments.map(p => [p.id, p])).values());
-
-        uniquePayments.sort((a, b) => {
-            const dateA = parseISO(a.dueDate).getTime();
-            const dateB = parseISO(b.dueDate).getTime();
-            if (dateA !== dateB) return dateA - dateB;
-            return a.studentName.localeCompare(b.studentName);
-        });
-        setPayments(uniquePayments);
-        setIsLoading(false);
-      }, (error) => {
-        console.error("Error fetching students for Financeiro: ", error);
-        toast({ title: "Erro ao Carregar Alunos para Financeiro", variant: "destructive" });
-        setIsLoading(false);
-      });
-      return () => unsubscribeStudents();
-
-    }, (error) => {
+    const unsubPlans = onSnapshot(plansQuery, snapshot => {
+      setAllPlans(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Plan)));
+    }, error => {
       console.error("Error fetching plans: ", error);
       toast({ title: "Erro ao Carregar Planos", variant: "destructive" });
-      setIsLoading(false);
+    });
+
+    const unsubStudents = onSnapshot(studentsQuery, snapshot => {
+      setAllStudents(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Student)));
+    }, error => {
+      console.error("Error fetching students: ", error);
+      toast({ title: "Erro ao Carregar Alunos", variant: "destructive" });
     });
 
     return () => {
-        unsubscribePlans();
-        unsubscribeExpenses();
+      unsubPlans();
+      unsubStudents();
     };
-  }, [userId, toast, selectedMonthDate]);
+
+  }, [userId, toast]);
+
+
+  useEffect(() => {
+      if (!userId) return;
+
+      const monthStart = startOfMonth(selectedMonthDate);
+      const monthEnd = endOfMonth(selectedMonthDate);
+
+      const expensesQuery = query(
+          collection(db, 'coaches', userId, 'expenses'), 
+          where('date', '>=', dateFnsFormatISO(monthStart, { representation: 'date' })),
+          where('date', '<=', dateFnsFormatISO(monthEnd, { representation: 'date' })),
+          orderBy('date', 'desc')
+      );
+
+      const unsubscribeExpenses = onSnapshot(expensesQuery, (snapshot) => {
+          setExpenses(snapshot.docs.map(doc => ({...doc.data(), id: doc.id} as Expense)));
+      }, (error) => {
+          console.error("Error fetching expenses:", error);
+          toast({ title: "Erro ao Carregar Saídas", variant: "destructive"});
+      });
+
+      return () => unsubscribeExpenses();
+  }, [userId, selectedMonthDate, toast]);
+
+
+  useEffect(() => {
+    if (allStudents.length === 0 || allPlans.length === 0) {
+        if(userId) setIsLoading(false); // Only stop loading if we are logged in but have no data
+        return;
+    }
+
+    const monthStart = startOfMonth(selectedMonthDate);
+    const monthEnd = endOfMonth(selectedMonthDate);
+    const today = startOfDay(new Date());
+
+    const derivedPayments: PaymentEntry[] = [];
+
+    allStudents.forEach(student => {
+        if (student.status !== 'active' || !student.registrationDate) return;
+
+        const planDetails = allPlans.find(p => p.name === student.plan);
+        if (!planDetails || !planDetails.durationDays || planDetails.durationDays <= 0) {
+            return;
+        }
+
+        let firstPaymentCycleStartDate: Date;
+        if (planDetails.chargeOnEnrollment) {
+          firstPaymentCycleStartDate = startOfDay(parseISO(student.registrationDate));
+        } else {
+          firstPaymentCycleStartDate = addDays(startOfDay(parseISO(student.registrationDate)), planDetails.durationDays);
+        }
+        
+        let currentCycleEffectiveDueDate = firstPaymentCycleStartDate;
+        
+        while (isBefore(currentCycleEffectiveDueDate, addMonths(monthEnd, 2))) { 
+            
+            if (isAfter(currentCycleEffectiveDueDate, addDays(monthEnd, planDetails.durationDays * 2))) {
+                 break; 
+            }
+
+            if (isWithinInterval(currentCycleEffectiveDueDate, { start: monthStart, end: monthEnd })) {
+                let entryStatus: Payment['status'] = 'pendente';
+                let entryPaymentDate: string | undefined = undefined;
+
+                const studentLastPaymentDate = student.lastPaymentDate ? startOfDay(parseISO(student.lastPaymentDate)) : null;
+                
+                if (studentLastPaymentDate && 
+                    (isEqual(studentLastPaymentDate, currentCycleEffectiveDueDate) || 
+                     (isAfter(studentLastPaymentDate, currentCycleEffectiveDueDate) && isBefore(studentLastPaymentDate, addDays(currentCycleEffectiveDueDate, planDetails.durationDays)))
+                    )
+                   ) {
+                     if (student.paymentStatus === 'pago') {
+                        const studentOverallDueDate = student.dueDate ? startOfDay(parseISO(student.dueDate)) : null;
+                        if (studentOverallDueDate && isAfter(studentOverallDueDate, currentCycleEffectiveDueDate)) {
+                            entryStatus = 'pago';
+                            entryPaymentDate = student.lastPaymentDate;
+                        }
+                     } else if (isEqual(studentLastPaymentDate, currentCycleEffectiveDueDate)){
+                        entryStatus = 'pago';
+                        entryPaymentDate = student.lastPaymentDate;
+                     }
+                }
+                
+                if (entryStatus !== 'pago') { 
+                    if (isBefore(currentCycleEffectiveDueDate, today)) {
+                        entryStatus = 'vencido';
+                    } else {
+                        entryStatus = 'pendente';
+                    }
+                }
+                
+                const studentOverallDueDate = student.dueDate ? startOfDay(parseISO(student.dueDate)) : null;
+                if (studentOverallDueDate && isEqual(currentCycleEffectiveDueDate, studentOverallDueDate)) {
+                    if (student.paymentStatus === 'vencido') entryStatus = 'vencido';
+                    else if (student.paymentStatus === 'pendente' && entryStatus !== 'vencido') entryStatus = 'pendente';
+                    else if (student.paymentStatus === 'pago' && entryStatus !== 'vencido') {
+                       entryStatus = 'pago';
+                       entryPaymentDate = student.lastPaymentDate;
+                    }
+                }
+
+
+                derivedPayments.push({
+                    id: `pay-${student.id}-${dateFnsFormatISO(currentCycleEffectiveDueDate, { representation: 'date' })}`,
+                    studentId: student.id,
+                    studentName: student.name,
+                    studentPhone: student.phone,
+                    studentPlanName: student.plan,
+                    amount: planDetails.price, 
+                    paymentDate: entryPaymentDate,
+                    dueDate: dateFnsFormatISO(currentCycleEffectiveDueDate, { representation: 'date' }),
+                    status: entryStatus,
+                    method: student.paymentMethod || 'PIX',
+                    referenceMonth: format(currentCycleEffectiveDueDate, 'yyyy-MM'),
+                });
+            }
+            
+            currentCycleEffectiveDueDate = addDays(currentCycleEffectiveDueDate, planDetails.durationDays);
+        }
+    });
+    
+    const uniquePayments = Array.from(new Map(derivedPayments.map(p => [p.id, p])).values());
+
+    uniquePayments.sort((a, b) => {
+        const dateA = parseISO(a.dueDate).getTime();
+        const dateB = parseISO(b.dueDate).getTime();
+        if (dateA !== dateB) return dateA - dateB;
+        return a.studentName.localeCompare(b.studentName);
+    });
+    setPayments(uniquePayments);
+    setIsLoading(false);
+  }, [allStudents, allPlans, selectedMonthDate, userId]);
 
 
   const handleMarkAsPaid = async (paymentEntryToUpdate: PaymentEntry) => {
@@ -867,5 +878,3 @@ export default function FinanceiroPage() {
     </>
   );
 }
-
-
