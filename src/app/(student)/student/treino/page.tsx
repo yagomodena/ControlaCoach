@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Dumbbell, Loader2 } from 'lucide-react';
 import { auth, db } from '@/firebase';
-import { doc, getDoc, getDocs, collection } from 'firebase/firestore';
+import { doc, getDoc, getDocs, collection, query, where, limit, collectionGroup } from 'firebase/firestore';
 import type { Student, DayOfWeek } from '@/types';
 import { DAYS_OF_WEEK } from '@/types';
 import { format, parseISO } from 'date-fns';
@@ -31,23 +31,13 @@ export default function StudentWorkoutPage() {
         return;
       }
       try {
-        const coachesRef = collection(db, 'coaches');
-        const coachesSnapshot = await getDocs(coachesRef);
-        let studentData: Student | null = null;
-        let studentFound = false;
+        const studentsCollectionGroup = collectionGroup(db, 'students');
+        const q = query(studentsCollectionGroup, where('id', '==', studentId), limit(1));
+        const querySnapshot = await getDocs(q);
 
-        for (const coachDoc of coachesSnapshot.docs) {
-          const studentDocRef = doc(db, 'coaches', coachDoc.id, 'students', studentId);
-          const studentDocSnap = await getDoc(studentDocRef);
-          if (studentDocSnap.exists()) {
-            studentData = { ...studentDocSnap.data(), id: studentDocSnap.id } as Student;
-            studentFound = true;
-            break;
-          }
-        }
-        
-        if (studentFound) {
-          setStudent(studentData);
+        if (!querySnapshot.empty) {
+          const studentDoc = querySnapshot.docs[0];
+          setStudent({ ...studentDoc.data(), id: studentDoc.id } as Student);
         } else {
           setError("Dados do aluno não encontrados.");
         }

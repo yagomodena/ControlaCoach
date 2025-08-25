@@ -12,7 +12,7 @@ import { Logo } from '@/components/logo';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, KeyRound, Loader2 } from 'lucide-react';
 import { db } from '@/firebase';
-import { collection, getDocs, doc, getDoc, query, where } from 'firebase/firestore';
+import { collectionGroup, getDocs, query, where } from 'firebase/firestore';
 
 
 export default function AlunoLoginPage() {
@@ -36,23 +36,12 @@ export default function AlunoLoginPage() {
     try {
       // This is an insecure way to "log in" a user and is for demonstration only.
       // In a real application, this should be handled by a proper authentication flow.
-      // We query all coaches to find a student with this ID.
-      const coachesRef = collection(db, 'coaches');
-      const coachesSnapshot = await getDocs(coachesRef);
-      let studentFound = false;
+      // We query the "students" collection group to find a student with this ID across all coaches.
+      const studentsCollectionGroup = collectionGroup(db, 'students');
+      const q = query(studentsCollectionGroup, where('id', '==', studentId));
+      const querySnapshot = await getDocs(q);
 
-      for (const coachDoc of coachesSnapshot.docs) {
-        // Since the studentId is the document ID, we can do a direct getDoc
-        const studentDocRef = doc(db, 'coaches', coachDoc.id, 'students', studentId);
-        const studentDocSnap = await getDoc(studentDocRef);
-
-        if (studentDocSnap.exists()) {
-            studentFound = true;
-            break; // Exit the loop once the student is found
-        }
-      }
-
-      if (studentFound) {
+      if (!querySnapshot.empty) {
         // In a real app, you'd create a secure session. Here, we'll use local storage.
         // This is NOT secure for production use.
         localStorage.setItem('studentId', studentId);
