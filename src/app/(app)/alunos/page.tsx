@@ -3,7 +3,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
-import { PlusCircle, Search, Edit3, Trash2, MoreVertical, Eye, Loader2 } from 'lucide-react';
+import { PlusCircle, Search, Edit3, Trash2, MoreVertical, Eye, Loader2, KeyRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -85,6 +85,24 @@ export default function AlunosPage() {
       return nameMatch && statusMatch;
     });
   }, [students, searchTerm, statusFilter]);
+  
+  const handleSendLogin = (student: Student) => {
+    if (!student.phone || !student.authId) {
+      toast({
+        title: "Dados Incompletos",
+        description: "O aluno não possui um telefone ou ID de acesso cadastrado para enviar o login.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const studentLoginPageUrl = `${window.location.origin}/login/aluno`;
+    const message = `Olá, ${student.name.split(' ')[0]}! Aqui estão seus dados de acesso ao portal FitPlanner:\n\n*Link de Acesso:* ${studentLoginPageUrl}\n*Seu ID de Aluno:* ${student.authId}\n\nGuarde este ID, ele será sua chave de entrada!`;
+    const whatsappNumber = student.phone.replace(/\D/g, '');
+    const whatsappUrl = `https://wa.me/55${whatsappNumber}?text=${encodeURIComponent(message)}`;
+    
+    window.open(whatsappUrl, '_blank');
+  };
 
   const handleDeleteStudent = async (studentIdToDelete: string, studentName: string) => {
     if (!userId) {
@@ -216,6 +234,9 @@ export default function AlunosPage() {
                               <Link href={`/alunos/${student.id}?edit=true`} className="flex items-center">
                                 <Edit3 className="mr-2 h-4 w-4" /> Editar
                               </Link>
+                            </DropdownMenuItem>
+                             <DropdownMenuItem onClick={() => handleSendLogin(student)} className="flex items-center">
+                              <KeyRound className="mr-2 h-4 w-4" /> Enviar Login
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleDeleteStudent(student.id, student.name)} className="text-destructive focus:text-destructive focus:bg-destructive/10 flex items-center">
                               <Trash2 className="mr-2 h-4 w-4" /> Excluir
