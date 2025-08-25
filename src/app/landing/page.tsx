@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { UsersRound, CalendarClock, CircleDollarSign, Smartphone, ReceiptText, CheckCircle2, Facebook, Instagram, Twitter, ArrowRight, ShieldCheck } from 'lucide-react';
+import { UsersRound, CalendarClock, CircleDollarSign, Smartphone, ReceiptText, CheckCircle2, Facebook, Instagram, Twitter, Youtube, ArrowRight, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 // import bannerImage from '@/images/banner.png' // Original local image
 const bannerImageUrl = "https://storage.googleapis.com/project-ai-prototyper.appspot.com/projects%2FJzkpAS8qTryME2DL477q%2Ffiles%2Ftreinadores.png";
@@ -244,14 +244,11 @@ export default function LandingPage() {
             <Link href="/contato" className="hover:text-[#FF6B00]">Contato</Link>
           </div>
           <div className="flex justify-center space-x-6 mb-6">
-            <Link href="#" aria-label="Facebook" className="text-gray-400 hover:text-[#FF6B00]">
-              <Facebook className="h-6 w-6" />
+            <Link href="#" aria-label="Youtube" className="text-gray-400 hover:text-[#FF6B00]">
+              <Youtube className="h-6 w-6" />
             </Link>
-            <Link href="#" aria-label="Instagram" className="text-gray-400 hover:text-[#FF6B00]">
+            <Link href="https://www.instagram.com/fitplannerbr/" aria-label="Instagram" className="text-gray-400 hover:text-[#FF6B00]">
               <Instagram className="h-6 w-6" />
-            </Link>
-            <Link href="#" aria-label="Twitter" className="text-gray-400 hover:text-[#FF6B00]">
-              <Twitter className="h-6 w-6" />
             </Link>
           </div>
           <p>&copy; {new Date().getFullYear()} FitPlanner. Todos os direitos reservados.</p>

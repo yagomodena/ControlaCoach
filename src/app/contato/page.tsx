@@ -2,20 +2,21 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
-import { Facebook, Instagram, Twitter, Mail, Phone, MapPin } from 'lucide-react';
+import { Facebook, Instagram, Twitter, Mail, Phone, Youtube, MapPin } from 'lucide-react';
 
 // Re-using the landing page header and footer structure for consistency
 const Header = () => (
   <header className="sticky top-0 z-50 py-4 px-6 md:px-10 flex justify-between items-center bg-white shadow-md">
     <Link href="/landing" className="flex items-center gap-2 group">
-      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#FF6B00" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <circle cx="12" cy="12" r="10" />
-        <path d="M12 2a10 10 0 0 0-3.91 19.48M12 22a10 10 0 0 0 3.91-19.48" />
-        <path d="M2 12h20" />
-        <path d="M12 2a10 10 0 0 0-7.79 3.94" />
-        <path d="M12 22a10 10 0 0 1-7.79-3.94" />
-      </svg>
+    <Image
+          src="/images/FP-SB.png"   // caminho relativo à pasta public
+          alt="FitPlanner Logo"
+          width={80}               // largura da logo
+          height={40}               // altura da logo
+          priority
+        />
       <span className="font-headline text-xl font-bold">
         <span className="text-[#FF6B00]">Fit</span>
         <span className="text-[#0D0D0D]">Planner</span>
@@ -75,7 +76,7 @@ export default function ContatoPage() {
               <div>
                 <h2 className="text-xl font-semibold text-[#0D0D0D]">Email</h2>
                 <a href="mailto:contato@fitplanner.com.br" className="text-gray-700 hover:text-[#FF6B00] hover:underline">
-                  contato@fitplanner.com.br
+                fitplannerbr@gmail.com
                 </a>
                 <p className="text-sm text-gray-500">Para dúvidas gerais e suporte.</p>
               </div>
@@ -86,21 +87,9 @@ export default function ContatoPage() {
               <div>
                 <h2 className="text-xl font-semibold text-[#0D0D0D]">Telefone / WhatsApp</h2>
                 <a href="tel:+5511999998888" className="text-gray-700 hover:text-[#FF6B00] hover:underline">
-                  (11) 99999-8888
+                  (16) 98857-7820
                 </a>
                 <p className="text-sm text-gray-500">Disponível em horário comercial.</p>
-              </div>
-            </div>
-            
-            <div className="flex items-center p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
-              <MapPin className="h-8 w-8 text-[#FF6B00] mr-4" />
-              <div>
-                <h2 className="text-xl font-semibold text-[#0D0D0D]">Nosso Endereço (Exemplo)</h2>
-                <p className="text-gray-700">
-                  Rua Exemplo, 123, Sala 45<br />
-                  Cidade Exemplo, Estado - CEP 00000-000
-                </p>
-                <p className="text-sm text-gray-500">Visitas apenas com agendamento.</p>
               </div>
             </div>
           </div>
@@ -108,14 +97,11 @@ export default function ContatoPage() {
           <div className="mt-12 text-center">
             <p className="text-lg text-gray-700 mb-4">Siga-nos nas redes sociais:</p>
             <div className="flex justify-center space-x-6">
-              <Link href="#" aria-label="Facebook" className="text-gray-500 hover:text-[#FF6B00]">
-                <Facebook className="h-8 w-8" />
-              </Link>
-              <Link href="#" aria-label="Instagram" className="text-gray-500 hover:text-[#FF6B00]">
+              <Link href="https://www.instagram.com/fitplannerbr/" aria-label="Instagram" className="text-gray-500 hover:text-[#FF6B00]">
                 <Instagram className="h-8 w-8" />
               </Link>
-              <Link href="#" aria-label="Twitter" className="text-gray-500 hover:text-[#FF6B00]">
-                <Twitter className="h-8 w-8" />
+              <Link href="#" aria-label="Youtube" className="text-gray-500 hover:text-[#FF6B00]">
+                <Youtube className="h-8 w-8" />
               </Link>
             </div>
           </div>
