@@ -29,14 +29,12 @@ import { ManagePlansDialog } from '@/components/dialogs/manage-plans-dialog';
 import { db, auth } from '@/firebase';
 import { collection, addDoc, onSnapshot, query, where, orderBy, doc, setDoc, writeBatch } from 'firebase/firestore';
 import { formatISO, addDays } from 'date-fns';
-import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 
 const NO_LOCATION_VALUE = "__NO_LOCATION__";
 
 const studentSchema = z.object({
   name: z.string().min(3, { message: 'Nome deve ter pelo menos 3 caracteres.' }),
   phone: z.string().min(10, { message: 'Telefone inválido.' }),
-  email: z.string().email({ message: 'Email inválido.' }),
   plan: z.string().min(1, { message: 'Selecione um plano.' }),
   technicalLevel: z.enum(['Iniciante', 'Intermediário', 'Avançado'], { required_error: 'Selecione o nível técnico.' }),
   status: z.enum(['active', 'inactive'], { required_error: 'Selecione o status.' }),
@@ -68,7 +66,7 @@ export default function NovoAlunoPage() {
   const [isAddPlanDialogOpen, setIsAddPlanDialogOpen] = useState(false);
   const [isManagePlansDialogOpen, setIsManagePlansDialogOpen] = useState(false);
   
-  const coachAuth = auth; // Keep a reference to the coach's auth instance
+  const coachAuth = auth; 
 
   useEffect(() => {
     const unsubscribeAuth = coachAuth.onAuthStateChanged(user => {
@@ -127,7 +125,6 @@ export default function NovoAlunoPage() {
     defaultValues: {
       name: '',
       phone: '',
-      email: '',
       plan: undefined,
       technicalLevel: undefined,
       status: 'active',
@@ -151,21 +148,6 @@ export default function NovoAlunoPage() {
     }
     
     try {
-      // We will just create a random password for now.
-      // The user can reset it later. This avoids the auto-login issue.
-      const tempPassword = Math.random().toString(36).slice(-8);
-
-      // Create user with a temporary auth instance to avoid session conflicts
-      const tempApp = auth.app;
-      const tempAuth = getAuth(tempApp);
-      
-      const userCredential = await createUserWithEmailAndPassword(tempAuth, data.email, tempPassword);
-      const studentUser = userCredential.user;
-      await updateProfile(studentUser, { displayName: data.name });
-      
-      // IMPORTANT: Sign out the temporary user immediately to not affect the coach's session
-      await signOut(tempAuth);
-
       const registrationDate = new Date();
       const registrationDateISO = formatISO(registrationDate, { representation: 'date' });
       const selectedPlanDetails = activePlans.find(p => p.name === data.plan);
@@ -182,11 +164,15 @@ export default function NovoAlunoPage() {
         initialDueDate = addDays(registrationDate, selectedPlanDetails.durationDays);
       }
 
-      const studentId = studentUser.uid;
+      // We will generate a new document in the root students collection to get an ID.
+      const studentRootCollectionRef = collection(db, 'students');
+      const newStudentDocRef = doc(studentRootCollectionRef); 
+      const studentId = newStudentDocRef.id;
+
       const studentDataToSave: Omit<Student, 'id'> & { coachId: string } = {
         coachId: userId,
-        authId: studentId,
-        email: data.email,
+        authId: studentId, // The student's authId is now their document ID
+        email: `${studentId}@fitplanner.local`, // A placeholder email
         name: data.name,
         phone: data.phone,
         plan: data.plan,
@@ -217,18 +203,17 @@ export default function NovoAlunoPage() {
       
       const batch = writeBatch(db);
       const studentCoachDocRef = doc(db, 'coaches', userId, 'students', studentId);
-      const studentRootDocRef = doc(db, 'students', studentId);
-
+      
       const { coachId, ...studentDataForCoachSubcollection } = studentDataToSave;
       
       batch.set(studentCoachDocRef, studentDataForCoachSubcollection);
-      batch.set(studentRootDocRef, studentDataToSave);
+      batch.set(newStudentDocRef, studentDataToSave);
       
       await batch.commit();
 
       toast({
         title: "Aluno Adicionado!",
-        description: `${data.name} foi cadastrado com sucesso.`,
+        description: `${data.name} foi cadastrado com sucesso. O ID do aluno é: ${studentId}`,
       });
 
       router.push('/alunos');
@@ -323,21 +308,6 @@ export default function NovoAlunoPage() {
                 </Card>
 
                 <div className="space-y-8">
-                    <Card className="shadow-lg">
-                        <CardHeader>
-                            <CardTitle className="flex items-center"><KeyRound className="mr-2 h-5 w-5 text-primary"/>Acesso do Aluno</CardTitle>
-                            <CardDescription>Defina o e-mail de acesso para o aluno.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
-                            <div className="space-y-2">
-                                <Label htmlFor="email">Email de Acesso</Label>
-                                <Controller name="email" control={control} render={({ field }) => <Input id="email" type="email" placeholder="aluno@email.com" {...field} />} />
-                                {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
-                            </div>
-                             <p className="text-xs text-muted-foreground">Uma senha temporária será criada. O aluno poderá redefinir a senha no primeiro acesso se necessário.</p>
-                        </CardContent>
-                    </Card>
-
                     <Card className="shadow-lg">
                         <CardHeader>
                             <CardTitle>Status</CardTitle>
@@ -451,3 +421,5 @@ export default function NovoAlunoPage() {
     </>
   );
 }
+
+    
