@@ -9,34 +9,36 @@ import { doc, getDoc, collection, query, where, getDocs, limit } from 'firebase/
 import type { Student } from '@/types';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useRouter } from 'next/navigation';
 
 export default function StudentDashboardPage() {
   const [student, setStudent] = useState<Student | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     const fetchStudentData = async () => {
-      const currentUser = auth.currentUser;
-      if (!currentUser) {
+      // In this insecure model, we retrieve the ID from localStorage.
+      // This is NOT suitable for production.
+      const studentId = localStorage.getItem('studentId');
+      if (!studentId) {
         setIsLoading(false);
-        setError("Usuário não autenticado. Por favor, faça login.");
+        setError("Sessão de aluno inválida. Por favor, faça login novamente.");
+        // Optional: redirect to login after a delay
+        setTimeout(() => router.push('/login/aluno'), 2000);
         return;
       }
 
       try {
-        // Since we don't know the coach's ID on the client, we have to query.
-        // This is not ideal for performance and security. A better approach would be
-        // to use a Cloud Function on user creation to store the coach's ID on the student's
-        // auth custom claims, which can then be read securely on the client.
-        // For this project's scope, we'll perform a query across all coaches.
         const coachesRef = collection(db, 'coaches');
         const coachesSnapshot = await getDocs(coachesRef);
         let studentData: Student | null = null;
         let studentFound = false;
 
         for (const coachDoc of coachesSnapshot.docs) {
-          const studentDocRef = doc(db, 'coaches', coachDoc.id, 'students', currentUser.uid);
+          // Since the studentId is the document ID, we can do a direct getDoc
+          const studentDocRef = doc(db, 'coaches', coachDoc.id, 'students', studentId);
           const studentDocSnap = await getDoc(studentDocRef);
           if (studentDocSnap.exists()) {
             studentData = { ...studentDocSnap.data(), id: studentDocSnap.id } as Student;
@@ -57,19 +59,10 @@ export default function StudentDashboardPage() {
         setIsLoading(false);
       }
     };
-
-    const unsubscribe = auth.onAuthStateChanged(user => {
-      if (user) {
-        fetchStudentData();
-      } else {
-        setIsLoading(false);
-        setError("Usuário não autenticado.");
-      }
-    });
     
-    return () => unsubscribe();
+    fetchStudentData();
 
-  }, []);
+  }, [router]);
 
   if (isLoading) {
     return (
@@ -88,7 +81,7 @@ export default function StudentDashboardPage() {
             </CardHeader>
             <CardContent>
                 <p className="text-destructive">{error}</p>
-                <p className="text-muted-foreground mt-2">Por favor, entre em contato com seu treinador para verificar seu cadastro.</p>
+                <p className="text-muted-foreground mt-2">Por favor, entre em contato com seu treinador para verificar seu cadastro ou tente fazer o login novamente.</p>
             </CardContent>
         </Card>
      )

@@ -9,6 +9,7 @@ import { doc, getDoc, getDocs, collection } from 'firebase/firestore';
 import type { Student, DayOfWeek } from '@/types';
 import { DAYS_OF_WEEK } from '@/types';
 import { format, parseISO } from 'date-fns';
+import { useRouter } from 'next/navigation';
 
 const sortDays = (days: DayOfWeek[] = []) => {
     return days.sort((a, b) => DAYS_OF_WEEK.indexOf(a) - DAYS_OF_WEEK.indexOf(b));
@@ -18,13 +19,15 @@ export default function StudentWorkoutPage() {
   const [student, setStudent] = useState<Student | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     const fetchStudentData = async () => {
-      const currentUser = auth.currentUser;
-      if (!currentUser) {
+      const studentId = localStorage.getItem('studentId');
+      if (!studentId) {
         setIsLoading(false);
-        setError("Usuário não autenticado.");
+        setError("Sessão de aluno inválida. Por favor, faça login novamente.");
+        setTimeout(() => router.push('/login/aluno'), 2000);
         return;
       }
       try {
@@ -34,7 +37,7 @@ export default function StudentWorkoutPage() {
         let studentFound = false;
 
         for (const coachDoc of coachesSnapshot.docs) {
-          const studentDocRef = doc(db, 'coaches', coachDoc.id, 'students', currentUser.uid);
+          const studentDocRef = doc(db, 'coaches', coachDoc.id, 'students', studentId);
           const studentDocSnap = await getDoc(studentDocRef);
           if (studentDocSnap.exists()) {
             studentData = { ...studentDocSnap.data(), id: studentDocSnap.id } as Student;
@@ -56,17 +59,8 @@ export default function StudentWorkoutPage() {
       }
     };
 
-    const unsubscribe = auth.onAuthStateChanged(user => {
-        if(user) {
-            fetchStudentData();
-        } else {
-            setIsLoading(false);
-            setError("Usuário não autenticado.");
-        }
-    });
-
-    return () => unsubscribe();
-  }, []);
+    fetchStudentData();
+  }, [router]);
 
   const formatDateString = (dateString?: string) => {
     if (!dateString) return 'N/A';

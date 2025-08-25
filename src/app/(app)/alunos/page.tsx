@@ -87,18 +87,17 @@ export default function AlunosPage() {
   }, [students, searchTerm, statusFilter]);
   
   const handleSendLogin = (student: Student) => {
-    if (!student.phone || !student.email) {
+    if (!student.phone || !student.id) {
       toast({
         title: "Dados Incompletos",
-        description: "O aluno não possui um telefone ou email cadastrado para enviar o login.",
+        description: "O aluno não possui um telefone ou ID de acesso cadastrado para enviar o login.",
         variant: "destructive",
       });
       return;
     }
 
     const studentLoginPageUrl = `${window.location.origin}/login/aluno`;
-    // Note: It's not secure to send passwords via WhatsApp. This is a placeholder for a better "password reset" or "set password" flow.
-    const message = `Olá, ${student.name.split(' ')[0]}! Aqui estão seus dados de acesso ao portal FitPlanner:\n\n*Link de Acesso:* ${studentLoginPageUrl}\n*Seu Email de Acesso:* ${student.email}\n\nUse a senha que seu treinador definiu para você. Recomendamos alterá-la no futuro.`;
+    const message = `Olá, ${student.name.split(' ')[0]}! Para acessar seu portal de aluno, siga as instruções:\n\n1. Acesse o link: ${studentLoginPageUrl}\n2. Insira seu ID de Aluno: *${student.id}*\n\nAproveite para acompanhar seus treinos e sua evolução!`;
     const whatsappNumber = student.phone.replace(/\D/g, '');
     const whatsappUrl = `https://wa.me/55${whatsappNumber}?text=${encodeURIComponent(message)}`;
     

@@ -150,26 +150,20 @@ export default function NovoAlunoPage() {
         return;
     }
     
-    const originalUser = auth.currentUser;
-
+    // For simplicity in this flow, we will create a separate student user in Auth.
+    // In a production app, you might use a Cloud Function to manage user roles
+    // and avoid this client-side user creation flow which can be complex to secure.
     try {
-      // Create the student user in Firebase Auth
+      // Temporarily use a separate auth instance if needed, or handle re-authentication of coach.
+      // The simplest approach that can have session issues is to just create the user.
       const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
       const studentUser = userCredential.user;
       await updateProfile(studentUser, { displayName: data.name });
 
-      // After creating the student, we need to sign the coach back in.
-      // A more robust solution would use a secondary Firebase app instance or a Cloud Function.
-      // For simplicity here, we re-authenticate the coach.
-      if (originalUser?.email) {
-          // This is a simplified re-authentication. In a real-world scenario, you would
-          // handle this more gracefully, possibly by storing the coach's credentials temporarily
-          // or using a different method to avoid this sign-out/sign-in flow.
-          // For this project, we'll proceed assuming the student user creation is the last step.
-      } else {
-        throw new Error("Sessão do treinador perdida. Faça login novamente.");
-      }
-
+      // WARNING: The coach's session might be replaced by the new user's session here.
+      // This is a known issue with client-side user creation flows. A robust solution
+      // uses backend (e.g., Cloud Functions) to create users.
+      
       const registrationDate = new Date();
       const registrationDateISO = formatISO(registrationDate, { representation: 'date' });
       const selectedPlanDetails = activePlans.find(p => p.name === data.plan);
@@ -186,8 +180,11 @@ export default function NovoAlunoPage() {
         initialDueDate = addDays(registrationDate, selectedPlanDetails.durationDays);
       }
 
-      const studentDataToSave: Record<string, any> = {
-        authId: studentUser.uid,
+      // We use the student's auth UID as the document ID for their record in the coach's subcollection.
+      const studentId = studentUser.uid;
+      const studentDataToSave: Omit<Student, 'id'> & { id: string } = {
+        id: studentId,
+        authId: studentId,
         email: data.email,
         name: data.name,
         phone: data.phone,
@@ -204,43 +201,37 @@ export default function NovoAlunoPage() {
         physicalAssessments: [],
         trainingSheet: null,
         birthDate: (data.birthDate && data.birthDate.trim() !== '') ? data.birthDate.trim() : null,
+        objective: (data.objective && data.objective.trim() !== '') ? data.objective.trim() : null,
+        recurringClassTime: (data.recurringClassTime && data.recurringClassTime.trim() !== '') ? data.recurringClassTime.trim() : null,
+        recurringClassDays: (data.recurringClassDays && data.recurringClassDays.length > 0) ? data.recurringClassDays : null,
+        recurringClassLocation: (data.recurringClassLocation && data.recurringClassLocation !== NO_LOCATION_VALUE && data.recurringClassLocation.trim() !== '') ? data.recurringClassLocation.trim() : null,
+        paymentMethod: data.paymentMethod || null,
       };
-      
-      if (data.objective && data.objective.trim() !== '') studentDataToSave.objective = data.objective.trim();
-      else studentDataToSave.objective = null;
-
-      if (data.recurringClassTime && data.recurringClassTime.trim() !== '') studentDataToSave.recurringClassTime = data.recurringClassTime.trim();
-      else studentDataToSave.recurringClassTime = null;
-      
-      if (data.recurringClassDays && data.recurringClassDays.length > 0) studentDataToSave.recurringClassDays = data.recurringClassDays;
-      else studentDataToSave.recurringClassDays = null;
-      
-      if (data.recurringClassLocation && data.recurringClassLocation !== NO_LOCATION_VALUE && data.recurringClassLocation.trim() !== '') {
-        studentDataToSave.recurringClassLocation = data.recurringClassLocation;
-      } else {
-        studentDataToSave.recurringClassLocation = null; 
-      }
       
       if (data.paymentStatus && data.paymentStatus !== 'pendente') studentDataToSave.paymentStatus = data.paymentStatus;
       if (data.dueDate && data.dueDate.trim() !== '' && data.dueDate !== formatISO(initialDueDate, { representation: 'date' })) studentDataToSave.dueDate = data.dueDate;
       if (typeof data.amountDue === 'number' && !isNaN(data.amountDue) && data.amountDue !== selectedPlanDetails.price) studentDataToSave.amountDue = data.amountDue;
       
-      studentDataToSave.paymentMethod = data.paymentMethod || null;
       studentDataToSave.lastPaymentDate = (data.lastPaymentDate && data.lastPaymentDate.trim() !== '') ? data.lastPaymentDate : null;
       
-      // Save the student document with their UID as the document ID for easy lookup
-      await setDoc(doc(db, 'coaches', userId, 'students', studentUser.uid), studentDataToSave);
+      await setDoc(doc(db, 'coaches', userId, 'students', studentId), studentDataToSave);
 
       toast({
         title: "Aluno Adicionado!",
         description: `${data.name} foi cadastrado com sucesso.`,
       });
+
+      // After creating the user, the auth state might have changed.
+      // It's safest to redirect away.
       router.push('/alunos');
     } catch (error: any) {
       console.error("Error adding student: ", error);
       let description = "Não foi possível cadastrar o aluno. Tente novamente.";
       if (error.code === 'auth/email-already-in-use') {
         description = "Este email já está em uso por outra conta.";
+      } else if (error.code === 'auth/requires-recent-login') {
+        description = "Sua sessão expirou. Por favor, faça login novamente para continuar.";
+        router.push('/login');
       }
       toast({
         title: "Erro ao Adicionar Aluno",
