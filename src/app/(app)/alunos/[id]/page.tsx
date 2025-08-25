@@ -796,7 +796,7 @@ export default function AlunoDetailPage() {
                     </Avatar>
                     <div>
                         <CardTitle className="text-2xl font-headline">{student.name}</CardTitle>
-                        <CardDescription>ID do Aluno: {student.id}</CardDescription>
+                        <CardDescription>ID do Aluno: {student.authId}</CardDescription>
                     </div>
                   </div>
                   {student.status === 'active'
