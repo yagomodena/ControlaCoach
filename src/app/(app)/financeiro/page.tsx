@@ -456,6 +456,7 @@ export default function FinanceiroPage() {
         'th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }\n' +
         'th { background-color: #f2f2f2; }\n' +
         'h1, h2, h3 { color: #333; }\n' +
+        '@page { size: auto;  margin: 25mm 25mm 25mm 25mm; }\n' + // Print margin
         '.report-header { margin-bottom: 20px; text-align: center;}\n' +
         '.summary-section, .details-section { margin-bottom: 30px; }\n' +
         '.summary-item { margin-bottom: 5px; }\n' +
