@@ -6,8 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { LineChart, Activity, Loader2 } from 'lucide-react';
 import { auth, db } from '@/firebase';
-import { doc, getDoc, getDocs, collection, query, where, limit, collectionGroup } from 'firebase/firestore';
-import type { Student, PhysicalAssessment } from '@/types';
+import { doc, getDoc } from 'firebase/firestore';
+import type { Student } from '@/types';
 import { format, parseISO } from 'date-fns';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { CartesianGrid, XAxis, YAxis, Legend, Line, ComposedChart, ResponsiveContainer } from 'recharts';
@@ -20,34 +20,31 @@ export default function StudentEvolutionPage() {
   const router = useRouter();
 
   useEffect(() => {
-    const fetchStudentData = async () => {
-      const studentId = localStorage.getItem('studentId');
-      if (!studentId) {
+    const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
+      if (user) {
+        try {
+          const studentDocRef = doc(db, 'students', user.uid);
+          const studentDocSnap = await getDoc(studentDocRef);
+
+          if (studentDocSnap.exists()) {
+            setStudent({ ...studentDocSnap.data(), id: studentDocSnap.id } as Student);
+          } else {
+            setError("Seus dados de aluno não foram encontrados.");
+          }
+        } catch (err) {
+          console.error(err);
+          setError("Ocorreu um erro ao buscar seus dados de evolução.");
+        } finally {
+          setIsLoading(false);
+        }
+      } else {
         setIsLoading(false);
         setError("Sessão de aluno inválida. Por favor, faça login novamente.");
-        setTimeout(() => router.push('/login/aluno'), 2000);
-        return;
+        setTimeout(() => router.push('/login'), 2000);
       }
-      try {
-        const studentsCollectionGroup = collectionGroup(db, 'students');
-        const q = query(studentsCollectionGroup, where('id', '==', studentId), limit(1));
-        const querySnapshot = await getDocs(q);
+    });
 
-        if (!querySnapshot.empty) {
-          const studentDoc = querySnapshot.docs[0];
-          setStudent({ ...studentDoc.data(), id: studentDoc.id } as Student);
-        } else {
-          setError("Dados do aluno não encontrados.");
-        }
-      } catch (err) {
-        console.error(err);
-        setError("Ocorreu um erro ao buscar seus dados de evolução.");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchStudentData();
+    return () => unsubscribeAuth();
   }, [router]);
   
   const formatDateString = (dateString?: string) => {

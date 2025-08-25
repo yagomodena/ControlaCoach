@@ -10,15 +10,16 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Logo } from '@/components/logo';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, KeyRound, Loader2 } from 'lucide-react';
-import { db } from '@/firebase';
-import { collectionGroup, getDocs, query, where } from 'firebase/firestore';
-
+import { ArrowLeft, KeyRound, Loader2, User, Eye, EyeOff } from 'lucide-react';
+import { auth } from '@/firebase';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 
 export default function AlunoLoginPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [studentId, setStudentId] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -27,39 +28,32 @@ export default function AlunoLoginPage() {
     setError('');
     setIsLoading(true);
 
-    if (!studentId.trim()) {
-        setError("Por favor, insira seu ID de aluno.");
+    if (!email.trim() || !password.trim()) {
+        setError("Por favor, insira seu email e senha.");
         setIsLoading(false);
         return;
     }
     
     try {
-      // This is an insecure way to "log in" a user and is for demonstration only.
-      // In a real application, this should be handled by a proper authentication flow.
-      // We query the "students" collection group to find a student with this ID across all coaches.
-      const studentsCollectionGroup = collectionGroup(db, 'students');
-      const q = query(studentsCollectionGroup, where('id', '==', studentId));
-      const querySnapshot = await getDocs(q);
-
-      if (!querySnapshot.empty) {
-        // In a real app, you'd create a secure session. Here, we'll use local storage.
-        // This is NOT secure for production use.
-        localStorage.setItem('studentId', studentId);
-        toast({
-            title: "Login realizado!",
-            description: "Bem-vindo ao seu portal.",
-        });
-        router.push('/student/dashboard');
-      } else {
-        setError('ID de Aluno não encontrado.');
-      }
+      await signInWithEmailAndPassword(auth, email, password);
+      // On successful login, Firebase automatically handles the session.
+      // The student layout will now pick up the authenticated user.
+      toast({
+          title: "Login realizado!",
+          description: "Bem-vindo ao seu portal.",
+      });
+      router.push('/student/dashboard');
 
     } catch (err: any) {
       console.error('Student Login Error:', err);
-      setError('Ocorreu um erro ao verificar o ID. Tente novamente.');
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+        setError('Email ou senha inválidos.');
+      } else {
+        setError('Erro ao fazer login. Tente novamente.');
+      }
       toast({
         title: 'Erro de Login',
-        description: 'Não foi possível verificar o ID. Verifique se ele está correto.',
+        description: 'Verifique seu email e senha.',
         variant: 'destructive',
       });
     } finally {
@@ -76,26 +70,49 @@ export default function AlunoLoginPage() {
           </div>
           <CardTitle className="text-2xl font-headline">Acesso do Aluno</CardTitle>
           <CardDescription>
-            Insira seu ID de Aluno para continuar.
+            Insira suas credenciais para continuar.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="student-id" className="flex items-center">
-                <KeyRound className="mr-2 h-4 w-4 text-muted-foreground" />
-                Seu ID de Aluno
-              </Label>
-               <Input
-                id="student-id"
-                type="text"
-                placeholder="Insira o ID que seu treinador enviou"
-                value={studentId}
-                onChange={(e) => setStudentId(e.target.value)}
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="seu@email.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 required
                 className="bg-input"
                 disabled={isLoading}
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Senha</Label>
+              <div className="relative">
+                 <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Sua senha"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="bg-input pr-10"
+                  disabled={isLoading}
+                />
+                 <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? "Esconder senha" : "Mostrar senha"}
+                  disabled={isLoading}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </Button>
+              </div>
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
             <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isLoading}>

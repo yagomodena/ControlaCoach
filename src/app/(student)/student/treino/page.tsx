@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Dumbbell, Loader2 } from 'lucide-react';
 import { auth, db } from '@/firebase';
-import { doc, getDoc, getDocs, collection, query, where, limit, collectionGroup } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import type { Student, DayOfWeek } from '@/types';
 import { DAYS_OF_WEEK } from '@/types';
 import { format, parseISO } from 'date-fns';
@@ -22,34 +22,30 @@ export default function StudentWorkoutPage() {
   const router = useRouter();
 
   useEffect(() => {
-    const fetchStudentData = async () => {
-      const studentId = localStorage.getItem('studentId');
-      if (!studentId) {
-        setIsLoading(false);
-        setError("Sessão de aluno inválida. Por favor, faça login novamente.");
-        setTimeout(() => router.push('/login/aluno'), 2000);
-        return;
-      }
-      try {
-        const studentsCollectionGroup = collectionGroup(db, 'students');
-        const q = query(studentsCollectionGroup, where('id', '==', studentId), limit(1));
-        const querySnapshot = await getDocs(q);
-
-        if (!querySnapshot.empty) {
-          const studentDoc = querySnapshot.docs[0];
-          setStudent({ ...studentDoc.data(), id: studentDoc.id } as Student);
+    const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
+        if (user) {
+            try {
+                const studentDocRef = doc(db, 'students', user.uid);
+                const studentDocSnap = await getDoc(studentDocRef);
+                if (studentDocSnap.exists()) {
+                    setStudent({ ...studentDocSnap.data(), id: studentDocSnap.id } as Student);
+                } else {
+                    setError("Dados do aluno não encontrados.");
+                }
+            } catch (err) {
+                console.error(err);
+                setError("Ocorreu um erro ao buscar sua ficha de treino.");
+            } finally {
+                setIsLoading(false);
+            }
         } else {
-          setError("Dados do aluno não encontrados.");
+            setIsLoading(false);
+            setError("Sessão de aluno inválida. Por favor, faça login novamente.");
+            setTimeout(() => router.push('/login'), 2000);
         }
-      } catch (err) {
-        console.error(err);
-        setError("Ocorreu um erro ao buscar sua ficha de treino.");
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    });
 
-    fetchStudentData();
+    return () => unsubscribeAuth();
   }, [router]);
 
   const formatDateString = (dateString?: string) => {

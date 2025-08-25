@@ -23,11 +23,11 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
-import { type Plan, type Location, type DayOfWeek, DAYS_OF_WEEK } from '@/types';
+import { type Plan, type Location, type DayOfWeek, DAYS_OF_WEEK, type Student } from '@/types';
 import { AddPlanDialog } from '@/components/dialogs/add-plan-dialog';
 import { ManagePlansDialog } from '@/components/dialogs/manage-plans-dialog';
 import { db, auth } from '@/firebase';
-import { collection, addDoc, onSnapshot, query, where, orderBy, doc, setDoc } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, where, orderBy, doc, setDoc, writeBatch } from 'firebase/firestore';
 import { formatISO, addDays } from 'date-fns';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 
@@ -150,20 +150,11 @@ export default function NovoAlunoPage() {
         return;
     }
     
-    // For simplicity in this flow, we will create a separate student user in Auth.
-    // In a production app, you might use a Cloud Function to manage user roles
-    // and avoid this client-side user creation flow which can be complex to secure.
     try {
-      // Temporarily use a separate auth instance if needed, or handle re-authentication of coach.
-      // The simplest approach that can have session issues is to just create the user.
       const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
       const studentUser = userCredential.user;
       await updateProfile(studentUser, { displayName: data.name });
 
-      // WARNING: The coach's session might be replaced by the new user's session here.
-      // This is a known issue with client-side user creation flows. A robust solution
-      // uses backend (e.g., Cloud Functions) to create users.
-      
       const registrationDate = new Date();
       const registrationDateISO = formatISO(registrationDate, { representation: 'date' });
       const selectedPlanDetails = activePlans.find(p => p.name === data.plan);
@@ -180,10 +171,9 @@ export default function NovoAlunoPage() {
         initialDueDate = addDays(registrationDate, selectedPlanDetails.durationDays);
       }
 
-      // We use the student's auth UID as the document ID for their record in the coach's subcollection.
       const studentId = studentUser.uid;
-      const studentDataToSave: Omit<Student, 'id'> & { id: string } = {
-        id: studentId,
+      const studentDataToSave: Omit<Student, 'id'> & { coachId: string } = {
+        coachId: userId,
         authId: studentId,
         email: data.email,
         name: data.name,
@@ -214,15 +204,23 @@ export default function NovoAlunoPage() {
       
       studentDataToSave.lastPaymentDate = (data.lastPaymentDate && data.lastPaymentDate.trim() !== '') ? data.lastPaymentDate : null;
       
-      await setDoc(doc(db, 'coaches', userId, 'students', studentId), studentDataToSave);
+      const batch = writeBatch(db);
+      const studentCoachDocRef = doc(db, 'coaches', userId, 'students', studentId);
+      const studentRootDocRef = doc(db, 'students', studentId);
+
+      // Create a version without the coachId for the subcollection
+      const { coachId, ...studentDataForCoachSubcollection } = studentDataToSave;
+      
+      batch.set(studentCoachDocRef, studentDataForCoachSubcollection);
+      batch.set(studentRootDocRef, studentDataToSave);
+      
+      await batch.commit();
 
       toast({
         title: "Aluno Adicionado!",
         description: `${data.name} foi cadastrado com sucesso.`,
       });
 
-      // After creating the user, the auth state might have changed.
-      // It's safest to redirect away.
       router.push('/alunos');
     } catch (error: any) {
       console.error("Error adding student: ", error);
@@ -447,3 +445,4 @@ export default function NovoAlunoPage() {
     </>
   );
 }
+

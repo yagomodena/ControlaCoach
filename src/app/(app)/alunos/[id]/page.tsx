@@ -26,7 +26,7 @@ import { useToast } from '@/hooks/use-toast';
 import { AddPlanDialog } from '@/components/dialogs/add-plan-dialog';
 import { ManagePlansDialog } from '@/components/dialogs/manage-plans-dialog';
 import { db, auth } from '@/firebase';
-import { doc, getDoc, updateDoc, collection, onSnapshot, query, where, orderBy, arrayUnion } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, onSnapshot, query, where, orderBy, arrayUnion, writeBatch } from 'firebase/firestore';
 import { differenceInYears, parseISO, format, formatISO } from 'date-fns';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { CartesianGrid, XAxis, YAxis, Legend, Line, ComposedChart, ResponsiveContainer } from 'recharts';
@@ -203,7 +203,8 @@ export default function AlunoDetailPage() {
         return;
     }
     try {
-      const studentDocRef = doc(db, 'coaches', userId, 'students', studentId);
+      const studentCoachDocRef = doc(db, 'coaches', userId, 'students', studentId);
+      const studentRootDocRef = doc(db, 'students', studentId);
 
       const updatePayload: Record<string, any> = {
         name: data.name,
@@ -213,7 +214,6 @@ export default function AlunoDetailPage() {
         status: data.status,
         birthDate: data.birthDate || null,
         photoURL: data.photoURL || null,
-        // physicalAssessments are handled separately
       };
       
       const hasWorkoutData = data.trainingSheetWorkouts && Object.values(data.trainingSheetWorkouts).some(workout => workout && workout.trim() !== '');
@@ -244,8 +244,11 @@ export default function AlunoDetailPage() {
           updatePayload[key] = null;
         }
       });
-
-      await updateDoc(studentDocRef, updatePayload);
+      
+      const batch = writeBatch(db);
+      batch.update(studentCoachDocRef, updatePayload);
+      batch.update(studentRootDocRef, updatePayload);
+      await batch.commit();
 
       const updatedStudentData = { ...(student || {}), ...updatePayload, id: studentId } as Student;
       setStudent(updatedStudentData);
@@ -294,10 +297,14 @@ export default function AlunoDetailPage() {
 
 
     try {
-      const studentDocRef = doc(db, 'coaches', userId, 'students', studentId);
-      await updateDoc(studentDocRef, {
-        physicalAssessments: arrayUnion(newAssessment)
-      });
+      const studentCoachDocRef = doc(db, 'coaches', userId, 'students', studentId);
+      const studentRootDocRef = doc(db, 'students', studentId);
+
+      const batch = writeBatch(db);
+      batch.update(studentCoachDocRef, { physicalAssessments: arrayUnion(newAssessment) });
+      batch.update(studentRootDocRef, { physicalAssessments: arrayUnion(newAssessment) });
+      await batch.commit();
+
       toast({ title: "Avaliação Adicionada!", description: "A nova avaliação física foi salva." });
       setNewWeight('');
       setNewHeight('');
@@ -1006,3 +1013,4 @@ export default function AlunoDetailPage() {
     </>
   );
 }
+

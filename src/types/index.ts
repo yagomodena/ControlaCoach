@@ -24,8 +24,9 @@ export interface TrainingSheet {
 }
 
 export interface Student {
-  id: string; // Firestore document ID
+  id: string; // Firestore document ID, should be the same as authId
   authId: string; // Firebase Auth User UID
+  coachId?: string; // UID of the coach this student belongs to
   email: string; // Student's login email
   name: string;
   phone: string;

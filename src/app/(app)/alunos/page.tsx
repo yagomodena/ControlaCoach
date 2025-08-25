@@ -24,7 +24,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import type { Student } from '@/types';
 import { db, auth } from '@/firebase';
-import { collection, deleteDoc, doc, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, deleteDoc, doc, query, orderBy, onSnapshot, writeBatch } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 
@@ -87,17 +87,16 @@ export default function AlunosPage() {
   }, [students, searchTerm, statusFilter]);
   
   const handleSendLogin = (student: Student) => {
-    if (!student.phone || !student.id) {
+    if (!student.phone || !student.email) {
       toast({
         title: "Dados Incompletos",
-        description: "O aluno não possui um telefone ou ID de acesso cadastrado para enviar o login.",
+        description: "O aluno não possui um telefone ou email cadastrado para enviar o login.",
         variant: "destructive",
       });
       return;
     }
 
-    const studentLoginPageUrl = `${window.location.origin}/login/aluno`;
-    const message = `Olá, ${student.name.split(' ')[0]}! Para acessar seu portal de aluno, siga as instruções:\n\n1. Acesse o link: ${studentLoginPageUrl}\n2. Insira seu ID de Aluno: *${student.id}*\n\nAproveite para acompanhar seus treinos e sua evolução!`;
+    const message = `Olá, ${student.name.split(' ')[0]}! Aqui estão seus dados de acesso ao portal FitPlanner:\n\n*Email:* ${student.email}\n*Senha:* (a senha que você cadastrou)\n\nPara acessar, use o link: ${window.location.origin}/login\n\nQualquer dúvida, fale com seu treinador.`;
     const whatsappNumber = student.phone.replace(/\D/g, '');
     const whatsappUrl = `https://wa.me/55${whatsappNumber}?text=${encodeURIComponent(message)}`;
     
@@ -111,8 +110,18 @@ export default function AlunosPage() {
     }
     if (window.confirm(`Tem certeza que deseja excluir o aluno "${studentName}"? Esta ação não pode ser desfeita.`)) {
       try {
-        await deleteDoc(doc(db, 'coaches', userId, 'students', studentIdToDelete));
-        setStudents(prevStudents => prevStudents.filter(s => s.id !== studentIdToDelete)); // Update local state
+        const batch = writeBatch(db);
+        const studentCoachRef = doc(db, 'coaches', userId, 'students', studentIdToDelete);
+        const studentRootRef = doc(db, 'students', studentIdToDelete);
+        
+        batch.delete(studentCoachRef);
+        batch.delete(studentRootRef);
+
+        await batch.commit();
+        
+        // Note: The student's Firebase Auth user is not deleted here. 
+        // This should be handled by a backend process for security reasons.
+
         toast({
           title: 'Aluno Excluído!',
           description: `O aluno "${studentName}" foi removido com sucesso.`,
