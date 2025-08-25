@@ -538,11 +538,11 @@ export default function AgendaPage() {
 
   const isLoading = isLoadingStudents || isLoadingLocations || isLoadingAvailability || isLoadingClassSessions || isLoadingBookedClasses || !userId || isHandlingRecurringClick;
   
-  const getAttendanceButtonVariant = (studentId: string, status: AttendanceStatus): 'destructive' | 'secondary' | 'outline' => {
-     const currentStatus = attendance[studentId] || 'pending';
-     if (currentStatus === status) {
-        if(status === 'absent') return 'destructive';
-        if(status === 'pending') return 'secondary';
+  const getAttendanceButtonVariant = (currentStatus: AttendanceStatus, buttonStatus: AttendanceStatus): 'default' | 'destructive' | 'secondary' | 'outline' => {
+     if (currentStatus === buttonStatus) {
+        if(buttonStatus === 'present') return 'default';
+        if(buttonStatus === 'absent') return 'destructive';
+        if(buttonStatus === 'pending') return 'secondary';
      }
      return 'outline';
   }
@@ -729,7 +729,7 @@ export default function AgendaPage() {
                      editedClassStudentIds.map(studentId => {
                       const student = allStudents.find(s => s.id === studentId);
                       if (!student) return null;
-                      const isPresent = attendance[studentId] === 'present';
+                      const currentStatus = attendance[studentId] || 'pending';
                       return (
                         <div key={studentId} className="flex justify-between items-center p-2 rounded-md bg-muted/50">
                             <Label htmlFor={`edit-student-${student.id}`} className="font-normal">
@@ -740,9 +740,13 @@ export default function AgendaPage() {
                                     <TooltipTrigger asChild>
                                         <Button 
                                             size="sm" 
-                                            variant={isPresent ? 'default' : 'outline'}
+                                            variant={getAttendanceButtonVariant(currentStatus, 'present')}
                                             onClick={() => handleAttendanceChange(studentId, 'present')} 
-                                            className={cn("h-8 px-2", isPresent && "bg-green-500 hover:bg-green-600 text-white")}
+                                            className={cn("h-8 px-2", 
+                                                currentStatus === 'present' 
+                                                ? "bg-green-500 hover:bg-green-600 text-white"
+                                                : "hover:bg-green-500/90 hover:text-white"
+                                            )}
                                         >
                                             <CheckCircle className="h-4 w-4"/>
                                         </Button>
@@ -751,13 +755,29 @@ export default function AgendaPage() {
                                 </Tooltip>
                                 <Tooltip>
                                     <TooltipTrigger asChild>
-                                        <Button size="sm" variant={getAttendanceButtonVariant(studentId, 'absent')} onClick={() => handleAttendanceChange(studentId, 'absent')} className="h-8 px-2"><XCircle className="h-4 w-4"/></Button>
+                                         <Button 
+                                            size="sm" 
+                                            variant={getAttendanceButtonVariant(currentStatus, 'absent')}
+                                            onClick={() => handleAttendanceChange(studentId, 'absent')} 
+                                            className={cn("h-8 px-2", 
+                                                currentStatus !== 'absent' && "hover:bg-red-600 hover:text-white"
+                                            )}
+                                        >
+                                            <XCircle className="h-4 w-4"/>
+                                        </Button>
                                     </TooltipTrigger>
                                     <TooltipContent><p>Marcar Falta</p></TooltipContent>
                                 </Tooltip>
                                  <Tooltip>
                                     <TooltipTrigger asChild>
-                                        <Button size="sm" variant={getAttendanceButtonVariant(studentId, 'pending')} onClick={() => handleAttendanceChange(studentId, 'pending')} className="h-8 px-2"><HelpCircle className="h-4 w-4"/></Button>
+                                        <Button 
+                                            size="sm" 
+                                            variant={getAttendanceButtonVariant(currentStatus, 'pending')}
+                                            onClick={() => handleAttendanceChange(studentId, 'pending')} 
+                                            className="h-8 px-2"
+                                        >
+                                            <HelpCircle className="h-4 w-4"/>
+                                        </Button>
                                     </TooltipTrigger>
                                     <TooltipContent><p>Marcar como Pendente</p></TooltipContent>
                                 </Tooltip>
@@ -819,3 +839,4 @@ export default function AgendaPage() {
     </TooltipProvider>
   );
 }
+
