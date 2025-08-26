@@ -50,6 +50,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
 
 const generateHourIntervals = (startHour: number, endHour: number, intervalMinutes: number = 60): string[] => {
   const intervals: string[] = [];
@@ -255,7 +257,7 @@ export default function AgendaPage() {
   };
 
 
-  const getSlotContent = (day: Date, time: string) => {
+  const getSlotContent = (day: Date, time: string, isMobile = false) => {
     const currentSlotDateTime = parse(time, 'HH:mm', day);
     currentSlotDateTime.setSeconds(0,0);
 
@@ -281,13 +283,31 @@ export default function AgendaPage() {
         textMutedColor = 'text-green-100';
       }
 
-      return (
-        <div className={`${bgColor} p-1.5 rounded-md h-full flex flex-col justify-between text-xs cursor-pointer transition-colors`} onClick={() => openEditClassDialog(bookedClass.id)}>
+      const mobileLayout = (
+        <div className={`${bgColor} p-3 rounded-lg w-full text-left`}>
+          <div className="flex justify-between items-start">
+              <div>
+                  <p className={`font-semibold ${textColor}`}>{bookedClass.title}</p>
+                  <p className={`text-sm ${textMutedColor} flex items-center`}><MapPin className="h-4 w-4 mr-1"/>{bookedClass.location}</p>
+              </div>
+              <p className={`text-sm ${textColor} flex items-center`}><Users className="h-4 w-4 mr-1"/>{bookedClass.studentIds.length}</p>
+          </div>
+        </div>
+      );
+
+      const desktopLayout = (
+        <div className={`${bgColor} p-1.5 rounded-md h-full flex flex-col justify-between text-xs cursor-pointer transition-colors`}>
           <div className={textColor}>
             <p className="font-semibold truncate">{bookedClass.title}</p>
             <p className={`truncate ${textMutedColor} flex items-center text-[10px]`}><MapPin className="h-2.5 w-2.5 mr-0.5"/>{bookedClass.location}</p>
           </div>
           <p className={`${textColor} text-[10px] flex items-center`}><Users className="h-2.5 w-2.5 mr-0.5"/>{bookedClass.studentIds.length} aluno(s)</p>
+        </div>
+      );
+
+      return (
+        <div onClick={() => openEditClassDialog(bookedClass.id)} className={isMobile ? "w-full cursor-pointer" : "h-full"}>
+           {isMobile ? mobileLayout : desktopLayout}
         </div>
       );
     }
@@ -299,11 +319,18 @@ export default function AgendaPage() {
         s.recurringClassDays?.includes(dayOfWeekName as DayOfWeek)
     );
     if (recurringStudent) {
-      return (
-        <div 
-          className="bg-accent/70 text-accent-foreground p-1.5 rounded-md h-full flex flex-col justify-between text-xs cursor-pointer hover:bg-accent transition-colors"
-          onClick={() => handleRecurringClassClick(day, time, recurringStudent)}
-        >
+       const mobileLayout = (
+         <div className="bg-accent/70 text-accent-foreground p-3 rounded-lg w-full text-left">
+           <div className="flex justify-between items-center">
+              <p className="font-semibold">Rec: {recurringStudent.name}</p>
+              <p className="text-sm flex items-center"><UserCircle className="h-4 w-4 mr-1"/>Aluno Fixo</p>
+           </div>
+           <p className="text-sm text-accent-foreground/80 flex items-center"><MapPin className="h-4 w-4 mr-1"/>{recurringStudent.recurringClassLocation || 'N/D'}</p>
+         </div>
+      );
+
+      const desktopLayout = (
+        <div className="bg-accent/70 text-accent-foreground p-1.5 rounded-md h-full flex flex-col justify-between text-xs cursor-pointer hover:bg-accent transition-colors">
            <div>
             <p className="font-semibold truncate">Rec: {recurringStudent.name}</p>
             <p className="truncate text-accent-foreground/80 flex items-center text-[10px]"><MapPin className="h-2.5 w-2.5 mr-0.5"/>{recurringStudent.recurringClassLocation || 'N/D'}</p>
@@ -311,10 +338,16 @@ export default function AgendaPage() {
            <p className="text-[10px] flex items-center"><UserCircle className="h-2.5 w-2.5 mr-0.5"/>Aluno Fixo</p>
         </div>
       );
+
+      return (
+        <div onClick={() => handleRecurringClassClick(day, time, recurringStudent)} className={isMobile ? "w-full cursor-pointer" : "h-full"}>
+            {isMobile ? mobileLayout : desktopLayout}
+        </div>
+      );
     }
     
     if (!coachAvailability) {
-        return <div className="bg-muted/30 h-full rounded-md"></div>; 
+        return <div className={cn("bg-muted/30 h-full rounded-md", isMobile && "h-12")}></div>; 
     }
 
     const numericDayOfWeek = getDay(day);
@@ -355,7 +388,7 @@ export default function AgendaPage() {
 
     if (!isCoachWorking || isCoachOnBreak) {
         return (
-            <div className="bg-slate-100 dark:bg-slate-800/50 h-full rounded-md flex items-center justify-center text-center text-xs text-slate-500 dark:text-slate-400 p-1 cursor-not-allowed">
+            <div className={cn("bg-slate-100 dark:bg-slate-800/50 rounded-md flex items-center justify-center text-center text-xs text-slate-500 dark:text-slate-400 p-1 cursor-not-allowed", isMobile ? 'h-16' : 'h-full')}>
                 Indisponível
             </div>
         );
@@ -367,18 +400,34 @@ export default function AgendaPage() {
     );
 
     if (configuredSession) {
-      return (
-        <div className="bg-green-500/10 border border-green-500/30 p-1.5 rounded-md h-full flex flex-col justify-center items-center text-xs text-green-700 hover:bg-green-500/20 transition-colors cursor-pointer" onClick={() => openStudentSelectionDialog(day, time, configuredSession.location)}>
+      const mobileLayout = (
+        <div className="bg-green-500/10 border border-green-500/30 p-3 rounded-lg w-full flex justify-between items-center text-green-700 hover:bg-green-500/20 transition-colors">
+            <div>
+              <p className="font-semibold">Disponível</p>
+              <p className="text-sm">({configuredSession.location})</p>
+            </div>
+             <PlusCircle className="h-6 w-6 opacity-70"/>
+        </div>
+      );
+
+      const desktopLayout = (
+        <div className="bg-green-500/10 border border-green-500/30 p-1.5 rounded-md h-full flex flex-col justify-center items-center text-xs text-green-700 hover:bg-green-500/20 transition-colors cursor-pointer">
             <p className="font-medium text-center truncate">Disponível</p>
             <p className="text-[10px] text-center truncate">({configuredSession.location})</p>
              <PlusCircle className="h-3.5 w-3.5 mt-1 opacity-70"/>
         </div>
       );
+
+      return (
+        <div onClick={() => openStudentSelectionDialog(day, time, configuredSession.location)} className={isMobile ? "w-full cursor-pointer" : "h-full"}>
+          {isMobile ? mobileLayout : desktopLayout}
+        </div>
+      );
     }
     
     return (
-      <div className="bg-background hover:bg-muted p-1.5 rounded-md h-full flex justify-center items-center cursor-pointer border border-transparent hover:border-primary/50 transition-colors" onClick={() => openStudentSelectionDialog(day, time)}>
-        <PlusCircle className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
+      <div className={cn("bg-background hover:bg-muted rounded-md flex justify-center items-center cursor-pointer border border-transparent hover:border-primary/50 transition-colors", isMobile ? 'h-16' : 'h-full')} onClick={() => openStudentSelectionDialog(day, time)}>
+        <PlusCircle className={cn("text-muted-foreground group-hover:text-primary", isMobile ? "h-6 w-6" : "h-4 w-4")} />
       </div>
     );
   };
@@ -598,7 +647,9 @@ export default function AgendaPage() {
             </CardContent>
         </Card>
       ) : (
-        <div className="overflow-x-auto bg-card p-1 rounded-lg shadow-lg">
+        <>
+        {/* Desktop View: Table */}
+        <div className="hidden md:block overflow-x-auto bg-card p-1 rounded-lg shadow-lg">
           <table className="min-w-full divide-y divide-border border border-border">
             <thead className="bg-muted/50">
               <tr>
@@ -618,7 +669,7 @@ export default function AgendaPage() {
                   {weekDays.map(day => (
                     <td key={day.toISOString() + time} className="px-1 py-1 whitespace-nowrap text-sm text-foreground h-20 min-h-[5rem] border-l border-border group">
                        <div className="h-full w-full">
-                         {getSlotContent(day, time)}
+                         {getSlotContent(day, time, false)}
                        </div>
                     </td>
                   ))}
@@ -627,6 +678,40 @@ export default function AgendaPage() {
             </tbody>
           </table>
         </div>
+
+        {/* Mobile View: Tabs */}
+        <div className="block md:hidden">
+          <Tabs defaultValue={format(new Date(), 'yyyy-MM-dd')} className="w-full">
+            <TabsList className="grid w-full grid-cols-4 sm:grid-cols-7 h-auto">
+              {weekDays.map(day => (
+                <TabsTrigger key={`trigger-${day.toISOString()}`} value={format(day, 'yyyy-MM-dd')} className="flex-col h-auto py-2">
+                    <span className="font-semibold">{format(day, 'EEE', { locale: ptBR })}</span>
+                    <span className="text-xs text-muted-foreground">{format(day, 'dd/MM')}</span>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+            {weekDays.map(day => (
+              <TabsContent key={`content-${day.toISOString()}`} value={format(day, 'yyyy-MM-dd')}>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>{format(day, "EEEE, dd 'de' MMMM", { locale: ptBR })}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {timeIntervals.map(time => (
+                      <div key={`mobile-${day.toISOString()}-${time}`} className="flex items-center gap-4">
+                          <span className="w-12 text-sm text-muted-foreground">{time}</span>
+                          <div className="flex-1">
+                            {getSlotContent(day, time, true)}
+                          </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            ))}
+          </Tabs>
+        </div>
+        </>
       )}
 
       <Dialog open={isStudentSelectionDialogOpen} onOpenChange={setIsStudentSelectionDialogOpen}>
@@ -839,4 +924,3 @@ export default function AgendaPage() {
     </TooltipProvider>
   );
 }
-
