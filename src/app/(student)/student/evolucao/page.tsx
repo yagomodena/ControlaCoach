@@ -4,14 +4,15 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { LineChart, Activity, Loader2 } from 'lucide-react';
+import { LineChart, Activity, Loader2, Dumbbell } from 'lucide-react';
 import { auth, db } from '@/firebase';
 import { doc, getDoc } from 'firebase/firestore';
-import type { Student } from '@/types';
+import type { Student, WorkoutLog } from '@/types';
 import { format, parseISO } from 'date-fns';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { CartesianGrid, XAxis, YAxis, Legend, Line, ComposedChart, ResponsiveContainer } from 'recharts';
 import { useRouter } from 'next/navigation';
+import { Badge } from '@/components/ui/badge';
 
 export default function StudentEvolutionPage() {
   const [student, setStudent] = useState<Student | null>(null);
@@ -59,6 +60,8 @@ export default function StudentEvolutionPage() {
     Peso: a.weight,
     'Gordura Corporal (%)': a.bodyFatPercentage,
   }));
+  
+  const sortedWorkoutLogs = student?.workoutLogs?.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()) || [];
 
 
   if (isLoading) {
@@ -79,7 +82,7 @@ export default function StudentEvolutionPage() {
      )
   }
   
-  if (!student || !sortedAssessments.length) {
+  if (!student) {
      return (
         <Card className="shadow-lg">
             <CardHeader>
@@ -87,7 +90,7 @@ export default function StudentEvolutionPage() {
                 <CardDescription>Acompanhe seu progresso ao longo do tempo.</CardDescription>
             </CardHeader>
             <CardContent>
-                <p className="text-muted-foreground text-center py-10">Nenhuma avaliação física encontrada. Peça para seu treinador registrar uma!</p>
+                <p className="text-muted-foreground text-center py-10">Não foi possível carregar seus dados.</p>
             </CardContent>
         </Card>
      )
@@ -97,7 +100,7 @@ export default function StudentEvolutionPage() {
     <div className="container mx-auto py-8 space-y-8">
       <div>
         <h1 className="text-3xl font-headline font-bold text-foreground">Minha Evolução</h1>
-        <p className="text-muted-foreground">Acompanhe seu progresso e suas medidas.</p>
+        <p className="text-muted-foreground">Acompanhe seu progresso, suas medidas e o histórico de cargas.</p>
       </div>
 
        <Card className="shadow-lg">
@@ -131,10 +134,11 @@ export default function StudentEvolutionPage() {
       
       <Card className="shadow-lg">
         <CardHeader>
-          <CardTitle className="flex items-center"><Activity className="mr-2 h-5 w-5 text-primary"/>Histórico de Avaliações</CardTitle>
+          <CardTitle className="flex items-center"><Activity className="mr-2 h-5 w-5 text-primary"/>Histórico de Avaliações Físicas</CardTitle>
           <CardDescription>Todas as suas medidas registradas pelo seu treinador.</CardDescription>
         </CardHeader>
         <CardContent>
+         {sortedAssessments.length > 0 ? (
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -150,7 +154,7 @@ export default function StudentEvolutionPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedAssessments.map((item, index) => (
+                {sortedAssessments.slice().reverse().map((item, index) => (
                   <TableRow key={index}>
                     <TableCell className="font-medium">{format(parseISO(item.date), 'dd/MM/yyyy')}</TableCell>
                     <TableCell>{item.weight?.toFixed(1) || '-'} kg</TableCell>
@@ -161,12 +165,49 @@ export default function StudentEvolutionPage() {
                     <TableCell>{item.rightArm?.toFixed(1) || '-'} cm</TableCell>
                     <TableCell>{item.rightThigh?.toFixed(1) || '-'} cm</TableCell>
                   </TableRow>
-                )).reverse()}
+                ))}
               </TableBody>
             </Table>
           </div>
+         ) : (
+             <p className="text-muted-foreground text-center py-10">Nenhuma avaliação física encontrada.</p>
+         )}
         </CardContent>
       </Card>
+
+      <Card className="shadow-lg">
+        <CardHeader>
+          <CardTitle className="flex items-center"><Dumbbell className="mr-2 h-5 w-5 text-primary"/>Histórico de Cargas</CardTitle>
+          <CardDescription>Seus últimos pesos registrados nos treinos.</CardDescription>
+        </CardHeader>
+        <CardContent>
+         {sortedWorkoutLogs.length > 0 ? (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Data</TableHead>
+                  <TableHead>Exercício</TableHead>
+                  <TableHead className="text-right">Peso Utilizado</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sortedWorkoutLogs.map((log) => (
+                  <TableRow key={log.logId}>
+                    <TableCell className="font-medium">{format(parseISO(log.date), 'dd/MM/yyyy HH:mm')}</TableCell>
+                    <TableCell>{log.exerciseName}</TableCell>
+                    <TableCell className="text-right"><Badge variant="secondary">{log.weightUsed} kg</Badge></TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+         ) : (
+            <p className="text-muted-foreground text-center py-10">Nenhum peso registrado ainda. Comece a registrar na tela "Meu Treino"!</p>
+         )}
+        </CardContent>
+      </Card>
+
     </div>
   );
 }

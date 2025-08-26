@@ -32,6 +32,15 @@ export interface TrainingSheet {
   workouts: Partial<Record<DayOfWeek, Exercise[]>>; 
 }
 
+export interface WorkoutLog {
+  logId: string; // Unique ID for the log entry
+  date: string; // ISO String
+  exerciseName: string;
+  exerciseId: string;
+  weightUsed: number;
+  notes?: string;
+}
+
 export interface Student {
   id: string; // Firestore document ID, should be the same as authId
   authId: string; // Firebase Auth User UID
@@ -60,6 +69,7 @@ export interface Student {
   
   physicalAssessments?: PhysicalAssessment[] | null;
   trainingSheet?: TrainingSheet | null;
+  workoutLogs?: WorkoutLog[] | null;
 }
 
 export interface Plan {
