@@ -12,7 +12,7 @@ import { Logo } from '@/components/logo';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, KeyRound, Loader2, User } from 'lucide-react';
 import { db } from '@/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { collectionGroup, getDocs, query, where } from 'firebase/firestore';
 
 export default function AlunoLoginPage() {
   const router = useRouter();
@@ -33,14 +33,15 @@ export default function AlunoLoginPage() {
     }
     
     try {
-      // Check if the student ID exists in the root /students collection
-      const studentDocRef = doc(db, 'students', studentId.trim());
-      const studentDocSnap = await getDoc(studentDocRef);
+      // Use a collection group query to find the student document in any `students` subcollection.
+      const studentsCollectionGroup = collectionGroup(db, 'students');
+      const q = query(studentsCollectionGroup, where('__name__', '==', `coaches/${studentId.split('/')[1]}/students/${studentId.split('/')[3]}`));
+      const querySnapshot = await getDocs(q);
 
-      if (studentDocSnap.exists()) {
+      if (!querySnapshot.empty) {
          // The student exists. For this ID-based login, we'll store the ID
          // in session storage and redirect.
-         sessionStorage.setItem('fitplanner_student_id', studentId.trim());
+         sessionStorage.setItem('fitplanner_student_id', querySnapshot.docs[0].id);
 
          toast({
              title: "Login realizado!",
@@ -74,7 +75,7 @@ export default function AlunoLoginPage() {
       <Card className="w-full max-w-sm shadow-xl">
         <CardHeader className="space-y-1 text-center">
           <div className="mx-auto mb-6">
-            <Logo />
+            <Logo collapsed={true} />
           </div>
           <CardTitle className="text-2xl font-headline">Acesso do Aluno</CardTitle>
           <CardDescription>

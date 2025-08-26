@@ -54,7 +54,7 @@ export default function LoginPage() {
       <Card className="w-full max-w-sm shadow-xl">
         <CardHeader className="space-y-1 text-center">
           <div className="mx-auto mb-6">
-            <Logo />
+            <Logo collapsed={true} />
           </div>
           <CardTitle className="text-2xl font-headline">Acesso do Treinador</CardTitle>
           <CardDescription>
