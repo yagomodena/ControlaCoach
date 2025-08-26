@@ -12,7 +12,7 @@ import { Logo } from '@/components/logo';
 import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, KeyRound, Loader2, User } from 'lucide-react';
 import { db } from '@/firebase';
-import { collectionGroup, getDocs, query, where } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 
 export default function AlunoLoginPage() {
   const router = useRouter();
@@ -33,15 +33,13 @@ export default function AlunoLoginPage() {
     }
     
     try {
-      // Use a collection group query to find the student document in any `students` subcollection.
-      const studentsCollectionGroup = collectionGroup(db, 'students');
-      const q = query(studentsCollectionGroup, where('__name__', '==', `coaches/${studentId.split('/')[1]}/students/${studentId.split('/')[3]}`));
-      const querySnapshot = await getDocs(q);
+      const studentDocRef = doc(db, 'students', studentId.trim());
+      const studentDocSnap = await getDoc(studentDocRef);
 
-      if (!querySnapshot.empty) {
+      if (studentDocSnap.exists()) {
          // The student exists. For this ID-based login, we'll store the ID
          // in session storage and redirect.
-         sessionStorage.setItem('fitplanner_student_id', querySnapshot.docs[0].id);
+         sessionStorage.setItem('fitplanner_student_id', studentDocSnap.id);
 
          toast({
              title: "Login realizado!",
