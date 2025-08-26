@@ -845,22 +845,22 @@ export default function FinanceiroPage() {
                     <CardHeader>
                       <CardTitle className="text-lg">Resumo do Mês</CardTitle>
                     </CardHeader>
-                    <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <CardContent className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                       <div className="p-4 bg-green-500/10 rounded-lg">
                         <p className="text-sm text-green-700 font-medium">Saldo do Mês</p>
-                        <p className={`text-2xl font-bold ${reportData.totalReceived - reportData.totalExpenses >= 0 ? 'text-green-600' : 'text-red-600'}`}>R$ {(reportData.totalReceived - reportData.totalExpenses).toFixed(2)}</p>
+                        <p className={`text-xl lg:text-2xl font-bold ${reportData.totalReceived - reportData.totalExpenses >= 0 ? 'text-green-600' : 'text-red-600'}`}>R$ {(reportData.totalReceived - reportData.totalExpenses).toFixed(2)}</p>
                       </div>
                       <div className="p-4 bg-green-500/10 rounded-lg">
                         <p className="text-sm text-green-700 font-medium">Total Recebido</p>
-                        <p className="text-2xl font-bold text-green-600">R$ {reportData.totalReceived.toFixed(2)}</p>
+                        <p className="text-xl lg:text-2xl font-bold text-green-600">R$ {reportData.totalReceived.toFixed(2)}</p>
                       </div>
                       <div className="p-4 bg-red-500/10 rounded-lg">
                         <p className="text-sm text-red-700 font-medium">Total de Saídas</p>
-                        <p className="text-2xl font-bold text-red-600">R$ {reportData.totalExpenses.toFixed(2)}</p>
+                        <p className="text-xl lg:text-2xl font-bold text-red-600">R$ {reportData.totalExpenses.toFixed(2)}</p>
                       </div>
                       <div className="p-4 bg-yellow-500/10 rounded-lg">
-                        <p className="text-sm text-yellow-700 font-medium">Total Pendente/Vencido</p>
-                        <p className="text-2xl font-bold text-yellow-600">R$ {(reportData.totalPending + reportData.totalOverdue).toFixed(2)}</p>
+                        <p className="text-sm text-yellow-700 font-medium">Total a Receber</p>
+                        <p className="text-xl lg:text-2xl font-bold text-yellow-600">R$ {(reportData.totalPending + reportData.totalOverdue).toFixed(2)}</p>
                       </div>
                     </CardContent>
                   </Card>
@@ -871,6 +871,7 @@ export default function FinanceiroPage() {
                     </CardHeader>
                     <CardContent>
                       {reportData.paidInMonth.length > 0 ? (
+                        <div className="overflow-x-auto">
                         <Table>
                           <TableHeader>
                             <TableRow>
@@ -891,6 +892,7 @@ export default function FinanceiroPage() {
                             ))}
                           </TableBody>
                         </Table>
+                        </div>
                       ) : (
                         <p className="text-muted-foreground">Nenhum recebimento em {reportData?.monthYear}.</p>
                       )}
@@ -903,6 +905,7 @@ export default function FinanceiroPage() {
                     </CardHeader>
                     <CardContent>
                       {reportData.expensesInMonth.length > 0 ? (
+                        <div className="overflow-x-auto">
                         <Table>
                           <TableHeader>
                             <TableRow>
@@ -923,6 +926,7 @@ export default function FinanceiroPage() {
                             ))}
                           </TableBody>
                         </Table>
+                        </div>
                       ) : (
                         <p className="text-muted-foreground">Nenhuma saída registrada em {reportData?.monthYear}.</p>
                       )}
@@ -935,6 +939,7 @@ export default function FinanceiroPage() {
                     </CardHeader>
                     <CardContent>
                       {reportData.outstandingInMonth.length > 0 ? (
+                        <div className="overflow-x-auto">
                         <Table>
                           <TableHeader>
                             <TableRow>
@@ -955,6 +960,7 @@ export default function FinanceiroPage() {
                             ))}
                           </TableBody>
                         </Table>
+                        </div>
                       ) : (
                         <p className="text-muted-foreground">Nenhum pagamento pendente ou vencido com vencimento em {reportData?.monthYear}.</p>
                       )}
@@ -980,3 +986,4 @@ export default function FinanceiroPage() {
     </>
   );
 }
+
