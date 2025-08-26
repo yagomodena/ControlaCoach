@@ -20,8 +20,8 @@ export function Logo({ collapsed = false, userType = 'coach' }: LogoProps) {
   }, []);
 
   const currentTheme = theme === 'system' ? systemTheme : theme;
-  const logoSrc = currentTheme === 'dark' ? '/images/FP-Branco.png' : '/images/FP-Preto.png';
-  const placeholderSrc = '/images/FP-Preto.png';
+  const logoSrc = currentTheme === 'dark' ? '/images/FP-SP.png' : '/images/FP-SB.png';
+  const placeholderSrc = '/images/FP-SP.png';
   const homeUrl = userType === 'student' ? '/student/dashboard' : '/dashboard';
 
   return (
@@ -36,7 +36,7 @@ export function Logo({ collapsed = false, userType = 'coach' }: LogoProps) {
           alt="FitPlanner Logo"
           width={120}
           height={40}
-          className="group-hover:opacity-90 transition-opacity duration-200 object-contain"
+          className="w-[120px] h-[40px] md:w-[240px] md:h-[80px] object-contain group-hover:opacity-90 transition-opacity duration-200"
           priority
         />
       ) : (
@@ -46,7 +46,7 @@ export function Logo({ collapsed = false, userType = 'coach' }: LogoProps) {
           width={120}
           height={40}
           aria-hidden="true"
-          className="group-hover:opacity-90 transition-opacity duration-200 object-contain"
+          className="w-[120px] h-[40px] object-contain group-hover:opacity-90 transition-opacity duration-200"
         />
       )}
 
