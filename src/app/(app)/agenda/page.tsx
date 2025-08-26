@@ -759,139 +759,142 @@ export default function AgendaPage() {
       </Dialog>
 
       <Dialog open={isEditClassDialogOpen} onOpenChange={setIsEditClassDialogOpen}>
-        <DialogContent className="w-[90vw] sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Gerenciar Aula - {classBeingEdited?.time}</DialogTitle>
-            <DialogDescription>
-              Edite os detalhes e controle a presença para a aula de {classBeingEdited?.time} em {classBeingEdited ? format(parseISO(classBeingEdited.date), 'dd/MM/yyyy', { locale: ptBR }) : ''}.
-            </DialogDescription>
-          </DialogHeader>
-          {classBeingEdited && (
-            <ScrollArea className="max-h-[70vh] -mr-3 pr-3">
-            <div className="py-4 space-y-4 pr-1">
-              <div className="space-y-1">
-                <Label htmlFor="editClassTitle">Título da Aula</Label>
-                <Input 
-                  id="editClassTitle" 
-                  value={editedClassTitle} 
-                  onChange={(e) => setEditedClassTitle(e.target.value)} 
-                  placeholder="Ex: Aula Particular - João"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="editClassLocation" className="flex items-center"><MapPin className="h-4 w-4 mr-1"/>Local da Aula</Label>
-                <div className="flex items-center gap-2">
-                  <Select
-                    value={editedClassLocation}
-                    onValueChange={setEditedClassLocation}
-                    disabled={isLoadingLocations}
-                  >
-                    <SelectTrigger id="editClassLocation" className="flex-grow">
-                      <SelectValue placeholder={isLoadingLocations ? "Carregando..." : "Selecione o local"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="A definir">A definir</SelectItem>
-                      {activeLocations.map(loc => (
-                        <SelectItem key={loc.id} value={loc.name}>{loc.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button variant="outline" size="icon" asChild>
-                    <Link href="/locais/novo" target="_blank" rel="noopener noreferrer">
-                      <PlusCircle className="h-4 w-4" />
-                      <span className="sr-only">Adicionar Novo Local</span>
-                    </Link>
-                  </Button>
-                </div>
-              </div>
+          <DialogContent className="w-[90vw] max-w-lg flex flex-col max-h-[95vh]">
+              <DialogHeader className="flex-shrink-0">
+                  <DialogTitle>Gerenciar Aula - {classBeingEdited?.time}</DialogTitle>
+                  <DialogDescription>
+                      Edite os detalhes e controle a presença para a aula de {classBeingEdited?.time} em {classBeingEdited ? format(parseISO(classBeingEdited.date), 'dd/MM/yyyy', { locale: ptBR }) : ''}.
+                  </DialogDescription>
+              </DialogHeader>
               
-              <Card className="bg-muted/30">
-                <CardHeader className="p-4">
-                  <CardTitle className="text-base font-medium flex items-center">Controle de Presença</CardTitle>
-                </CardHeader>
-                <CardContent className="p-4 pt-0 space-y-3">
-                    {isLoadingStudents ? (
-                      <div className="flex justify-center items-center py-4"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
-                    ) : editedClassStudentIds.length > 0 ? (
-                      editedClassStudentIds.map(studentId => {
-                        const student = allStudents.find(s => s.id === studentId);
-                        if (!student) return null;
-                        const currentStatus = attendance[studentId] || 'pending';
-                        return (
-                          <div key={studentId} className="flex flex-col sm:flex-row justify-between items-center p-2 rounded-md bg-background/50">
-                              <Label htmlFor={`edit-student-${student.id}`} className="font-normal mb-2 sm:mb-0">
-                                {student.name}
-                              </Label>
-                              <div className="flex items-center gap-1 w-full sm:w-auto">
-                                  <Tooltip>
-                                      <TooltipTrigger asChild><Button size="sm" variant={getAttendanceButtonVariant(currentStatus, 'present')} onClick={() => handleAttendanceChange(studentId, 'present')} className={cn("h-8 px-2 flex-1", currentStatus === 'present' ? "bg-green-500 hover:bg-green-600 text-white" : "hover:bg-green-500/90 hover:text-white")}><CheckCircle className="h-4 w-4"/></Button></TooltipTrigger>
-                                      <TooltipContent><p>Presente</p></TooltipContent>
-                                  </Tooltip>
-                                  <Tooltip>
-                                      <TooltipTrigger asChild><Button size="sm" variant={getAttendanceButtonVariant(currentStatus, 'absent')} onClick={() => handleAttendanceChange(studentId, 'absent')} className={cn("h-8 px-2 flex-1", currentStatus !== 'absent' && "hover:bg-red-600 hover:text-white")}><XCircle className="h-4 w-4"/></Button></TooltipTrigger>
-                                      <TooltipContent><p>Faltou</p></TooltipContent>
-                                  </Tooltip>
-                                  <Tooltip>
-                                      <TooltipTrigger asChild><Button size="sm" variant={getAttendanceButtonVariant(currentStatus, 'pending')} onClick={() => handleAttendanceChange(studentId, 'pending')} className="h-8 px-2 flex-1"><HelpCircle className="h-4 w-4"/></Button></TooltipTrigger>
-                                      <TooltipContent><p>Pendente</p></TooltipContent>
-                                  </Tooltip>
+              {classBeingEdited && (
+                  <ScrollArea className="flex-grow -mr-4 pr-4">
+                      <div className="space-y-4 pr-1 py-1">
+                          <div className="space-y-1">
+                              <Label htmlFor="editClassTitle">Título da Aula</Label>
+                              <Input 
+                                  id="editClassTitle" 
+                                  value={editedClassTitle} 
+                                  onChange={(e) => setEditedClassTitle(e.target.value)} 
+                                  placeholder="Ex: Aula Particular - João"
+                              />
+                          </div>
+                          <div className="space-y-1">
+                              <Label htmlFor="editClassLocation" className="flex items-center"><MapPin className="h-4 w-4 mr-1"/>Local da Aula</Label>
+                              <div className="flex items-center gap-2">
+                                  <Select
+                                      value={editedClassLocation}
+                                      onValueChange={setEditedClassLocation}
+                                      disabled={isLoadingLocations}
+                                  >
+                                      <SelectTrigger id="editClassLocation" className="flex-grow">
+                                          <SelectValue placeholder={isLoadingLocations ? "Carregando..." : "Selecione o local"} />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                          <SelectItem value="A definir">A definir</SelectItem>
+                                          {activeLocations.map(loc => (
+                                              <SelectItem key={loc.id} value={loc.name}>{loc.name}</SelectItem>
+                                          ))}
+                                      </SelectContent>
+                                  </Select>
+                                  <Button variant="outline" size="icon" asChild>
+                                      <Link href="/locais/novo" target="_blank" rel="noopener noreferrer">
+                                          <PlusCircle className="h-4 w-4" />
+                                          <span className="sr-only">Adicionar Novo Local</span>
+                                      </Link>
+                                  </Button>
                               </div>
                           </div>
-                        )
-                      })
-                    ) : (
-                      <p className="text-sm text-muted-foreground text-center py-2">Nenhum aluno inscrito nesta aula.</p>
-                    )}
-                </CardContent>
-              </Card>
+                          
+                          <Card className="bg-muted/30">
+                              <CardHeader className="p-4">
+                                  <CardTitle className="text-base font-medium flex items-center">Controle de Presença</CardTitle>
+                              </CardHeader>
+                              <CardContent className="p-4 pt-0 space-y-3">
+                                  {isLoadingStudents ? (
+                                      <div className="flex justify-center items-center py-4"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+                                  ) : editedClassStudentIds.length > 0 ? (
+                                      editedClassStudentIds.map(studentId => {
+                                          const student = allStudents.find(s => s.id === studentId);
+                                          if (!student) return null;
+                                          const currentStatus = attendance[studentId] || 'pending';
+                                          return (
+                                              <div key={studentId} className="flex flex-col sm:flex-row justify-between items-center p-2 rounded-md bg-background/50">
+                                                  <Label htmlFor={`edit-student-${student.id}`} className="font-normal mb-2 sm:mb-0">
+                                                      {student.name}
+                                                  </Label>
+                                                  <div className="flex items-center gap-1 w-full sm:w-auto">
+                                                      <Tooltip>
+                                                          <TooltipTrigger asChild><Button size="sm" variant={getAttendanceButtonVariant(currentStatus, 'present')} onClick={() => handleAttendanceChange(studentId, 'present')} className={cn("h-8 px-2 flex-1", currentStatus === 'present' ? "bg-green-500 hover:bg-green-600 text-white" : "hover:bg-green-500/90 hover:text-white")}><CheckCircle className="h-4 w-4"/></Button></TooltipTrigger>
+                                                          <TooltipContent><p>Presente</p></TooltipContent>
+                                                      </Tooltip>
+                                                      <Tooltip>
+                                                          <TooltipTrigger asChild><Button size="sm" variant={getAttendanceButtonVariant(currentStatus, 'absent')} onClick={() => handleAttendanceChange(studentId, 'absent')} className={cn("h-8 px-2 flex-1", currentStatus !== 'absent' && "hover:bg-red-600 hover:text-white")}><XCircle className="h-4 w-4"/></Button></TooltipTrigger>
+                                                          <TooltipContent><p>Faltou</p></TooltipContent>
+                                                      </Tooltip>
+                                                      <Tooltip>
+                                                          <TooltipTrigger asChild><Button size="sm" variant={getAttendanceButtonVariant(currentStatus, 'pending')} onClick={() => handleAttendanceChange(studentId, 'pending')} className="h-8 px-2 flex-1"><HelpCircle className="h-4 w-4"/></Button></TooltipTrigger>
+                                                          <TooltipContent><p>Pendente</p></TooltipContent>
+                                                      </Tooltip>
+                                                  </div>
+                                              </div>
+                                          )
+                                      })
+                                  ) : (
+                                      <p className="text-sm text-muted-foreground text-center py-2">Nenhum aluno inscrito nesta aula.</p>
+                                  )}
+                              </CardContent>
+                          </Card>
 
-              <Card className="bg-muted/30">
-                 <CardHeader className="p-4">
-                  <CardTitle className="text-base font-medium flex items-center">Editar Alunos Inscritos</CardTitle>
-                </CardHeader>
-                <CardContent className="p-4 pt-0">
-                  <ScrollArea className="h-[150px] w-full rounded-md border p-4 bg-background">
-                  {isLoadingStudents ? (
-                      <div className="flex justify-center items-center h-full">
-                          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                          <Card className="bg-muted/30">
+                              <CardHeader className="p-4">
+                                  <CardTitle className="text-base font-medium flex items-center">Editar Alunos Inscritos</CardTitle>
+                              </CardHeader>
+                              <CardContent className="p-4 pt-0">
+                                  <ScrollArea className="h-[150px] w-full rounded-md border p-4 bg-background">
+                                      {isLoadingStudents ? (
+                                          <div className="flex justify-center items-center h-full">
+                                              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                                          </div>
+                                      ) : activeStudentsList.length > 0 ? (
+                                          activeStudentsList.map(student => (
+                                              <div key={student.id} className="flex items-center space-x-2 mb-2">
+                                                  <Checkbox
+                                                      id={`edit-student-${student.id}`}
+                                                      checked={editedClassStudentIds.includes(student.id)}
+                                                      onCheckedChange={(checked) => handleStudentSelectionChangeForEdit(student.id, !!checked)}
+                                                  />
+                                                  <Label htmlFor={`edit-student-${student.id}`} className="font-normal">
+                                                      {student.name}
+                                                  </Label>
+                                              </div>
+                                          ))
+                                      ) : (
+                                          <p className="text-sm text-muted-foreground">Nenhum aluno ativo encontrado.</p>
+                                      )}
+                                  </ScrollArea>
+                              </CardContent>
+                          </Card>
                       </div>
-                    ) : activeStudentsList.length > 0 ? (
-                      activeStudentsList.map(student => (
-                        <div key={student.id} className="flex items-center space-x-2 mb-2">
-                          <Checkbox
-                            id={`edit-student-${student.id}`}
-                            checked={editedClassStudentIds.includes(student.id)}
-                            onCheckedChange={(checked) => handleStudentSelectionChangeForEdit(student.id, !!checked)}
-                          />
-                          <Label htmlFor={`edit-student-${student.id}`} className="font-normal">
-                            {student.name}
-                          </Label>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-sm text-muted-foreground">Nenhum aluno ativo encontrado.</p>
-                    )}
                   </ScrollArea>
-                </CardContent>
-              </Card>
-            </div>
-            </ScrollArea>
-          )}
-          <DialogFooter className="flex-col gap-2 pt-4 border-t w-full sm:flex-row sm:justify-between">
-            <Button type="button" variant="destructive" onClick={handleDeleteClass} className="w-full sm:w-auto sm:order-first">
-              <Trash2 className="mr-2 h-4 w-4" /> Excluir Aula
-            </Button>
-            <div className="flex flex-col-reverse gap-2 w-full sm:flex-row sm:w-auto">
-                <DialogClose asChild>
-                  <Button type="button" variant="outline" className="w-full">Cancelar</Button>
-                </DialogClose>
-                <Button type="button" onClick={handleSaveChangesToClass} disabled={editedClassStudentIds.length === 0 || !editedClassTitle || !editedClassLocation || isLoadingStudents || isLoadingLocations} className="w-full">
-                Salvar Alterações
-                </Button>
-            </div>
-          </DialogFooter>
-        </DialogContent>
+              )}
+              
+              <DialogFooter className="flex-col gap-2 pt-4 border-t sm:flex-row sm:justify-between flex-shrink-0 px-0 sm:px-0">
+                  <Button type="button" variant="destructive" onClick={handleDeleteClass} className="w-full sm:w-auto sm:order-first">
+                      <Trash2 className="mr-2 h-4 w-4" /> Excluir Aula
+                  </Button>
+                  <div className="flex flex-col-reverse gap-2 w-full sm:flex-row sm:w-auto">
+                      <DialogClose asChild>
+                          <Button type="button" variant="outline" className="w-full">Cancelar</Button>
+                      </DialogClose>
+                      <Button type="button" onClick={handleSaveChangesToClass} disabled={editedClassStudentIds.length === 0 || !editedClassTitle || !editedClassLocation || isLoadingStudents || isLoadingLocations} className="w-full">
+                          Salvar Alterações
+                      </Button>
+                  </div>
+              </DialogFooter>
+          </DialogContent>
       </Dialog>
+
 
     </div>
     </TooltipProvider>
