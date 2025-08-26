@@ -240,8 +240,8 @@ export default function RelatoriosPage() {
           </Button>
         </div>
 
-        <div id="report-content-area" className="grid gap-6 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 print:grid-cols-2 print:gap-4">
-          <Card>
+        <div id="report-content-area" className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 print:grid-cols-2 print:gap-4">
+          <Card className="col-span-1 md:col-span-2 xl:col-span-1">
             <CardHeader>
               <CardTitle className="flex items-center text-xl"><Users className="mr-2 h-5 w-5 text-primary" />Novos Alunos por Mês</CardTitle>
               <CardDescription>Últimos {CHART_MONTH_RANGE} meses</CardDescription>
@@ -250,7 +250,7 @@ export default function RelatoriosPage() {
               {newStudentsData.length > 0 ? (
               <ChartContainer config={chartConfigBase} className="min-h-[250px] w-full">
                 <ResponsiveContainer width="100%" height={250}>
-                  <RechartsBarChart data={newStudentsData} margin={{ top: 5, right: 0, left: -20, bottom: 5 }}>
+                  <RechartsBarChart data={newStudentsData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={10} />
                     <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={10} width={30}/>
@@ -264,7 +264,7 @@ export default function RelatoriosPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="col-span-1 md:col-span-1 xl:col-span-1">
             <CardHeader>
               <CardTitle className="flex items-center text-xl"><CalendarCheck2 className="mr-2 h-5 w-5 text-primary" />Aulas Realizadas por Mês</CardTitle>
               <CardDescription>Últimos {CHART_MONTH_RANGE} meses</CardDescription>
@@ -273,7 +273,7 @@ export default function RelatoriosPage() {
               {bookedClassesData.length > 0 ? (
               <ChartContainer config={chartConfigBase} className="min-h-[250px] w-full">
                 <ResponsiveContainer width="100%" height={250}>
-                  <RechartsBarChart data={bookedClassesData} margin={{ top: 5, right: 0, left: -20, bottom: 5 }}>
+                  <RechartsBarChart data={bookedClassesData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={10} />
                     <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={10} width={30}/>
@@ -287,7 +287,7 @@ export default function RelatoriosPage() {
             </CardContent>
           </Card>
 
-          <Card className="lg:col-span-2 xl:col-span-1 print:col-span-2">
+          <Card className="col-span-1 md:col-span-2 xl:col-span-1">
             <CardHeader>
               <CardTitle className="flex items-center text-xl"><DollarSign className="mr-2 h-5 w-5 text-primary" />Receita Mensal Estimada</CardTitle>
               <CardDescription>Estimativa de receita nos últimos {CHART_MONTH_RANGE} meses (baseado em pagamentos confirmados)</CardDescription>
@@ -296,14 +296,14 @@ export default function RelatoriosPage() {
               {monthlyRevenueData.length > 0 ? (
               <ChartContainer config={chartConfigBase} className="min-h-[250px] w-full">
                 <ResponsiveContainer width="100%" height={250}>
-                  <RechartsBarChart data={monthlyRevenueData} margin={{ top: 5, right: 0, left: -20, bottom: 5 }}>
+                  <RechartsBarChart data={monthlyRevenueData} margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={10} />
                     <YAxis 
                       tickLine={false} 
                       axisLine={false} 
                       fontSize={10} 
-                      width={50}
+                      width={60}
                       tickFormatter={(value) => `R$${value.toLocaleString('pt-BR')}`}
                     />
                     <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--muted))', radius: 4 }}/>
