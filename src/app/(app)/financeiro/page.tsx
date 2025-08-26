@@ -845,125 +845,65 @@ export default function FinanceiroPage() {
                     <CardHeader>
                       <CardTitle className="text-lg">Resumo do Mês</CardTitle>
                     </CardHeader>
-                    <CardContent className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <CardContent className="grid grid-cols-2 gap-4">
                       <div className="p-4 bg-green-500/10 rounded-lg">
                         <p className="text-sm text-green-700 font-medium">Saldo do Mês</p>
-                        <p className={`text-xl lg:text-2xl font-bold ${reportData.totalReceived - reportData.totalExpenses >= 0 ? 'text-green-600' : 'text-red-600'}`}>R$ {(reportData.totalReceived - reportData.totalExpenses).toFixed(2)}</p>
+                        <p className={`text-xl font-bold ${reportData.totalReceived - reportData.totalExpenses >= 0 ? 'text-green-600' : 'text-red-600'}`}>R$ {(reportData.totalReceived - reportData.totalExpenses).toFixed(2)}</p>
                       </div>
                       <div className="p-4 bg-green-500/10 rounded-lg">
                         <p className="text-sm text-green-700 font-medium">Total Recebido</p>
-                        <p className="text-xl lg:text-2xl font-bold text-green-600">R$ {reportData.totalReceived.toFixed(2)}</p>
+                        <p className="text-xl font-bold text-green-600">R$ {reportData.totalReceived.toFixed(2)}</p>
                       </div>
                       <div className="p-4 bg-red-500/10 rounded-lg">
                         <p className="text-sm text-red-700 font-medium">Total de Saídas</p>
-                        <p className="text-xl lg:text-2xl font-bold text-red-600">R$ {reportData.totalExpenses.toFixed(2)}</p>
+                        <p className="text-xl font-bold text-red-600">R$ {reportData.totalExpenses.toFixed(2)}</p>
                       </div>
                       <div className="p-4 bg-yellow-500/10 rounded-lg">
                         <p className="text-sm text-yellow-700 font-medium">Total a Receber</p>
-                        <p className="text-xl lg:text-2xl font-bold text-yellow-600">R$ {(reportData.totalPending + reportData.totalOverdue).toFixed(2)}</p>
+                        <p className="text-xl font-bold text-yellow-600">R$ {(reportData.totalPending + reportData.totalOverdue).toFixed(2)}</p>
                       </div>
                     </CardContent>
                   </Card>
 
                   <Card>
-                    <CardHeader>
-                      <CardTitle className="text-lg">Recebimentos de {reportData?.monthYear}</CardTitle>
-                    </CardHeader>
+                    <CardHeader><CardTitle className="text-lg">Recebimentos de {reportData?.monthYear}</CardTitle></CardHeader>
                     <CardContent>
                       {reportData.paidInMonth.length > 0 ? (
-                        <div className="overflow-x-auto">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Aluno</TableHead>
-                              <TableHead>Valor (R$)</TableHead>
-                              <TableHead>Data Pag.</TableHead>
-                              <TableHead>Método</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {reportData.paidInMonth.map(p => (
-                              <TableRow key={`paid-${p.id}`}>
-                                <TableCell>{p.studentName}</TableCell>
-                                <TableCell>{p.amount.toFixed(2)}</TableCell>
-                                <TableCell>{p.paymentDate ? safeFormatDate(p.paymentDate) : '-'}</TableCell>
-                                <TableCell>{p.method}</TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                        </div>
-                      ) : (
-                        <p className="text-muted-foreground">Nenhum recebimento em {reportData?.monthYear}.</p>
-                      )}
+                        <>
+                          {/* Desktop View */}
+                          <div className="hidden md:block"><Table><TableHeader><TableRow><TableHead>Aluno</TableHead><TableHead>Valor (R$)</TableHead><TableHead>Data Pag.</TableHead><TableHead>Método</TableHead></TableRow></TableHeader><TableBody>{reportData.paidInMonth.map(p => (<TableRow key={`paid-${p.id}`}><TableCell>{p.studentName}</TableCell><TableCell>{p.amount.toFixed(2)}</TableCell><TableCell>{p.paymentDate ? safeFormatDate(p.paymentDate) : '-'}</TableCell><TableCell>{p.method}</TableCell></TableRow>))}</TableBody></Table></div>
+                          {/* Mobile View */}
+                          <div className="md:hidden space-y-2">{reportData.paidInMonth.map(p => (<div key={`paid-mobile-${p.id}`} className="p-3 bg-muted/50 rounded-md text-sm"><div className="flex justify-between font-medium"><p>{p.studentName}</p><p>R$ {p.amount.toFixed(2)}</p></div><div className="flex justify-between text-muted-foreground text-xs"><p>Pago em: {p.paymentDate ? safeFormatDate(p.paymentDate) : '-'}</p><p>Método: {p.method}</p></div></div>))}</div>
+                        </>
+                      ) : (<p className="text-muted-foreground text-center py-4">Nenhum recebimento em {reportData?.monthYear}.</p>)}
                     </CardContent>
                   </Card>
 
                    <Card>
-                    <CardHeader>
-                      <CardTitle className="text-lg">Saídas de {reportData?.monthYear}</CardTitle>
-                    </CardHeader>
+                    <CardHeader><CardTitle className="text-lg">Saídas de {reportData?.monthYear}</CardTitle></CardHeader>
                     <CardContent>
                       {reportData.expensesInMonth.length > 0 ? (
-                        <div className="overflow-x-auto">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Descrição</TableHead>
-                              <TableHead>Categoria</TableHead>
-                              <TableHead>Data</TableHead>
-                              <TableHead className="text-right">Valor (R$)</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {reportData.expensesInMonth.map(e => (
-                              <TableRow key={`exp-${e.id}`}>
-                                <TableCell>{e.description}</TableCell>
-                                <TableCell><Badge variant="outline">{e.category}</Badge></TableCell>
-                                <TableCell>{safeFormatDate(e.date)}</TableCell>
-                                <TableCell className="text-right">{e.amount.toFixed(2)}</TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                        </div>
-                      ) : (
-                        <p className="text-muted-foreground">Nenhuma saída registrada em {reportData?.monthYear}.</p>
-                      )}
+                        <>
+                          {/* Desktop View */}
+                          <div className="hidden md:block"><Table><TableHeader><TableRow><TableHead>Descrição</TableHead><TableHead>Categoria</TableHead><TableHead>Data</TableHead><TableHead className="text-right">Valor (R$)</TableHead></TableRow></TableHeader><TableBody>{reportData.expensesInMonth.map(e => (<TableRow key={`exp-${e.id}`}><TableCell>{e.description}</TableCell><TableCell><Badge variant="outline">{e.category}</Badge></TableCell><TableCell>{safeFormatDate(e.date)}</TableCell><TableCell className="text-right">{e.amount.toFixed(2)}</TableCell></TableRow>))}</TableBody></Table></div>
+                          {/* Mobile View */}
+                          <div className="md:hidden space-y-2">{reportData.expensesInMonth.map(e => (<div key={`exp-mobile-${e.id}`} className="p-3 bg-muted/50 rounded-md text-sm"><div className="flex justify-between font-medium"><p>{e.description}</p><p className="text-red-500">R$ {e.amount.toFixed(2)}</p></div><div className="flex justify-between text-muted-foreground text-xs"><p>{e.category}</p><p>{safeFormatDate(e.date)}</p></div></div>))}</div>
+                        </>
+                      ) : (<p className="text-muted-foreground text-center py-4">Nenhuma saída registrada em {reportData?.monthYear}.</p>)}
                     </CardContent>
                   </Card>
 
                   <Card>
-                    <CardHeader>
-                      <CardTitle className="text-lg">Pendentes/Vencidos (Venc. em {reportData?.monthYear})</CardTitle>
-                    </CardHeader>
+                    <CardHeader><CardTitle className="text-lg">Pendentes/Vencidos (Venc. em {reportData?.monthYear})</CardTitle></CardHeader>
                     <CardContent>
                       {reportData.outstandingInMonth.length > 0 ? (
-                        <div className="overflow-x-auto">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Aluno</TableHead>
-                              <TableHead>Valor (R$)</TableHead>
-                              <TableHead>Vencimento</TableHead>
-                              <TableHead>Status</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {reportData.outstandingInMonth.map(p => (
-                              <TableRow key={`out-${p.id}`}>
-                                <TableCell>{p.studentName}</TableCell>
-                                <TableCell>{p.amount.toFixed(2)}</TableCell>
-                                <TableCell>{p.dueDate ? safeFormatDate(p.dueDate) : '-'}</TableCell>
-                                <TableCell>{getPaymentStatusBadge(p.status)}</TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                        </div>
-                      ) : (
-                        <p className="text-muted-foreground">Nenhum pagamento pendente ou vencido com vencimento em {reportData?.monthYear}.</p>
-                      )}
+                        <>
+                          {/* Desktop View */}
+                          <div className="hidden md:block"><Table><TableHeader><TableRow><TableHead>Aluno</TableHead><TableHead>Valor (R$)</TableHead><TableHead>Vencimento</TableHead><TableHead>Status</TableHead></TableRow></TableHeader><TableBody>{reportData.outstandingInMonth.map(p => (<TableRow key={`out-${p.id}`}><TableCell>{p.studentName}</TableCell><TableCell>{p.amount.toFixed(2)}</TableCell><TableCell>{p.dueDate ? safeFormatDate(p.dueDate) : '-'}</TableCell><TableCell>{getPaymentStatusBadge(p.status)}</TableCell></TableRow>))}</TableBody></Table></div>
+                          {/* Mobile View */}
+                          <div className="md:hidden space-y-2">{reportData.outstandingInMonth.map(p => (<div key={`out-mobile-${p.id}`} className="p-3 bg-muted/50 rounded-md text-sm"><div className="flex justify-between items-start"><div className="font-medium"><p>{p.studentName}</p><p className="text-xs text-muted-foreground">Venc: {p.dueDate ? safeFormatDate(p.dueDate) : '-'}</p></div><div>{getPaymentStatusBadge(p.status)}</div></div><div className="text-right font-bold mt-1">R$ {p.amount.toFixed(2)}</div></div>))}</div>
+                        </>
+                      ) : (<p className="text-muted-foreground text-center py-4">Nenhum pagamento pendente ou vencido com vencimento em {reportData?.monthYear}.</p>)}
                     </CardContent>
                   </Card>
                 </>
@@ -986,4 +926,5 @@ export default function FinanceiroPage() {
     </>
   );
 }
+
 
