@@ -444,6 +444,16 @@ export default function AlunoDetailPage() {
       control,
       name: `trainingSheetWorkouts.${day}`,
     });
+    const [muscleGroupFilter, setMuscleGroupFilter] = useState('all');
+
+    const muscleGroups = React.useMemo(() => 
+        ['all', ...Array.from(new Set(libraryExercises.map(e => e.muscleGroup)))]
+    , [libraryExercises]);
+
+    const filteredExercises = React.useMemo(() => {
+        if (muscleGroupFilter === 'all') return libraryExercises;
+        return libraryExercises.filter(e => e.muscleGroup === muscleGroupFilter);
+    }, [muscleGroupFilter, libraryExercises]);
 
     const handleAddExercise = (exerciseId: string) => {
         const exercise = libraryExercises.find(e => e.id === exerciseId);
@@ -498,22 +508,46 @@ export default function AlunoDetailPage() {
               </div>
             </div>
           ))}
-          <div className="flex items-center gap-2">
-            <Select onValueChange={handleAddExercise}>
-                <SelectTrigger className="flex-grow"><SelectValue placeholder="Selecione um exercício da biblioteca..."/></SelectTrigger>
-                <SelectContent>
-                    {libraryExercises.length > 0 ? (
-                      libraryExercises.map(ex => (
-                        <SelectItem key={ex.id} value={ex.id}>{ex.name} ({ex.muscleGroup})</SelectItem>
-                      ))  
-                    ) : (
-                        <SelectItem value="none" disabled>Nenhum exercício na biblioteca</SelectItem>
-                    )}
-                </SelectContent>
-            </Select>
-            <Button type="button" variant="outline" asChild>
-                <Link href="/exercicios" target="_blank"><PlusCircle className="h-4 w-4"/></Link>
-            </Button>
+          <div className="space-y-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 items-center">
+                <div>
+                  <Label htmlFor={`filter-${day}`} className="text-xs">Filtrar por Grupo</Label>
+                  <Select value={muscleGroupFilter} onValueChange={setMuscleGroupFilter}>
+                      <SelectTrigger id={`filter-${day}`}>
+                          <SelectValue placeholder="Filtrar por grupo..."/>
+                      </SelectTrigger>
+                      <SelectContent>
+                          {muscleGroups.map(group => (
+                              <SelectItem key={group} value={group} className="capitalize">
+                                  {group === 'all' ? 'Todos os Grupos' : group}
+                              </SelectItem>
+                          ))}
+                      </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                   <Label htmlFor={`add-exercise-${day}`} className="text-xs">Adicionar Exercício</Label>
+                   <div className="flex items-center gap-2">
+                      <Select onValueChange={handleAddExercise} value="">
+                          <SelectTrigger id={`add-exercise-${day}`} className="flex-grow">
+                              <SelectValue placeholder="Selecione..."/>
+                          </SelectTrigger>
+                          <SelectContent>
+                              {filteredExercises.length > 0 ? (
+                                filteredExercises.map(ex => (
+                                  <SelectItem key={ex.id} value={ex.id}>{ex.name}</SelectItem>
+                                ))  
+                              ) : (
+                                  <SelectItem value="none" disabled>Nenhum exercício encontrado</SelectItem>
+                              )}
+                          </SelectContent>
+                      </Select>
+                       <Button type="button" variant="outline" asChild>
+                          <Link href="/exercicios" target="_blank"><PlusCircle className="h-4 w-4"/></Link>
+                      </Button>
+                   </div>
+                </div>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -1127,5 +1161,3 @@ export default function AlunoDetailPage() {
     </>
   );
 }
-
-    
