@@ -526,7 +526,7 @@ export default function FinanceiroPage() {
           </Button>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-4 mb-8">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
           <Card className="shadow-md">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Saldo do Mês</CardTitle>
@@ -617,7 +617,7 @@ export default function FinanceiroPage() {
                     </Button>
                 </div>
             </CardHeader>
-            <CardContent className="px-0 xxs:px-2 sm:px-6">
+            <CardContent className="px-0 sm:px-6">
                  <TabsContent value="payments">
                      {isLoading ? (
                         <div className="flex justify-center items-center py-12">
@@ -625,76 +625,100 @@ export default function FinanceiroPage() {
                         <p className="ml-2 text-muted-foreground">Carregando recebimentos...</p>
                         </div>
                     ) : (
-                    <Table>
-                    <TableHeader>
-                        <TableRow>
-                        <TableHead className="px-2 py-3 sm:px-4">Aluno</TableHead>
-                        <TableHead className="hidden lg:table-cell px-2 py-3 sm:px-4">Valor</TableHead>
-                        <TableHead className="px-2 py-3 sm:px-4">Vencimento</TableHead>
-                        <TableHead className="px-2 py-3 sm:px-4">Status</TableHead>
-                        <TableHead className="hidden md:table-cell px-2 py-3 sm:px-4">Método</TableHead>
-                        <TableHead className="text-right px-2 py-3 sm:px-4">Ações</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {filteredPayments.length > 0 ? (
-                        filteredPayments.map((payment) => (
-                            <TableRow key={payment.id}>
-                            <TableCell className="font-medium p-2 sm:p-4 truncate max-w-[80px] xxs:max-w-[100px] xs:max-w-[120px] sm:max-w-xs">
-                                {payment.studentName}
-                            </TableCell>
-                            <TableCell className="hidden lg:table-cell p-2 sm:p-4">R$ {payment.amount.toFixed(2)}</TableCell>
-                            <TableCell className="p-2 sm:p-4">
-                                {safeFormatDate(payment.dueDate)}
-                            </TableCell>
-                            <TableCell className="p-2 sm:p-4">{getPaymentStatusBadge(payment.status)}</TableCell>
-                            <TableCell className="hidden md:table-cell p-2 sm:p-4">{payment.method}</TableCell>
-                            <TableCell className="text-right p-1 sm:p-2">
-                                <div className="flex items-center justify-end space-x-0.5">
-                                {(payment.status === 'pendente' || payment.status === 'vencido') && (
-                                    <>
-                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-green-500 hover:text-green-600 sm:hidden" onClick={() => handleMarkAsPaid(payment)} title="Marcar como Pago">
-                                        <CheckCircle className="h-4 w-4" />
-                                    </Button>
-                                    <Button variant="ghost" size="sm" className="hidden sm:inline-flex items-center text-green-500 hover:text-green-600" onClick={() => handleMarkAsPaid(payment)} title="Marcar como Pago">
-                                        <CheckCircle className="h-4 w-4 mr-1" /> <span className="hidden xs:inline">Pago</span>
-                                    </Button>
-                                    </>
-                                )}
-                                <Button variant="ghost" size="icon" className="h-8 w-8 sm:hidden" asChild>
-                                    <Link href={`/alunos/${payment.studentId}`} title="Ver Aluno">
-                                    <Users className="h-4 w-4" />
-                                    </Link>
-                                </Button>
-                                <Button variant="ghost" size="sm" className="hidden sm:inline-flex items-center" asChild>
-                                    <Link href={`/alunos/${payment.studentId}`} title="Ver Aluno">
-                                    <Users className="h-4 w-4 mr-1" /> <span className="hidden xs:inline">Aluno</span>
-                                    </Link>
-                                </Button>
-
-                                <Button variant="ghost" size="icon" className="h-8 w-8 sm:hidden" asChild>
-                                    <Link href={`/financeiro/lembrete/${payment.studentId}`} title="Gerar Lembrete">
-                                    <DollarSign className="h-4 w-4" />
-                                    </Link>
-                                </Button>
-                                <Button variant="ghost" size="sm" className="hidden sm:inline-flex items-center" asChild>
-                                    <Link href={`/financeiro/lembrete/${payment.studentId}`} title="Gerar Lembrete">
-                                    <DollarSign className="h-4 w-4 mr-1" /> <span className="hidden xs:inline">Lembrete</span>
-                                    </Link>
-                                </Button>
-                                </div>
-                            </TableCell>
+                    <>
+                    {/* Desktop Table */}
+                    <div className="hidden md:block">
+                        <Table>
+                        <TableHeader>
+                            <TableRow>
+                            <TableHead>Aluno</TableHead>
+                            <TableHead>Valor</TableHead>
+                            <TableHead>Vencimento</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Método</TableHead>
+                            <TableHead className="text-right">Ações</TableHead>
                             </TableRow>
-                        ))
+                        </TableHeader>
+                        <TableBody>
+                            {filteredPayments.length > 0 ? (
+                            filteredPayments.map((payment) => (
+                                <TableRow key={payment.id}>
+                                <TableCell className="font-medium truncate max-w-xs">{payment.studentName}</TableCell>
+                                <TableCell>R$ {payment.amount.toFixed(2)}</TableCell>
+                                <TableCell>{safeFormatDate(payment.dueDate)}</TableCell>
+                                <TableCell>{getPaymentStatusBadge(payment.status)}</TableCell>
+                                <TableCell>{payment.method}</TableCell>
+                                <TableCell className="text-right">
+                                    <div className="flex items-center justify-end space-x-1">
+                                    {(payment.status === 'pendente' || payment.status === 'vencido') && (
+                                        <Button variant="ghost" size="sm" className="text-green-500 hover:text-green-600" onClick={() => handleMarkAsPaid(payment)} title="Marcar como Pago">
+                                            <CheckCircle className="h-4 w-4 mr-1" /> Pago
+                                        </Button>
+                                    )}
+                                    <Button variant="ghost" size="sm" asChild>
+                                        <Link href={`/alunos/${payment.studentId}`} title="Ver Aluno"><Users className="h-4 w-4 mr-1" /> Aluno</Link>
+                                    </Button>
+                                    <Button variant="ghost" size="sm" asChild>
+                                        <Link href={`/financeiro/lembrete/${payment.studentId}`} title="Gerar Lembrete"><DollarSign className="h-4 w-4 mr-1" /> Lembrete</Link>
+                                    </Button>
+                                    </div>
+                                </TableCell>
+                                </TableRow>
+                            ))
+                            ) : (
+                            <TableRow>
+                                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                                Nenhum recebimento encontrado para {clientRendered ? format(selectedMonthDate, 'MMMM yyyy', { locale: ptBR }) : '...'}.
+                                </TableCell>
+                            </TableRow>
+                            )}
+                        </TableBody>
+                        </Table>
+                    </div>
+                    {/* Mobile Card View */}
+                    <div className="md:hidden space-y-4">
+                        {filteredPayments.length > 0 ? (
+                            filteredPayments.map((payment) => (
+                                <Card key={`mobile-${payment.id}`} className="bg-muted/30">
+                                    <CardHeader className="pb-2">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <CardTitle className="text-base">{payment.studentName}</CardTitle>
+                                                <CardDescription>Venc. {safeFormatDate(payment.dueDate)}</CardDescription>
+                                            </div>
+                                            {getPaymentStatusBadge(payment.status)}
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent className="flex flex-col space-y-2">
+                                         <div className="flex justify-between items-center text-sm">
+                                            <span className="text-muted-foreground">Valor:</span>
+                                            <span className="font-medium">R$ {payment.amount.toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center text-sm">
+                                            <span className="text-muted-foreground">Método:</span>
+                                            <span className="font-medium">{payment.method}</span>
+                                        </div>
+                                        <div className="pt-2 flex flex-wrap gap-2 justify-end">
+                                            {(payment.status === 'pendente' || payment.status === 'vencido') && (
+                                                <Button size="sm" className="flex-1 bg-green-500 hover:bg-green-600" onClick={() => handleMarkAsPaid(payment)}><CheckCircle className="h-4 w-4 mr-1"/> Pago</Button>
+                                            )}
+                                            <Button variant="secondary" size="sm" className="flex-1" asChild>
+                                                <Link href={`/alunos/${payment.studentId}`}><Users className="h-4 w-4 mr-1"/> Aluno</Link>
+                                            </Button>
+                                            <Button variant="secondary" size="sm" className="flex-1" asChild>
+                                                <Link href={`/financeiro/lembrete/${payment.studentId}`}><DollarSign className="h-4 w-4 mr-1"/> Lembrete</Link>
+                                            </Button>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            ))
                         ) : (
-                        <TableRow>
-                            <TableCell colSpan={6} className="text-center text-muted-foreground py-8 p-2 sm:p-4">
-                            Nenhum recebimento encontrado para {clientRendered ? format(selectedMonthDate, 'MMMM yyyy', { locale: ptBR }) : '...'}.
-                            </TableCell>
-                        </TableRow>
+                             <div className="text-center text-muted-foreground py-8">
+                                Nenhum recebimento encontrado para {clientRendered ? format(selectedMonthDate, 'MMMM yyyy', { locale: ptBR }) : '...'}.
+                            </div>
                         )}
-                    </TableBody>
-                    </Table>
+                    </div>
+                    </>
                     )}
                  </TabsContent>
                  <TabsContent value="expenses">
@@ -922,3 +946,5 @@ export default function FinanceiroPage() {
     </>
   );
 }
+
+    
