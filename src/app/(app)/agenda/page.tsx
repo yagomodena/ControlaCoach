@@ -759,7 +759,7 @@ export default function AgendaPage() {
       </Dialog>
 
       <Dialog open={isEditClassDialogOpen} onOpenChange={setIsEditClassDialogOpen}>
-          <DialogContent className="w-[90vw] max-w-lg flex flex-col max-h-[95vh]">
+          <DialogContent className="sm:max-w-lg flex flex-col max-h-[95vh]">
               <DialogHeader className="flex-shrink-0">
                   <DialogTitle>Gerenciar Aula - {classBeingEdited?.time}</DialogTitle>
                   <DialogDescription>
@@ -767,8 +767,8 @@ export default function AgendaPage() {
                   </DialogDescription>
               </DialogHeader>
               
-              {classBeingEdited && (
-                  <ScrollArea className="flex-grow -mr-4 pr-4">
+              <div className="flex-grow min-h-0 overflow-y-auto">
+                  {classBeingEdited && (
                       <div className="space-y-4 pr-1 py-1">
                           <div className="space-y-1">
                               <Label htmlFor="editClassTitle">Título da Aula</Label>
@@ -876,8 +876,8 @@ export default function AgendaPage() {
                               </CardContent>
                           </Card>
                       </div>
-                  </ScrollArea>
-              )}
+                  )}
+              </div>
               
               <DialogFooter className="flex-col gap-2 pt-4 border-t sm:flex-row sm:justify-between flex-shrink-0 px-0 sm:px-0">
                   <Button type="button" variant="destructive" onClick={handleDeleteClass} className="w-full sm:w-auto sm:order-first">
