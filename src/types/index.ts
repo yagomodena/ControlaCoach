@@ -3,6 +3,15 @@
 export type DayOfWeek = 'Segunda' | 'Terça' | 'Quarta' | 'Quinta' | 'Sexta' | 'Sábado' | 'Domingo';
 export const DAYS_OF_WEEK: DayOfWeek[] = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
 
+export interface Exercise {
+  id: string; // for mapping
+  name: string;
+  sets: string;
+  reps: string;
+  rest: string;
+  notes?: string;
+}
+
 export interface PhysicalAssessment {
   date: string; // ISO String
   weight?: number;
@@ -20,7 +29,7 @@ export interface PhysicalAssessment {
 
 export interface TrainingSheet {
   lastUpdated: string; // ISO String
-  workouts: Partial<Record<DayOfWeek, string>>; // A workout string for each day of the week
+  workouts: Partial<Record<DayOfWeek, Exercise[]>>; 
 }
 
 export interface Student {

@@ -3,10 +3,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dumbbell, Loader2 } from 'lucide-react';
 import { auth, db } from '@/firebase';
 import { doc, getDoc } from 'firebase/firestore';
-import type { Student, DayOfWeek } from '@/types';
+import type { Student, DayOfWeek, Exercise } from '@/types';
 import { DAYS_OF_WEEK } from '@/types';
 import { format, parseISO } from 'date-fns';
 import { useRouter } from 'next/navigation';
@@ -92,14 +93,39 @@ export default function StudentWorkoutPage() {
         </CardHeader>
         <CardContent className="space-y-6">
             {workoutDays.length > 0 ? (
-                workoutDays.map(day => (
-                    <div key={day}>
-                        <h3 className="font-semibold text-xl text-foreground mb-2 border-b pb-1 border-primary/20">Treino de {day}</h3>
-                        <div className="prose prose-sm max-w-none whitespace-pre-wrap p-4 bg-muted/50 rounded-md font-code">
-                            <pre className="bg-transparent p-0 m-0">{trainingSheet?.workouts?.[day] || 'Nenhum treino definido para este dia.'}</pre>
+                workoutDays.map(day => {
+                    const exercises = trainingSheet!.workouts[day];
+                    if (!exercises || exercises.length === 0) return null;
+                    return (
+                        <div key={day}>
+                            <h3 className="font-semibold text-xl text-foreground mb-2 border-b pb-1 border-primary/20">Treino de {day}</h3>
+                            <div className="overflow-x-auto">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Exercício</TableHead>
+                                            <TableHead>Séries</TableHead>
+                                            <TableHead>Reps</TableHead>
+                                            <TableHead>Descanso</TableHead>
+                                            <TableHead>Observações</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {exercises.map(ex => (
+                                            <TableRow key={ex.id}>
+                                                <TableCell className="font-medium">{ex.name}</TableCell>
+                                                <TableCell>{ex.sets}</TableCell>
+                                                <TableCell>{ex.reps}</TableCell>
+                                                <TableCell>{ex.rest}</TableCell>
+                                                <TableCell>{ex.notes || '-'}</TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
                         </div>
-                    </div>
-                ))
+                    )
+                })
             ) : (
                 <p className="text-muted-foreground text-center py-10">Nenhuma ficha de treino encontrada. Peça para seu treinador cadastrar uma!</p>
             )}

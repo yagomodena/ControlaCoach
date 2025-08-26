@@ -4,7 +4,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Edit3, Save, CalendarDays, DollarSign, ShieldCheck, ShieldOff, User, Phone, BarChart, Users, CheckCircle, XCircle, Clock, Goal, PlusCircle, Search, MapPinIcon, ClockIcon, Loader2, Dumbbell, Activity, CalendarIcon, LineChart } from 'lucide-react';
+import { ArrowLeft, Edit3, Save, CalendarDays, DollarSign, ShieldCheck, ShieldOff, User, Phone, BarChart, Users, CheckCircle, XCircle, Clock, Goal, PlusCircle, Search, MapPinIcon, ClockIcon, Loader2, Dumbbell, Activity, CalendarIcon, LineChart, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,10 +17,10 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import type { Student, Plan, Location, DayOfWeek, TrainingSheet, PhysicalAssessment } from '@/types';
+import { type Student, type Plan, type Location, type DayOfWeek, type TrainingSheet, type PhysicalAssessment, type Exercise } from '@/types';
 import { DAYS_OF_WEEK } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { AddPlanDialog } from '@/components/dialogs/add-plan-dialog';
@@ -30,8 +30,18 @@ import { doc, getDoc, updateDoc, collection, onSnapshot, query, where, orderBy, 
 import { differenceInYears, parseISO, format, formatISO } from 'date-fns';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { CartesianGrid, XAxis, YAxis, Legend, Line, ComposedChart, ResponsiveContainer } from 'recharts';
+import { v4 as uuidv4 } from 'uuid';
 
 const NO_LOCATION_VALUE = "__NO_LOCATION__";
+
+const exerciseSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1, 'Nome do exercício é obrigatório.'),
+  sets: z.string().min(1, 'Séries são obrigatórias.'),
+  reps: z.string().min(1, 'Repetições são obrigatórias.'),
+  rest: z.string().min(1, 'Descanso é obrigatório.'),
+  notes: z.string().optional(),
+});
 
 const studentSchema = z.object({
   name: z.string().min(3, { message: 'Nome deve ter pelo menos 3 caracteres.' }),
@@ -42,7 +52,7 @@ const studentSchema = z.object({
   objective: z.string().optional(),
   birthDate: z.string().optional().nullable(),
   photoURL: z.string().url().optional().nullable(),
-  trainingSheetWorkouts: z.record(z.nativeEnum(DAYS_OF_WEEK), z.string().optional()).optional(),
+  trainingSheetWorkouts: z.record(z.nativeEnum(DAYS_OF_WEEK), z.array(exerciseSchema).optional()).optional(),
   paymentStatus: z.enum(['pago', 'pendente', 'vencido']).optional(),
   dueDate: z.string().optional(),
   amountDue: z.number().optional(),
@@ -151,6 +161,11 @@ export default function AlunoDetailPage() {
   
   const recurringClassDays = watch('recurringClassDays') || [];
 
+  const { fields, append, remove, update } = useFieldArray({
+    control,
+    name: `trainingSheetWorkouts.${sortDays(recurringClassDays)[0]}` as any, // This is tricky, need a better way
+  });
+
   const fetchStudent = async () => {
       if (!studentId || !userId) return;
       setIsLoading(true);
@@ -216,7 +231,7 @@ export default function AlunoDetailPage() {
         photoURL: data.photoURL || null,
       };
       
-      const hasWorkoutData = data.trainingSheetWorkouts && Object.values(data.trainingSheetWorkouts).some(workout => workout && workout.trim() !== '');
+      const hasWorkoutData = data.trainingSheetWorkouts && Object.values(data.trainingSheetWorkouts).some(workoutDay => workoutDay && workoutDay.length > 0);
 
       if(hasWorkoutData) {
         updatePayload.trainingSheet = {
@@ -406,6 +421,63 @@ export default function AlunoDetailPage() {
     'Gordura (%)': a.bodyFatPercentage,
   }));
 
+  const TrainingDayEditor = ({ day }: { day: DayOfWeek }) => {
+    const { fields, append, remove } = useFieldArray({
+      control,
+      name: `trainingSheetWorkouts.${day}`,
+    });
+
+    return (
+      <Card className="bg-muted/30">
+        <CardHeader className="py-3 px-4">
+          <CardTitle className="text-lg">Treino de {day}</CardTitle>
+        </CardHeader>
+        <CardContent className="px-4 pb-4 space-y-3">
+          {fields.map((item, index) => (
+            <div key={item.id} className="p-3 border rounded-md bg-background space-y-2">
+              <div className="flex justify-between items-center">
+                 <p className="font-semibold text-primary">Exercício {index + 1}</p>
+                 <Button type="button" variant="ghost" size="icon" className="text-destructive h-7 w-7" onClick={() => remove(index)}>
+                   <Trash2 className="h-4 w-4" />
+                 </Button>
+              </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                 <Controller
+                    name={`trainingSheetWorkouts.${day}.${index}.name`}
+                    control={control}
+                    render={({ field }) => <Input {...field} placeholder="Nome do exercício" className="col-span-2"/>}
+                 />
+                 <Controller
+                    name={`trainingSheetWorkouts.${day}.${index}.sets`}
+                    control={control}
+                    render={({ field }) => <Input {...field} placeholder="Séries"/>}
+                 />
+                 <Controller
+                    name={`trainingSheetWorkouts.${day}.${index}.reps`}
+                    control={control}
+                    render={({ field }) => <Input {...field} placeholder="Reps"/>}
+                 />
+                 <Controller
+                    name={`trainingSheetWorkouts.${day}.${index}.rest`}
+                    control={control}
+                    render={({ field }) => <Input {...field} placeholder="Descanso"/>}
+                 />
+                  <Controller
+                    name={`trainingSheetWorkouts.${day}.${index}.notes`}
+                    control={control}
+                    render={({ field }) => <Input {...field} placeholder="Obs (opcional)" className="col-span-2"/>}
+                 />
+              </div>
+            </div>
+          ))}
+          <Button type="button" variant="outline" onClick={() => append({ id: uuidv4(), name: '', sets: '', reps: '', rest: '', notes: '' })}>
+            <PlusCircle className="mr-2 h-4 w-4" /> Adicionar Exercício
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  };
+
 
   return (
     <>
@@ -492,25 +564,7 @@ export default function AlunoDetailPage() {
                         <CardContent className="space-y-4">
                             {sortDays(recurringClassDays).length > 0 ? (
                                 sortDays(recurringClassDays).map(day => (
-                                    <Card key={day} className="bg-muted/30">
-                                        <CardHeader className="py-3 px-4">
-                                            <CardTitle className="text-lg">Treino de {day}</CardTitle>
-                                        </CardHeader>
-                                        <CardContent className="px-4 pb-4">
-                                            <Controller
-                                                name={`trainingSheetWorkouts.${day}`}
-                                                control={control}
-                                                render={({ field }) => (
-                                                    <Textarea
-                                                        {...field}
-                                                        placeholder={`Detalhes do treino de ${day}...`}
-                                                        rows={8}
-                                                        className="font-mono text-sm bg-background"
-                                                    />
-                                                )}
-                                            />
-                                        </CardContent>
-                                    </Card>
+                                    <TrainingDayEditor key={day} day={day} />
                                 ))
                             ) : (
                                 <p className="text-center text-muted-foreground py-8">
@@ -930,26 +984,49 @@ export default function AlunoDetailPage() {
             </TabsContent>
             
             <TabsContent value="training_sheet">
-                 <Card className="shadow-lg">
+                <Card className="shadow-lg">
                     <CardHeader>
                         <CardTitle className="flex items-center"><Dumbbell className="mr-2 h-5 w-5 text-primary"/>Plano de Treino</CardTitle>
                         <CardDescription>Ficha de treino atual do aluno. Atualizado em: {student.trainingSheet?.lastUpdated ? formatDateString(student.trainingSheet.lastUpdated) : 'N/A'}</CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-4">
-                        {student.trainingSheet?.workouts && Object.keys(student.trainingSheet.workouts).length > 0 ? (
-                           sortDays(Object.keys(student.trainingSheet.workouts) as DayOfWeek[]).map(day => (
-                               <div key={day}>
-                                   <h3 className="font-semibold text-md text-foreground mb-1">Treino de {day}</h3>
-                                   <div className="prose prose-sm max-w-none whitespace-pre-wrap p-3 bg-muted/30 rounded-md">
-                                     {student.trainingSheet?.workouts?.[day] || 'Nenhum treino definido para este dia.'}
-                                   </div>
-                               </div>
-                           ))
-                        ): (
+                    <CardContent className="space-y-6">
+                        {student.trainingSheet?.workouts && Object.values(student.trainingSheet.workouts).some(day => day && day.length > 0) ? (
+                            sortDays(Object.keys(student.trainingSheet.workouts) as DayOfWeek[]).map(day => {
+                                const exercises = student.trainingSheet!.workouts[day];
+                                if (!exercises || exercises.length === 0) return null;
+                                return (
+                                    <div key={day}>
+                                        <h3 className="font-semibold text-lg text-foreground mb-2">Treino de {day}</h3>
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>Exercício</TableHead>
+                                                    <TableHead>Séries</TableHead>
+                                                    <TableHead>Reps</TableHead>
+                                                    <TableHead>Descanso</TableHead>
+                                                    <TableHead>Obs</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {exercises.map(ex => (
+                                                    <TableRow key={ex.id}>
+                                                        <TableCell className="font-medium">{ex.name}</TableCell>
+                                                        <TableCell>{ex.sets}</TableCell>
+                                                        <TableCell>{ex.reps}</TableCell>
+                                                        <TableCell>{ex.rest}</TableCell>
+                                                        <TableCell>{ex.notes || '-'}</TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
+                                )
+                            })
+                        ) : (
                             <p className="text-muted-foreground text-center py-4">Nenhuma ficha de treino cadastrada para este aluno.</p>
                         )}
                     </CardContent>
-                 </Card>
+                </Card>
             </TabsContent>
 
             <TabsContent value="schedule">
@@ -999,7 +1076,6 @@ export default function AlunoDetailPage() {
           </Tabs>
         )}
       </div>
-
       <AddPlanDialog
         open={isAddPlanDialogOpen}
         onOpenChange={setIsAddPlanDialogOpen}
@@ -1013,4 +1089,3 @@ export default function AlunoDetailPage() {
     </>
   );
 }
-

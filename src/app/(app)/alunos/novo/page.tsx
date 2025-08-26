@@ -29,6 +29,7 @@ import { ManagePlansDialog } from '@/components/dialogs/manage-plans-dialog';
 import { db, auth } from '@/firebase';
 import { collection, addDoc, onSnapshot, query, where, orderBy, doc, setDoc, writeBatch } from 'firebase/firestore';
 import { formatISO, addDays } from 'date-fns';
+import { v4 as uuidv4 } from 'uuid';
 
 const NO_LOCATION_VALUE = "__NO_LOCATION__";
 
@@ -164,10 +165,8 @@ export default function NovoAlunoPage() {
         initialDueDate = addDays(registrationDate, selectedPlanDetails.durationDays);
       }
 
-      // We will generate a new document in the root students collection to get an ID.
-      const studentRootCollectionRef = collection(db, 'students');
-      const newStudentDocRef = doc(studentRootCollectionRef); 
-      const studentId = newStudentDocRef.id;
+      // Generate a unique ID for the new student
+      const studentId = uuidv4();
 
       const studentDataToSave: Omit<Student, 'id'> & { coachId: string } = {
         coachId: userId,
@@ -203,17 +202,18 @@ export default function NovoAlunoPage() {
       
       const batch = writeBatch(db);
       const studentCoachDocRef = doc(db, 'coaches', userId, 'students', studentId);
+      const studentRootDocRef = doc(db, 'students', studentId); 
       
       const { coachId, ...studentDataForCoachSubcollection } = studentDataToSave;
       
       batch.set(studentCoachDocRef, studentDataForCoachSubcollection);
-      batch.set(newStudentDocRef, studentDataToSave);
+      batch.set(studentRootDocRef, studentDataToSave);
       
       await batch.commit();
 
       toast({
         title: "Aluno Adicionado!",
-        description: `${data.name} foi cadastrado com sucesso. O ID do aluno é: ${studentId}`,
+        description: `${data.name} foi cadastrado com sucesso.`,
       });
 
       router.push('/alunos');
