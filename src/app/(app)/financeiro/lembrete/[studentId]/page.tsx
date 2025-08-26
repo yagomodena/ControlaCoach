@@ -228,7 +228,7 @@ export default function GerarLembretePage() {
                 <Controller name="planName" control={control} render={({ field }) => <Input id="planName" {...field} />} />
                  {errors.planName && <p className="text-sm text-destructive">{errors.planName.message}</p>}
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <Label htmlFor="dueDate">Data de Vencimento</Label>
                   <Controller name="dueDate" control={control} render={({ field }) => <Input id="dueDate" type="date" {...field} />} />
