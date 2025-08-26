@@ -3,7 +3,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
-import { DollarSign, Search, Filter, FileText, Users, AlertTriangle, CheckCircle, Clock, Printer, ChevronLeft, ChevronRight, Loader2, PlusCircle, MinusCircle, Trash2 } from 'lucide-react';
+import { DollarSign, Search, Filter, FileText, Users, AlertTriangle, CheckCircle, Clock, Printer, ChevronLeft, ChevronRight, Loader2, PlusCircle, MinusCircle, Trash2, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -72,6 +72,8 @@ import { db, auth } from '@/firebase';
 import { collection, onSnapshot, query, where, orderBy, doc, updateDoc, getDoc, addDoc, deleteDoc } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
 import { AddExpenseDialog } from '@/components/dialogs/add-expense-dialog';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 
 interface PaymentEntry extends Payment {
@@ -111,6 +113,7 @@ export default function FinanceiroPage() {
   const [isAddExpenseDialogOpen, setIsAddExpenseDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
   useEffect(() => {
     setClientRendered(true);
@@ -443,6 +446,43 @@ export default function FinanceiroPage() {
     });
     setIsReportDialogOpen(true);
   };
+
+  const handleDownloadPdf = async () => {
+    const reportContentElement = document.getElementById('report-content-area');
+    if (!reportContentElement || !reportData) {
+      toast({ title: "Erro", description: "Não foi possível encontrar o conteúdo do relatório para baixar.", variant: "destructive" });
+      return;
+    }
+    
+    setIsDownloadingPdf(true);
+
+    try {
+        const canvas = await html2canvas(reportContentElement, {
+            scale: 2, // Higher scale for better quality
+            useCORS: true,
+            backgroundColor: null,
+        });
+        
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF({
+            orientation: 'p',
+            unit: 'px',
+            format: [canvas.width, canvas.height]
+        });
+        
+        pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+        
+        const fileName = `Relatorio_Financeiro_${reportData.monthYear.replace(' ', '_')}.pdf`;
+        pdf.save(fileName);
+
+    } catch (error) {
+        console.error("Error generating PDF:", error);
+        toast({ title: "Erro ao gerar PDF", description: "Não foi possível gerar o PDF. Tente novamente.", variant: "destructive"});
+    } finally {
+        setIsDownloadingPdf(false);
+    }
+  };
+
 
   const printReport = () => {
     const printableContent = document.getElementById('report-content-area');
@@ -838,7 +878,7 @@ export default function FinanceiroPage() {
           </DialogHeader>
           
           <ScrollArea className="flex-grow overflow-y-auto pr-2">
-            <div id="report-content-area" className="py-4 space-y-6">
+            <div id="report-content-area" className="py-4 space-y-6 bg-white text-black p-4">
               {reportData ? (
                 <>
                   <Card>
@@ -914,6 +954,10 @@ export default function FinanceiroPage() {
           </ScrollArea>
           
           <DialogFooter className="pt-4 border-t mt-auto no-print">
+            <Button variant="outline" onClick={handleDownloadPdf} disabled={isDownloadingPdf}>
+              {isDownloadingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Download className="mr-2 h-4 w-4" />}
+              {isDownloadingPdf ? 'Baixando...' : 'Baixar PDF'}
+            </Button>
             <Button variant="outline" onClick={printReport}>
               <Printer className="mr-2 h-4 w-4" /> Imprimir Relatório
             </Button>
@@ -926,5 +970,3 @@ export default function FinanceiroPage() {
     </>
   );
 }
-
-
