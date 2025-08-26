@@ -839,7 +839,7 @@ export default function AlunoDetailPage() {
           </form>
         ) : (
           <Tabs defaultValue="overview" className="w-full">
-            <TabsList className="grid w-full grid-cols-5 mb-6 max-w-2xl mx-auto">
+            <TabsList className="flex flex-wrap h-auto mb-6 max-w-2xl mx-auto">
               <TabsTrigger value="overview">Visão Geral</TabsTrigger>
               <TabsTrigger value="schedule">Aulas</TabsTrigger>
               <TabsTrigger value="evolution">Evolução Física</TabsTrigger>
