@@ -728,40 +728,74 @@ export default function FinanceiroPage() {
                           <p className="ml-2 text-muted-foreground">Carregando saídas...</p>
                         </div>
                     ) : (
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Descrição</TableHead>
-                                <TableHead>Categoria</TableHead>
-                                <TableHead>Data</TableHead>
-                                <TableHead className="text-right">Valor</TableHead>
-                                <TableHead className="text-right">Ações</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
+                    <>
+                        {/* Desktop Table */}
+                        <div className="hidden md:block">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Descrição</TableHead>
+                                        <TableHead>Categoria</TableHead>
+                                        <TableHead>Data</TableHead>
+                                        <TableHead className="text-right">Valor</TableHead>
+                                        <TableHead className="text-right">Ações</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {filteredExpenses.length > 0 ? (
+                                        filteredExpenses.map((expense) => (
+                                        <TableRow key={expense.id}>
+                                            <TableCell className="font-medium">{expense.description}</TableCell>
+                                            <TableCell><Badge variant="outline">{expense.category}</Badge></TableCell>
+                                            <TableCell>{safeFormatDate(expense.date)}</TableCell>
+                                            <TableCell className="text-right">R$ {expense.amount.toFixed(2)}</TableCell>
+                                            <TableCell className="text-right">
+                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive/90" onClick={() => confirmDeleteExpense(expense)}>
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </TableCell>
+                                        </TableRow>
+                                        ))
+                                    ) : (
+                                        <TableRow>
+                                        <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                                            Nenhuma saída registrada para {clientRendered ? format(selectedMonthDate, 'MMMM yyyy', { locale: ptBR }) : '...'}.
+                                        </TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
+
+                        {/* Mobile Card View */}
+                        <div className="md:hidden space-y-4">
                             {filteredExpenses.length > 0 ? (
                                 filteredExpenses.map((expense) => (
-                                <TableRow key={expense.id}>
-                                    <TableCell className="font-medium">{expense.description}</TableCell>
-                                    <TableCell><Badge variant="outline">{expense.category}</Badge></TableCell>
-                                    <TableCell>{safeFormatDate(expense.date)}</TableCell>
-                                    <TableCell className="text-right">R$ {expense.amount.toFixed(2)}</TableCell>
-                                    <TableCell className="text-right">
-                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive/90" onClick={() => confirmDeleteExpense(expense)}>
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                    </TableCell>
-                                </TableRow>
+                                    <Card key={`mobile-exp-${expense.id}`} className="bg-muted/30">
+                                        <CardContent className="p-3">
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <p className="font-semibold text-foreground">{expense.description}</p>
+                                                    <p className="text-sm text-muted-foreground">{safeFormatDate(expense.date)}</p>
+                                                </div>
+                                                <Badge variant="outline">{expense.category}</Badge>
+                                            </div>
+                                            <div className="flex justify-between items-center mt-2 pt-2 border-t">
+                                                <p className="text-lg font-bold text-red-600">R$ {expense.amount.toFixed(2)}</p>
+                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive/90" onClick={() => confirmDeleteExpense(expense)}>
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
                                 ))
                             ) : (
-                                <TableRow>
-                                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                                    Nenhuma saída registrada para {clientRendered ? format(selectedMonthDate, 'MMMM yyyy', { locale: ptBR }) : '...'}.
-                                </TableCell>
-                                </TableRow>
+                                <div className="text-center text-muted-foreground py-8">
+                                     Nenhuma saída registrada para {clientRendered ? format(selectedMonthDate, 'MMMM yyyy', { locale: ptBR }) : '...'}.
+                                </div>
                             )}
-                        </TableBody>
-                    </Table>
+                        </div>
+                    </>
                     )}
                  </TabsContent>
             </CardContent>
@@ -946,5 +980,3 @@ export default function FinanceiroPage() {
     </>
   );
 }
-
-    
