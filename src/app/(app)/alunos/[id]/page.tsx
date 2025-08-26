@@ -942,42 +942,35 @@ export default function AlunoDetailPage() {
                         <Separator />
                         <CardTitle className="text-lg">Histórico de Avaliações</CardTitle>
                         {sortedAssessments.length > 0 ? (
-                           <div className="overflow-x-auto">
-                           <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Data</TableHead>
-                                    <TableHead>Peso</TableHead>
-                                    <TableHead>Altura</TableHead>
-                                    <TableHead>% Gord</TableHead>
-                                    <TableHead>Peito</TableHead>
-                                    <TableHead>Cintura</TableHead>
-                                    <TableHead>Quadril</TableHead>
-                                    <TableHead>B. Esq</TableHead>
-                                    <TableHead>B. Dir</TableHead>
-                                    <TableHead>C. Esq</TableHead>
-                                    <TableHead>C. Dir</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {sortedAssessments.map((assessment, index) => (
-                                    <TableRow key={index}>
-                                        <TableCell>{formatDateString(assessment.date)}</TableCell>
-                                        <TableCell>{assessment.weight || '-'}</TableCell>
-                                        <TableCell>{assessment.height || '-'}</TableCell>
-                                        <TableCell>{assessment.bodyFatPercentage || '-'}</TableCell>
-                                        <TableCell>{assessment.chest || '-'}</TableCell>
-                                        <TableCell>{assessment.waist || '-'}</TableCell>
-                                        <TableCell>{assessment.hips || '-'}</TableCell>
-                                        <TableCell>{assessment.leftArm || '-'}</TableCell>
-                                        <TableCell>{assessment.rightArm || '-'}</TableCell>
-                                        <TableCell>{assessment.leftThigh || '-'}</TableCell>
-                                        <TableCell>{assessment.rightThigh || '-'}</TableCell>
-                                    </TableRow>
+                            <>
+                                {/* Desktop View */}
+                                <div className="overflow-x-auto hidden md:block">
+                                    <Table>
+                                        <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Peso</TableHead><TableHead>Altura</TableHead><TableHead>% Gord</TableHead><TableHead>Peito</TableHead><TableHead>Cintura</TableHead><TableHead>Quadril</TableHead><TableHead>B. Esq</TableHead><TableHead>B. Dir</TableHead><TableHead>C. Esq</TableHead><TableHead>C. Dir</TableHead></TableRow></TableHeader>
+                                        <TableBody>{sortedAssessments.map((assessment, index) => (<TableRow key={index}><TableCell>{formatDateString(assessment.date)}</TableCell><TableCell>{assessment.weight || '-'}</TableCell><TableCell>{assessment.height || '-'}</TableCell><TableCell>{assessment.bodyFatPercentage || '-'}</TableCell><TableCell>{assessment.chest || '-'}</TableCell><TableCell>{assessment.waist || '-'}</TableCell><TableCell>{assessment.hips || '-'}</TableCell><TableCell>{assessment.leftArm || '-'}</TableCell><TableCell>{assessment.rightArm || '-'}</TableCell><TableCell>{assessment.leftThigh || '-'}</TableCell><TableCell>{assessment.rightThigh || '-'}</TableCell></TableRow>))}</TableBody>
+                                    </Table>
+                                </div>
+                                {/* Mobile View */}
+                                <div className="space-y-4 md:hidden">
+                                {sortedAssessments.slice().reverse().map((item, index) => (
+                                    <Card key={`mobile-assess-${index}`} className="bg-muted/50 p-4">
+                                        <CardTitle className="text-base mb-3">{formatDateString(item.date)}</CardTitle>
+                                        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                                            <p><strong>Peso:</strong> {item.weight?.toFixed(1) || '-'} kg</p>
+                                            <p><strong>Altura:</strong> {item.height?.toFixed(1) || '-'} cm</p>
+                                            <p><strong>Gordura:</strong> {item.bodyFatPercentage?.toFixed(1) || '-'} %</p>
+                                            <p><strong>Cintura:</strong> {item.waist?.toFixed(1) || '-'} cm</p>
+                                            <p><strong>Quadril:</strong> {item.hips?.toFixed(1) || '-'} cm</p>
+                                            <p><strong>Peito:</strong> {item.chest?.toFixed(1) || '-'} cm</p>
+                                            <p><strong>Braço D.:</strong> {item.rightArm?.toFixed(1) || '-'} cm</p>
+                                            <p><strong>Braço E.:</strong> {item.leftArm?.toFixed(1) || '-'} cm</p>
+                                            <p><strong>Coxa D.:</strong> {item.rightThigh?.toFixed(1) || '-'} cm</p>
+                                            <p><strong>Coxa E.:</strong> {item.leftThigh?.toFixed(1) || '-'} cm</p>
+                                        </div>
+                                    </Card>
                                 ))}
-                            </TableBody>
-                           </Table>
-                           </div>
+                                </div>
+                            </>
                         ) : (
                            <p className="text-center text-sm text-muted-foreground py-8">
                                 Nenhuma avaliação física registrada. Adicione uma na aba de edição.
@@ -1001,29 +994,26 @@ export default function AlunoDetailPage() {
                                 return (
                                     <div key={day}>
                                         <h3 className="font-semibold text-lg text-foreground mb-2">Treino de {day}</h3>
-                                        <div className="overflow-x-auto">
+                                        {/* Desktop View */}
+                                        <div className="overflow-x-auto hidden md:block">
                                             <Table>
-                                                <TableHeader>
-                                                    <TableRow>
-                                                        <TableHead>Exercício</TableHead>
-                                                        <TableHead>Séries</TableHead>
-                                                        <TableHead>Reps</TableHead>
-                                                        <TableHead>Descanso</TableHead>
-                                                        <TableHead>Obs</TableHead>
-                                                    </TableRow>
-                                                </TableHeader>
-                                                <TableBody>
-                                                    {exercises.map(ex => (
-                                                        <TableRow key={ex.id}>
-                                                            <TableCell className="font-medium">{ex.name}</TableCell>
-                                                            <TableCell>{ex.sets}</TableCell>
-                                                            <TableCell>{ex.reps}</TableCell>
-                                                            <TableCell>{ex.rest}</TableCell>
-                                                            <TableCell>{ex.notes || '-'}</TableCell>
-                                                        </TableRow>
-                                                    ))}
-                                                </TableBody>
+                                                <TableHeader><TableRow><TableHead>Exercício</TableHead><TableHead>Séries</TableHead><TableHead>Reps</TableHead><TableHead>Descanso</TableHead><TableHead>Obs</TableHead></TableRow></TableHeader>
+                                                <TableBody>{exercises.map(ex => (<TableRow key={ex.id}><TableCell className="font-medium">{ex.name}</TableCell><TableCell>{ex.sets}</TableCell><TableCell>{ex.reps}</TableCell><TableCell>{ex.rest}</TableCell><TableCell>{ex.notes || '-'}</TableCell></TableRow>))}</TableBody>
                                             </Table>
+                                        </div>
+                                        {/* Mobile View */}
+                                        <div className="space-y-3 md:hidden">
+                                            {exercises.map(ex => (
+                                                <Card key={`mobile-${ex.id}`} className="bg-muted/50 p-3">
+                                                    <p className="font-semibold text-foreground">{ex.name}</p>
+                                                    <div className="grid grid-cols-3 gap-2 mt-2 text-sm">
+                                                        <div><p className="text-xs text-muted-foreground">Séries</p><p>{ex.sets}</p></div>
+                                                        <div><p className="text-xs text-muted-foreground">Reps</p><p>{ex.reps}</p></div>
+                                                        <div><p className="text-xs text-muted-foreground">Descanso</p><p>{ex.rest}</p></div>
+                                                    </div>
+                                                    {ex.notes && <p className="text-xs text-muted-foreground mt-2">Obs: {ex.notes}</p>}
+                                                </Card>
+                                            ))}
                                         </div>
                                     </div>
                                 )
