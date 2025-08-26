@@ -53,19 +53,50 @@ export function Navbar({ userType = 'coach' }: NavbarProps) {
   
   return (
     <header className="sticky top-0 z-40 flex h-16 items-center gap-4 border-b bg-card px-4 md:px-6 shadow-sm">
-      {isMobile ? (
-         <Button variant="outline" size="icon" className="shrink-0 md:hidden" onClick={toggleSidebar}>
-            <Menu className="h-5 w-5" />
-            <span className="sr-only">Alternar menu de navegação</span>
-          </Button>
-      ) : (
-        <div className='md:hidden'>
-           <Logo collapsed={true} />
+      {/* Mobile Header */}
+      <div className="flex w-full items-center justify-between md:hidden">
+        <Button variant="outline" size="icon" className="shrink-0" onClick={toggleSidebar}>
+          <Menu className="h-5 w-5" />
+          <span className="sr-only">Alternar menu de navegação</span>
+        </Button>
+        <div className="flex-1 text-center">
+            <div className="inline-block">
+                <Logo collapsed={true} />
+            </div>
         </div>
-      )}
-      
-      <div className="flex w-full items-center gap-4 md:ml-auto md:gap-2 lg:gap-4">
-        <form className="ml-auto flex-1 sm:flex-initial hidden md:block">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="secondary" size="icon" className="rounded-full shrink-0">
+              <UserCircle className="h-5 w-5" />
+              <span className="sr-only">Alternar menu do usuário</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+             <DropdownMenuLabel>Minha Conta</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {userType === 'coach' && (
+              <>
+                <Link href="/configuracoes" passHref>
+                  <DropdownMenuItem asChild>
+                    <span>Perfil</span>
+                  </DropdownMenuItem>
+                </Link>
+                <Link href="/configuracoes" passHref>
+                  <DropdownMenuItem asChild>
+                    <span>Configurações</span>
+                  </DropdownMenuItem>
+                </Link>
+                <DropdownMenuSeparator />
+              </>
+            )}
+            <DropdownMenuItem onClick={handleLogout}>Sair</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      {/* Desktop Header */}
+      <div className="hidden w-full items-center gap-4 md:flex md:ml-auto md:gap-2 lg:gap-4">
+        <form className="ml-auto flex-1 sm:flex-initial">
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
