@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { v4 as uuidv4 } from 'uuid';
+import { Label } from '@/components/ui/label';
 
 const sortDays = (days: DayOfWeek[] = []) => {
     return days.sort((a, b) => DAYS_OF_WEEK.indexOf(a) - DAYS_OF_WEEK.indexOf(b));
@@ -153,8 +154,10 @@ export default function StudentWorkoutPage() {
                     if (!exercises || exercises.length === 0) return null;
                     return (
                         <div key={day}>
-                            <h3 className="font-semibold text-xl text-foreground mb-2 border-b pb-1 border-primary/20">Treino de {day}</h3>
-                            <div className="overflow-x-auto">
+                            <h3 className="font-semibold text-xl text-foreground mb-3 border-b pb-2 border-primary/20">Treino de {day}</h3>
+                            
+                            {/* Desktop Table View */}
+                            <div className="overflow-x-auto hidden md:block">
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
@@ -199,6 +202,47 @@ export default function StudentWorkoutPage() {
                                         ))}
                                     </TableBody>
                                 </Table>
+                            </div>
+
+                            {/* Mobile Card View */}
+                            <div className="space-y-4 md:hidden">
+                                {exercises.map(ex => (
+                                    <Card key={`mobile-${ex.id}`} className="bg-muted/50">
+                                        <CardHeader className="pb-3">
+                                            <CardTitle className="text-base">{ex.name}</CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="space-y-3">
+                                            <div className="grid grid-cols-3 gap-x-4 gap-y-2 text-sm">
+                                                <div><Label className="text-xs text-muted-foreground">Séries</Label><p>{ex.sets}</p></div>
+                                                <div><Label className="text-xs text-muted-foreground">Reps</Label><p>{ex.reps}</p></div>
+                                                <div><Label className="text-xs text-muted-foreground">Descanso</Label><p>{ex.rest}</p></div>
+                                                {ex.notes && <div className="col-span-3"><Label className="text-xs text-muted-foreground">Obs</Label><p>{ex.notes}</p></div>}
+                                            </div>
+                                            <div className="flex items-end gap-2 pt-2 border-t">
+                                                <div className="flex-1 space-y-1">
+                                                     <Label htmlFor={`weight-${ex.id}`} className="text-xs">Peso (kg)</Label>
+                                                     <Input
+                                                      id={`weight-${ex.id}`}
+                                                      type="number"
+                                                      placeholder="Ex: 50"
+                                                      className="h-9 bg-background"
+                                                      value={weightInputs[ex.id] || ''}
+                                                      onChange={(e) => handleWeightChange(ex.id, e.target.value)}
+                                                      disabled={isSaving[ex.id]}
+                                                    />
+                                                </div>
+                                                <Button 
+                                                   size="sm" 
+                                                   className="h-9"
+                                                   onClick={() => handleSaveWeight(ex)}
+                                                   disabled={!weightInputs[ex.id] || isSaving[ex.id]}
+                                                >
+                                                   {isSaving[ex.id] ? <Loader2 className="h-4 w-4 animate-spin"/> : <Save className="h-4 w-4"/>}
+                                                </Button>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                ))}
                             </div>
                         </div>
                     )
