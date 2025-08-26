@@ -1,5 +1,4 @@
 
-
 export type DayOfWeek = 'Segunda' | 'Terça' | 'Quarta' | 'Quinta' | 'Sexta' | 'Sábado' | 'Domingo';
 export const DAYS_OF_WEEK: DayOfWeek[] = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
 
@@ -10,6 +9,8 @@ export interface Exercise {
   reps: string;
   rest: string;
   notes?: string;
+  // New field to link to the library
+  libraryExerciseId?: string;
 }
 
 export interface PhysicalAssessment {
@@ -165,6 +166,16 @@ export interface CoachProfileSettings {
   defaultPaymentReminderDays: number;
 }
 
+export interface LibraryExercise {
+  id: string;
+  name: string;
+  muscleGroup: string;
+  defaultSets?: string;
+  defaultReps?: string;
+  defaultRest?: string;
+  defaultNotes?: string;
+}
+
 
 export const getDayOfWeekName = (dayNumber: number): DayOfWeek | undefined => {
   const map: Record<number, DayOfWeek> = {
@@ -179,4 +190,3 @@ export const getDayOfWeekName = (dayNumber: number): DayOfWeek | undefined => {
   return map[dayNumber];
 };
 
-    

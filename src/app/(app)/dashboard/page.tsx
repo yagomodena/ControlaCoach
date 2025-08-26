@@ -306,7 +306,6 @@ export default function DashboardPage() {
             <Button asChild variant="link" className="mt-4 px-0 text-primary">
               <Link href="/agenda">Ver agenda completa &rarr;</Link>
             </Button>
-             {/* <p className="text-xs text-muted-foreground mt-2">* A lista de próximas aulas é baseada em dados de exemplo.</p> */}
           </CardContent>
         </Card>
       </div>

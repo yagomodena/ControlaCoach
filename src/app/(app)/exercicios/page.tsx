@@ -1,0 +1,321 @@
+
+'use client';
+
+import React, { useState, useEffect, useMemo } from 'react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { PlusCircle, Edit, Trash2, Dumbbell, Loader2, Search } from "lucide-react";
+import { type LibraryExercise } from '@/types';
+import { db, auth } from '@/firebase';
+import { collection, onSnapshot, deleteDoc, doc, query, orderBy, addDoc, updateDoc } from 'firebase/firestore';
+import { useToast } from '@/hooks/use-toast';
+import { useRouter } from 'next/navigation';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+} from "@/components/ui/dialog";
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+
+const exerciseSchema = z.object({
+  name: z.string().min(2, { message: "O nome deve ter pelo menos 2 caracteres." }),
+  muscleGroup: z.string().min(2, { message: "O grupo muscular deve ter pelo menos 2 caracteres." }),
+  defaultSets: z.string().optional(),
+  defaultReps: z.string().optional(),
+  defaultRest: z.string().optional(),
+  defaultNotes: z.string().optional(),
+});
+
+type ExerciseFormData = z.infer<typeof exerciseSchema>;
+
+interface ExerciseDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  exercise?: LibraryExercise | null;
+  onSave: () => void;
+}
+
+function ExerciseDialog({ open, onOpenChange, exercise, onSave }: ExerciseDialogProps) {
+  const { toast } = useToast();
+  const [userId, setUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged(user => setUserId(user?.uid || null));
+    return () => unsubscribe();
+  }, []);
+
+  const { control, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<ExerciseFormData>({
+    resolver: zodResolver(exerciseSchema),
+  });
+
+  useEffect(() => {
+    if (exercise) {
+      reset(exercise);
+    } else {
+      reset({
+        name: '',
+        muscleGroup: '',
+        defaultSets: '',
+        defaultReps: '',
+        defaultRest: '',
+        defaultNotes: '',
+      });
+    }
+  }, [exercise, reset]);
+
+  const onSubmit = async (data: ExerciseFormData) => {
+    if (!userId) {
+      toast({ title: "Erro de autenticação", variant: "destructive" });
+      return;
+    }
+
+    try {
+      if (exercise?.id) {
+        // Update existing exercise
+        const exerciseRef = doc(db, 'coaches', userId, 'libraryExercises', exercise.id);
+        await updateDoc(exerciseRef, data);
+        toast({ title: "Exercício Atualizado!", description: `${data.name} foi atualizado com sucesso.` });
+      } else {
+        // Add new exercise
+        await addDoc(collection(db, 'coaches', userId, 'libraryExercises'), data);
+        toast({ title: "Exercício Criado!", description: `${data.name} foi adicionado à biblioteca.` });
+      }
+      onSave();
+      onOpenChange(false);
+    } catch (error) {
+      console.error("Error saving exercise:", error);
+      toast({ title: "Erro ao Salvar", description: "Não foi possível salvar o exercício.", variant: "destructive" });
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{exercise ? 'Editar Exercício' : 'Novo Exercício'}</DialogTitle>
+          <DialogDescription>
+            {exercise ? 'Altere os detalhes do exercício abaixo.' : 'Adicione um novo exercício à sua biblioteca.'}
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="name">Nome do Exercício</Label>
+            <Controller name="name" control={control} render={({ field }) => <Input {...field} placeholder="Ex: Supino Reto" />} />
+            {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="muscleGroup">Grupo Muscular</Label>
+            <Controller name="muscleGroup" control={control} render={({ field }) => <Input {...field} placeholder="Ex: Peito, Costas, Pernas" />} />
+            {errors.muscleGroup && <p className="text-sm text-destructive">{errors.muscleGroup.message}</p>}
+          </div>
+          <p className="text-sm text-muted-foreground pt-2">Valores Padrão (Opcional)</p>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="defaultSets">Séries</Label>
+              <Controller name="defaultSets" control={control} render={({ field }) => <Input {...field} placeholder="Ex: 3" />} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="defaultReps">Repetições</Label>
+              <Controller name="defaultReps" control={control} render={({ field }) => <Input {...field} placeholder="Ex: 10-12" />} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="defaultRest">Descanso</Label>
+              <Controller name="defaultRest" control={control} render={({ field }) => <Input {...field} placeholder="Ex: 60s" />} />
+            </div>
+          </div>
+           <div className="space-y-2">
+              <Label htmlFor="defaultNotes">Observações</Label>
+              <Controller name="defaultNotes" control={control} render={({ field }) => <Input {...field} placeholder="Ex: Focar na execução lenta" />} />
+            </div>
+
+          <DialogFooter className="pt-4">
+            <DialogClose asChild>
+              <Button type="button" variant="outline">Cancelar</Button>
+            </DialogClose>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? 'Salvando...' : 'Salvar'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+
+export default function ExerciciosPage() {
+  const [exercises, setExercises] = useState<LibraryExercise[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
+  const { toast } = useToast();
+  const router = useRouter();
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [selectedExercise, setSelectedExercise] = useState<LibraryExercise | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  useEffect(() => {
+    const unsubscribeAuth = auth.onAuthStateChanged(user => {
+      if (user) {
+        setUserId(user.uid);
+      } else {
+        setUserId(null);
+        toast({ title: "Autenticação Necessária", variant: "destructive" });
+        router.push('/login');
+      }
+    });
+    return () => unsubscribeAuth();
+  }, [router, toast]);
+
+  const fetchExercises = () => {
+    if (!userId) return;
+    setIsLoading(true);
+    const exercisesCollectionRef = collection(db, 'coaches', userId, 'libraryExercises');
+    const q = query(exercisesCollectionRef, orderBy('muscleGroup'), orderBy('name'));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as LibraryExercise));
+      setExercises(data);
+      setIsLoading(false);
+    }, (error) => {
+      console.error("Error fetching exercises: ", error);
+      toast({ title: "Erro ao Carregar Exercícios", variant: "destructive" });
+      setIsLoading(false);
+    });
+    return unsubscribe;
+  };
+  
+  useEffect(() => {
+    const unsubscribe = fetchExercises();
+    return () => unsubscribe && unsubscribe();
+  }, [userId]);
+
+
+  const handleAddNew = () => {
+    setSelectedExercise(null);
+    setIsDialogOpen(true);
+  };
+
+  const handleEdit = (exercise: LibraryExercise) => {
+    setSelectedExercise(exercise);
+    setIsDialogOpen(true);
+  };
+
+  const handleDelete = async (exercise: LibraryExercise) => {
+    if (!userId) return;
+    if (window.confirm(`Tem certeza que deseja excluir o exercício "${exercise.name}"?`)) {
+      try {
+        await deleteDoc(doc(db, 'coaches', userId, 'libraryExercises', exercise.id));
+        toast({ title: "Exercício Excluído!" });
+        fetchExercises(); // Re-fetch
+      } catch (error) {
+        toast({ title: "Erro ao Excluir", variant: "destructive" });
+      }
+    }
+  };
+
+  const groupedExercises = useMemo(() => {
+    const filtered = exercises.filter(ex => 
+        ex.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        ex.muscleGroup.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    
+    return filtered.reduce((acc, ex) => {
+      (acc[ex.muscleGroup] = acc[ex.muscleGroup] || []).push(ex);
+      return acc;
+    }, {} as Record<string, LibraryExercise[]>);
+  }, [exercises, searchTerm]);
+
+  return (
+    <>
+      <div className="container mx-auto py-8">
+        <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4">
+          <div>
+            <h1 className="text-3xl font-headline font-bold text-foreground">Biblioteca de Exercícios</h1>
+            <p className="text-muted-foreground">Gerencie sua lista de exercícios reutilizáveis.</p>
+          </div>
+          <Button onClick={handleAddNew} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+            <PlusCircle className="mr-2 h-5 w-5" />
+            Adicionar Exercício
+          </Button>
+        </div>
+
+        <Card className="shadow-lg">
+          <CardHeader>
+            <CardTitle>Exercícios Cadastrados</CardTitle>
+            <CardDescription>Adicione e gerencie os exercícios para montar os treinos dos seus alunos de forma rápida.</CardDescription>
+            <div className="relative w-full sm:max-w-sm mt-4">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="search"
+                placeholder="Buscar por nome ou grupo..."
+                className="pl-8 w-full bg-background"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="flex justify-center items-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : Object.keys(groupedExercises).length > 0 ? (
+              <Accordion type="multiple" className="w-full">
+                {Object.entries(groupedExercises).map(([group, exs]) => (
+                  <AccordionItem key={group} value={group}>
+                    <AccordionTrigger className="text-lg font-medium">{group} ({exs.length})</AccordionTrigger>
+                    <AccordionContent>
+                      <div className="space-y-2">
+                        {exs.map(ex => (
+                          <div key={ex.id} className="flex justify-between items-center p-3 rounded-md bg-muted/50">
+                            <div>
+                              <p className="font-semibold">{ex.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {ex.defaultSets && `Séries: ${ex.defaultSets}`}
+                                {ex.defaultReps && ` • Reps: ${ex.defaultReps}`}
+                                {ex.defaultRest && ` • Desc: ${ex.defaultRest}`}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1">
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(ex)}>
+                                    <Edit className="h-4 w-4"/>
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDelete(ex)}>
+                                    <Trash2 className="h-4 w-4"/>
+                                </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            ) : (
+              <div className="text-center py-12 text-muted-foreground">
+                <Dumbbell className="mx-auto h-12 w-12 mb-4" />
+                <p>Nenhum exercício encontrado.</p>
+                <p className="text-sm">Comece adicionando um novo exercício à sua biblioteca.</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+      <ExerciseDialog
+        open={isDialogOpen}
+        onOpenChange={setIsDialogOpen}
+        exercise={selectedExercise}
+        onSave={fetchExercises}
+      />
+    </>
+  );
+}

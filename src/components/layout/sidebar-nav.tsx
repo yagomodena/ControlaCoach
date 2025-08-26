@@ -12,7 +12,8 @@ import {
   LogOut,
   MapPin, 
   ListChecks, 
-  LineChart, // Added LineChart icon
+  LineChart,
+  Dumbbell, // Added Dumbbell icon
 } from 'lucide-react';
 import {
   Sidebar,
@@ -34,13 +35,14 @@ import { signOut } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
 
 const navItems = [
+  { href: '/dashboard', label: 'Dashboard', icon: LineChart }, // Changed Relatórios to Dashboard
   { href: '/alunos', label: 'Alunos', icon: Users },
   { href: '/aulas', label: 'Aulas', icon: BookOpenCheck },
   { href: '/agenda', label: 'Agenda', icon: CalendarDays },
+  { href: '/exercicios', label: 'Exercícios', icon: Dumbbell }, // Added Exercícios
   { href: '/locais', label: 'Locais', icon: MapPin },
   { href: '/planos', label: 'Planos', icon: ListChecks }, 
   { href: '/financeiro', label: 'Financeiro', icon: DollarSign },
-  { href: '/relatorios', label: 'Relatórios', icon: LineChart }, // Added Relatórios
   { href: '/configuracoes', label: 'Configurações', icon: Settings },
 ];
 
@@ -113,6 +115,7 @@ export function SidebarNav() {
               <SidebarMenuSkeleton showIcon />
               <SidebarMenuSkeleton showIcon /> 
               <SidebarMenuSkeleton showIcon />
+              <SidebarMenuSkeleton showIcon /> 
               <SidebarMenuSkeleton showIcon /> 
             </>
           )}

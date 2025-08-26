@@ -20,7 +20,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useForm, Controller, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { type Student, type Plan, type Location, type DayOfWeek, type TrainingSheet, type PhysicalAssessment, type Exercise } from '@/types';
+import { type Student, type Plan, type Location, type DayOfWeek, type TrainingSheet, type PhysicalAssessment, type Exercise, LibraryExercise } from '@/types';
 import { DAYS_OF_WEEK } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { AddPlanDialog } from '@/components/dialogs/add-plan-dialog';
@@ -41,6 +41,7 @@ const exerciseSchema = z.object({
   reps: z.string().min(1, 'Repetições são obrigatórias.'),
   rest: z.string().min(1, 'Descanso é obrigatório.'),
   notes: z.string().optional(),
+  libraryExerciseId: z.string().optional(),
 });
 
 const studentSchema = z.object({
@@ -87,6 +88,8 @@ export default function AlunoDetailPage() {
   const [isLoadingPlans, setIsLoadingPlans] = useState(true);
   const [activeLocations, setActiveLocations] = useState<Location[]>([]);
   const [isLoadingLocations, setIsLoadingLocations] = useState(true);
+  const [libraryExercises, setLibraryExercises] = useState<LibraryExercise[]>([]);
+  const [isLoadingExercises, setIsLoadingExercises] = useState(true);
   const [isAddPlanDialogOpen, setIsAddPlanDialogOpen] = useState(false);
   const [isManagePlansDialogOpen, setIsManagePlansDialogOpen] = useState(false);
 
@@ -149,9 +152,24 @@ export default function AlunoDetailPage() {
       toast({ title: "Erro ao Carregar Locais", variant: "destructive" });
       setIsLoadingLocations(false);
     });
+    
+    setIsLoadingExercises(true);
+    const exercisesCollectionRef = collection(db, 'coaches', userId, 'libraryExercises');
+    const qExercises = query(exercisesCollectionRef, orderBy('muscleGroup'), orderBy('name'));
+    const unsubscribeExercises = onSnapshot(qExercises, (snapshot) => {
+      const exercisesData = snapshot.docs.map(docSnap => ({ ...docSnap.data(), id: docSnap.id } as LibraryExercise));
+      setLibraryExercises(exercisesData);
+      setIsLoadingExercises(false);
+    }, (error) => {
+      console.error("Error fetching library exercises: ", error);
+      toast({ title: "Erro ao Carregar Exercícios", variant: "destructive" });
+      setIsLoadingExercises(false);
+    });
+
     return () => {
         unsubscribePlans();
         unsubscribeLocations();
+        unsubscribeExercises();
     };
   }, [userId, toast]);
 
@@ -163,7 +181,7 @@ export default function AlunoDetailPage() {
 
   const { fields, append, remove, update } = useFieldArray({
     control,
-    name: `trainingSheetWorkouts.${sortDays(recurringClassDays)[0]}` as any, // This is tricky, need a better way
+    name: `trainingSheetWorkouts.${sortDays(recurringClassDays)[0]}` as any,
   });
 
   const fetchStudent = async () => {
@@ -360,7 +378,7 @@ export default function AlunoDetailPage() {
     }
   };
 
-  if (isLoading || isLoadingLocations || isLoadingPlans || !userId) {
+  if (isLoading || isLoadingLocations || isLoadingPlans || isLoadingExercises || !userId) {
     return (
       <div className="container mx-auto py-8 flex flex-col items-center justify-center min-h-[calc(100vh-150px)]">
         <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
@@ -427,6 +445,21 @@ export default function AlunoDetailPage() {
       name: `trainingSheetWorkouts.${day}`,
     });
 
+    const handleAddExercise = (exerciseId: string) => {
+        const exercise = libraryExercises.find(e => e.id === exerciseId);
+        if (exercise) {
+            append({
+                id: uuidv4(),
+                name: exercise.name,
+                sets: exercise.defaultSets || '',
+                reps: exercise.defaultReps || '',
+                rest: exercise.defaultRest || '',
+                notes: exercise.defaultNotes || '',
+                libraryExerciseId: exercise.id,
+            });
+        }
+    };
+
     return (
       <Card className="bg-muted/30">
         <CardHeader className="py-3 px-4">
@@ -436,17 +469,12 @@ export default function AlunoDetailPage() {
           {fields.map((item, index) => (
             <div key={item.id} className="p-3 border rounded-md bg-background space-y-2">
               <div className="flex justify-between items-center">
-                 <p className="font-semibold text-primary">Exercício {index + 1}</p>
+                 <p className="font-semibold text-primary">{item.name}</p>
                  <Button type="button" variant="ghost" size="icon" className="text-destructive h-7 w-7" onClick={() => remove(index)}>
                    <Trash2 className="h-4 w-4" />
                  </Button>
               </div>
               <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                 <Controller
-                    name={`trainingSheetWorkouts.${day}.${index}.name`}
-                    control={control}
-                    render={({ field }) => <Input {...field} placeholder="Nome do exercício" className="col-span-2"/>}
-                 />
                  <Controller
                     name={`trainingSheetWorkouts.${day}.${index}.sets`}
                     control={control}
@@ -470,9 +498,23 @@ export default function AlunoDetailPage() {
               </div>
             </div>
           ))}
-          <Button type="button" variant="outline" onClick={() => append({ id: uuidv4(), name: '', sets: '', reps: '', rest: '', notes: '' })}>
-            <PlusCircle className="mr-2 h-4 w-4" /> Adicionar Exercício
-          </Button>
+          <div className="flex items-center gap-2">
+            <Select onValueChange={handleAddExercise}>
+                <SelectTrigger className="flex-grow"><SelectValue placeholder="Selecione um exercício da biblioteca..."/></SelectTrigger>
+                <SelectContent>
+                    {libraryExercises.length > 0 ? (
+                      libraryExercises.map(ex => (
+                        <SelectItem key={ex.id} value={ex.id}>{ex.name} ({ex.muscleGroup})</SelectItem>
+                      ))  
+                    ) : (
+                        <SelectItem value="none" disabled>Nenhum exercício na biblioteca</SelectItem>
+                    )}
+                </SelectContent>
+            </Select>
+            <Button type="button" variant="outline" asChild>
+                <Link href="/exercicios" target="_blank"><PlusCircle className="h-4 w-4"/></Link>
+            </Button>
+          </div>
         </CardContent>
       </Card>
     );
