@@ -506,7 +506,7 @@ export default function AlunoDetailPage() {
         {isEditMode ? (
           <form onSubmit={handleSubmit(onSubmit)}>
             <Tabs defaultValue="personal" className="w-full">
-                <TabsList className="grid w-full grid-cols-4 mb-6 max-w-2xl mx-auto">
+                <TabsList className="flex flex-wrap h-auto justify-center mb-6 max-w-2xl mx-auto">
                     <TabsTrigger value="personal">Pessoal</TabsTrigger>
                     <TabsTrigger value="sports">Info Esportiva</TabsTrigger>
                     <TabsTrigger value="schedule">Aulas & Financeiro</TabsTrigger>
