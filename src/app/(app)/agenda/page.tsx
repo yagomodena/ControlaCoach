@@ -904,17 +904,17 @@ export default function AgendaPage() {
             </div>
             </ScrollArea>
           )}
-          <DialogFooter className="sm:justify-between pt-4 border-t">
-            <Button type="button" variant="destructive" onClick={handleDeleteClass} className="sm:mr-auto">
+          <DialogFooter className="flex-col-reverse sm:flex-row sm:justify-between pt-4 border-t w-full">
+            <Button type="button" variant="destructive" onClick={handleDeleteClass} className="w-full sm:w-auto">
               <Trash2 className="mr-2 h-4 w-4" /> Excluir Aula
             </Button>
-            <div className="flex gap-2 mt-2 sm:mt-0">
-                <DialogClose asChild>
-                <Button type="button" variant="outline">Cancelar</Button>
-                </DialogClose>
-                <Button type="button" onClick={handleSaveChangesToClass} disabled={editedClassStudentIds.length === 0 || !editedClassTitle || !editedClassLocation || isLoadingStudents || isLoadingLocations}>
+            <div className="flex flex-col-reverse sm:flex-row gap-2 w-full sm:w-auto">
+                <Button type="button" onClick={handleSaveChangesToClass} disabled={editedClassStudentIds.length === 0 || !editedClassTitle || !editedClassLocation || isLoadingStudents || isLoadingLocations} className="w-full">
                 Salvar Alterações
                 </Button>
+                <DialogClose asChild>
+                  <Button type="button" variant="outline" className="w-full">Cancelar</Button>
+                </DialogClose>
             </div>
           </DialogFooter>
         </DialogContent>
