@@ -759,7 +759,7 @@ export default function AgendaPage() {
       </Dialog>
 
       <Dialog open={isEditClassDialogOpen} onOpenChange={setIsEditClassDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="w-[90vw] sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Gerenciar Aula - {classBeingEdited?.time}</DialogTitle>
             <DialogDescription>
@@ -877,11 +877,11 @@ export default function AgendaPage() {
             </div>
             </ScrollArea>
           )}
-          <DialogFooter className="flex-col sm:flex-row sm:justify-between gap-2 pt-4 border-t w-full">
-            <Button type="button" variant="destructive" onClick={handleDeleteClass} className="w-full sm:w-auto order-last sm:order-first">
+          <DialogFooter className="flex-col gap-2 pt-4 border-t w-full sm:flex-row sm:justify-between">
+            <Button type="button" variant="destructive" onClick={handleDeleteClass} className="w-full sm:w-auto sm:order-first">
               <Trash2 className="mr-2 h-4 w-4" /> Excluir Aula
             </Button>
-            <div className="flex flex-col-reverse sm:flex-row gap-2 w-full sm:w-auto">
+            <div className="flex flex-col-reverse gap-2 w-full sm:flex-row sm:w-auto">
                 <DialogClose asChild>
                   <Button type="button" variant="outline" className="w-full">Cancelar</Button>
                 </DialogClose>
