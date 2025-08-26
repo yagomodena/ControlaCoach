@@ -48,9 +48,9 @@ export default function StudentEvolutionPage() {
     }
   }, [router]);
   
-  const formatDateString = (dateString?: string) => {
+  const formatDateString = (dateString?: string, formatStyle = 'dd/MM/yy') => {
     if (!dateString) return 'N/A';
-    try { return format(parseISO(dateString), 'dd/MM/yy'); } catch (e) { return 'Data inválida'; }
+    try { return format(parseISO(dateString), formatStyle); } catch (e) { return 'Data inválida'; }
   };
 
   const sortedAssessments = student?.physicalAssessments?.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()) || [];
@@ -139,36 +139,57 @@ export default function StudentEvolutionPage() {
         </CardHeader>
         <CardContent>
          {sortedAssessments.length > 0 ? (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Peso</TableHead>
-                  <TableHead>Gordura</TableHead>
-                  <TableHead>Cintura</TableHead>
-                  <TableHead>Quadril</TableHead>
-                  <TableHead>Peito</TableHead>
-                  <TableHead>Braço D.</TableHead>
-                  <TableHead>Coxa D.</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sortedAssessments.slice().reverse().map((item, index) => (
-                  <TableRow key={index}>
-                    <TableCell className="font-medium">{format(parseISO(item.date), 'dd/MM/yyyy')}</TableCell>
-                    <TableCell>{item.weight?.toFixed(1) || '-'} kg</TableCell>
-                    <TableCell>{item.bodyFatPercentage?.toFixed(1) || '-'} %</TableCell>
-                    <TableCell>{item.waist?.toFixed(1) || '-'} cm</TableCell>
-                    <TableCell>{item.hips?.toFixed(1) || '-'} cm</TableCell>
-                    <TableCell>{item.chest?.toFixed(1) || '-'} cm</TableCell>
-                    <TableCell>{item.rightArm?.toFixed(1) || '-'} cm</TableCell>
-                    <TableCell>{item.rightThigh?.toFixed(1) || '-'} cm</TableCell>
+          <>
+            {/* Desktop Table View */}
+            <div className="overflow-x-auto hidden md:block">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Data</TableHead>
+                    <TableHead>Peso</TableHead>
+                    <TableHead>Gordura</TableHead>
+                    <TableHead>Cintura</TableHead>
+                    <TableHead>Quadril</TableHead>
+                    <TableHead>Peito</TableHead>
+                    <TableHead>Braço D.</TableHead>
+                    <TableHead>Coxa D.</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {sortedAssessments.slice().reverse().map((item, index) => (
+                    <TableRow key={index}>
+                      <TableCell className="font-medium">{formatDateString(item.date, 'dd/MM/yyyy')}</TableCell>
+                      <TableCell>{item.weight?.toFixed(1) || '-'} kg</TableCell>
+                      <TableCell>{item.bodyFatPercentage?.toFixed(1) || '-'} %</TableCell>
+                      <TableCell>{item.waist?.toFixed(1) || '-'} cm</TableCell>
+                      <TableCell>{item.hips?.toFixed(1) || '-'} cm</TableCell>
+                      <TableCell>{item.chest?.toFixed(1) || '-'} cm</TableCell>
+                      <TableCell>{item.rightArm?.toFixed(1) || '-'} cm</TableCell>
+                      <TableCell>{item.rightThigh?.toFixed(1) || '-'} cm</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            {/* Mobile Card View */}
+            <div className="space-y-4 md:hidden">
+              {sortedAssessments.slice().reverse().map((item, index) => (
+                <Card key={`mobile-assess-${index}`} className="bg-muted/50 p-4">
+                  <CardTitle className="text-base mb-3">{formatDateString(item.date, 'dd/MM/yyyy')}</CardTitle>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                    <p><strong>Peso:</strong> {item.weight?.toFixed(1) || '-'} kg</p>
+                    <p><strong>Gordura:</strong> {item.bodyFatPercentage?.toFixed(1) || '-'} %</p>
+                    <p><strong>Cintura:</strong> {item.waist?.toFixed(1) || '-'} cm</p>
+                    <p><strong>Quadril:</strong> {item.hips?.toFixed(1) || '-'} cm</p>
+                    <p><strong>Peito:</strong> {item.chest?.toFixed(1) || '-'} cm</p>
+                    <p><strong>Braço D.:</strong> {item.rightArm?.toFixed(1) || '-'} cm</p>
+                    <p><strong>Coxa D.:</strong> {item.rightThigh?.toFixed(1) || '-'} cm</p>
+                    <p><strong>Braço E.:</strong> {item.leftArm?.toFixed(1) || '-'} cm</p>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </>
          ) : (
              <p className="text-muted-foreground text-center py-10">Nenhuma avaliação física encontrada.</p>
          )}
@@ -182,26 +203,43 @@ export default function StudentEvolutionPage() {
         </CardHeader>
         <CardContent>
          {sortedWorkoutLogs.length > 0 ? (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Exercício</TableHead>
-                  <TableHead className="text-right">Peso Utilizado</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sortedWorkoutLogs.map((log) => (
-                  <TableRow key={log.logId}>
-                    <TableCell className="font-medium">{format(parseISO(log.date), 'dd/MM/yyyy HH:mm')}</TableCell>
-                    <TableCell>{log.exerciseName}</TableCell>
-                    <TableCell className="text-right"><Badge variant="secondary">{log.weightUsed} kg</Badge></TableCell>
+          <>
+            {/* Desktop Table View */}
+            <div className="overflow-x-auto hidden md:block">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Data</TableHead>
+                    <TableHead>Exercício</TableHead>
+                    <TableHead className="text-right">Peso Utilizado</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {sortedWorkoutLogs.map((log) => (
+                    <TableRow key={log.logId}>
+                      <TableCell className="font-medium">{formatDateString(log.date, 'dd/MM/yy HH:mm')}</TableCell>
+                      <TableCell>{log.exerciseName}</TableCell>
+                      <TableCell className="text-right"><Badge variant="secondary">{log.weightUsed} kg</Badge></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            {/* Mobile Card View */}
+            <div className="space-y-4 md:hidden">
+              {sortedWorkoutLogs.map((log) => (
+                <Card key={`mobile-log-${log.logId}`} className="bg-muted/50 p-3">
+                   <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-semibold text-foreground">{log.exerciseName}</p>
+                        <p className="text-xs text-muted-foreground">{formatDateString(log.date, 'dd/MM/yy HH:mm')}</p>
+                      </div>
+                      <Badge variant="secondary">{log.weightUsed} kg</Badge>
+                   </div>
+                </Card>
+              ))}
+            </div>
+          </>
          ) : (
             <p className="text-muted-foreground text-center py-10">Nenhum peso registrado ainda. Comece a registrar na tela "Meu Treino"!</p>
          )}
