@@ -506,7 +506,7 @@ export default function AlunoDetailPage() {
         {isEditMode ? (
           <form onSubmit={handleSubmit(onSubmit)}>
             <Tabs defaultValue="personal" className="w-full">
-                <TabsList className="flex flex-wrap h-auto justify-center mb-6 max-w-2xl mx-auto">
+                <TabsList className="flex flex-wrap h-auto justify-start sm:justify-center mb-6 max-w-2xl mx-auto overflow-x-auto sm:overflow-x-visible">
                     <TabsTrigger value="personal">Pessoal</TabsTrigger>
                     <TabsTrigger value="sports">Info Esportiva</TabsTrigger>
                     <TabsTrigger value="schedule">Aulas & Financeiro</TabsTrigger>
@@ -839,7 +839,7 @@ export default function AlunoDetailPage() {
           </form>
         ) : (
           <Tabs defaultValue="overview" className="w-full">
-            <TabsList className="flex flex-wrap h-auto mb-6 max-w-2xl mx-auto">
+            <TabsList className="flex flex-wrap h-auto justify-start sm:justify-center mb-6 max-w-2xl mx-auto overflow-x-auto sm:overflow-x-visible">
               <TabsTrigger value="overview">Visão Geral</TabsTrigger>
               <TabsTrigger value="schedule">Aulas</TabsTrigger>
               <TabsTrigger value="evolution">Evolução Física</TabsTrigger>
@@ -849,7 +849,7 @@ export default function AlunoDetailPage() {
 
             <TabsContent value="overview">
               <Card className="shadow-lg">
-                <CardHeader className="flex flex-row items-center justify-between">
+                <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center sm:justify-between gap-4">
                   <div className="flex items-center gap-4">
                     <Avatar className="h-20 w-20">
                         <AvatarImage src={student.photoURL ?? undefined} alt={student.name} />
@@ -857,7 +857,7 @@ export default function AlunoDetailPage() {
                     </Avatar>
                     <div>
                         <CardTitle className="text-2xl font-headline">{student.name}</CardTitle>
-                        <CardDescription>ID do Aluno: {student.id}</CardDescription>
+                        <CardDescription>ID: {student.id}</CardDescription>
                     </div>
                   </div>
                   {student.status === 'active'
@@ -865,7 +865,7 @@ export default function AlunoDetailPage() {
                     : <Badge className="bg-red-500/20 text-red-700 border-red-500/30 py-1 px-3 text-sm"><ShieldOff className="inline mr-1 h-4 w-4" />Inativo</Badge>
                   }
                 </CardHeader>
-                <CardContent className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 pt-6">
+                <CardContent className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 pt-6">
                   <InfoItem icon={User} label="Nome Completo" value={student.name} />
                   <InfoItem icon={Phone} label="Telefone" value={student.phone} />
                   <InfoItem icon={CalendarDays} label="Data de Nascimento" value={student.birthDate ? `${formatDateString(student.birthDate)} (${studentAge} anos)` : 'N/A'} />
@@ -880,23 +880,25 @@ export default function AlunoDetailPage() {
                  <CardContent className="pt-2">
                    <Label className="text-sm text-muted-foreground">Histórico de Presença (Últimos 5)</Label>
                     {student.attendanceHistory && student.attendanceHistory.length > 0 ? (
-                      <Table className="mt-2">
-                        <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>ID Aula Agendada</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-                        <TableBody>
-                          {student.attendanceHistory.slice(0, 5).map((att, index) => (
-                            <TableRow key={index}>
-                              <TableCell>{formatDateString(att.date)}</TableCell>
-                              <TableCell>{att.bookedClassId}</TableCell>
-                              <TableCell>
-                                {att.status === 'present' && <Badge className="bg-green-500/20 text-green-700 border-green-500/30"><CheckCircle className="inline mr-1 h-3 w-3" /> Presente</Badge>}
-                                {att.status === 'absent' && <Badge className="bg-red-500/20 text-red-700 border-red-500/30"><XCircle className="inline mr-1 h-3 w-3" /> Ausente</Badge>}
-                                {att.status === 'rescheduled' && <Badge className="bg-blue-500/20 text-blue-700 border-blue-500/30"><Clock className="inline mr-1 h-3 w-3" /> Remarcado</Badge>}
-                                {att.status === 'pending' && <Badge className="bg-yellow-500/20 text-yellow-700 border-yellow-500/30"><Clock className="inline mr-1 h-3 w-3" /> Pendente</Badge>}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
+                      <div className="overflow-x-auto">
+                        <Table className="mt-2">
+                          <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>ID Aula Agendada</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                          <TableBody>
+                            {student.attendanceHistory.slice(0, 5).map((att, index) => (
+                              <TableRow key={index}>
+                                <TableCell>{formatDateString(att.date)}</TableCell>
+                                <TableCell>{att.bookedClassId}</TableCell>
+                                <TableCell>
+                                  {att.status === 'present' && <Badge className="bg-green-500/20 text-green-700 border-green-500/30"><CheckCircle className="inline mr-1 h-3 w-3" /> Presente</Badge>}
+                                  {att.status === 'absent' && <Badge className="bg-red-500/20 text-red-700 border-red-500/30"><XCircle className="inline mr-1 h-3 w-3" /> Ausente</Badge>}
+                                  {att.status === 'rescheduled' && <Badge className="bg-blue-500/20 text-blue-700 border-blue-500/30"><Clock className="inline mr-1 h-3 w-3" /> Remarcado</Badge>}
+                                  {att.status === 'pending' && <Badge className="bg-yellow-500/20 text-yellow-700 border-yellow-500/30"><Clock className="inline mr-1 h-3 w-3" /> Pendente</Badge>}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
                     ) : (
                       <p className="text-muted-foreground text-sm mt-1">Nenhum histórico de presença registrado.</p>
                     )}
@@ -911,8 +913,10 @@ export default function AlunoDetailPage() {
                         <CardDescription>Plano, nível e histórico de avaliações físicas.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-6">
-                         <InfoItem icon={Users} label="Plano" value={student.plan} />
-                         <InfoItem icon={BarChart} label="Nível Técnico" value={student.technicalLevel} />
+                         <div className="grid sm:grid-cols-2 gap-6">
+                            <InfoItem icon={Users} label="Plano" value={student.plan} />
+                            <InfoItem icon={BarChart} label="Nível Técnico" value={student.technicalLevel} />
+                         </div>
                         <Separator />
                         <CardTitle className="text-lg">Gráfico de Evolução</CardTitle>
                          {sortedAssessments.length > 1 ? (
@@ -997,28 +1001,30 @@ export default function AlunoDetailPage() {
                                 return (
                                     <div key={day}>
                                         <h3 className="font-semibold text-lg text-foreground mb-2">Treino de {day}</h3>
-                                        <Table>
-                                            <TableHeader>
-                                                <TableRow>
-                                                    <TableHead>Exercício</TableHead>
-                                                    <TableHead>Séries</TableHead>
-                                                    <TableHead>Reps</TableHead>
-                                                    <TableHead>Descanso</TableHead>
-                                                    <TableHead>Obs</TableHead>
-                                                </TableRow>
-                                            </TableHeader>
-                                            <TableBody>
-                                                {exercises.map(ex => (
-                                                    <TableRow key={ex.id}>
-                                                        <TableCell className="font-medium">{ex.name}</TableCell>
-                                                        <TableCell>{ex.sets}</TableCell>
-                                                        <TableCell>{ex.reps}</TableCell>
-                                                        <TableCell>{ex.rest}</TableCell>
-                                                        <TableCell>{ex.notes || '-'}</TableCell>
+                                        <div className="overflow-x-auto">
+                                            <Table>
+                                                <TableHeader>
+                                                    <TableRow>
+                                                        <TableHead>Exercício</TableHead>
+                                                        <TableHead>Séries</TableHead>
+                                                        <TableHead>Reps</TableHead>
+                                                        <TableHead>Descanso</TableHead>
+                                                        <TableHead>Obs</TableHead>
                                                     </TableRow>
-                                                ))}
-                                            </TableBody>
-                                        </Table>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {exercises.map(ex => (
+                                                        <TableRow key={ex.id}>
+                                                            <TableCell className="font-medium">{ex.name}</TableCell>
+                                                            <TableCell>{ex.sets}</TableCell>
+                                                            <TableCell>{ex.reps}</TableCell>
+                                                            <TableCell>{ex.rest}</TableCell>
+                                                            <TableCell>{ex.notes || '-'}</TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                </TableBody>
+                                            </Table>
+                                        </div>
                                     </div>
                                 )
                             })
