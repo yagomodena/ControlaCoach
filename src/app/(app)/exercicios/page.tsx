@@ -237,7 +237,11 @@ export default function ExerciciosPage() {
   }, [router, toast]);
 
   const fetchExercises = () => {
-    if (!userId) return;
+    if (!userId) {
+      setExercises([]);
+      setIsLoading(false);
+      return () => {};
+    }
     setIsLoading(true);
     const exercisesCollectionRef = collection(db, 'coaches', userId, 'libraryExercises');
     const q = query(exercisesCollectionRef, orderBy('muscleGroup'), orderBy('name'));
@@ -256,7 +260,7 @@ export default function ExerciciosPage() {
   
   useEffect(() => {
     const unsubscribe = fetchExercises();
-    return () => unsubscribe && unsubscribe();
+    return () => unsubscribe();
   }, [userId]);
 
 
@@ -276,7 +280,7 @@ export default function ExerciciosPage() {
       try {
         await deleteDoc(doc(db, 'coaches', userId, 'libraryExercises', exercise.id));
         toast({ title: "Exercício Excluído!" });
-        fetchExercises(); // Re-fetch
+        // No manual re-fetch needed due to onSnapshot listener
       } catch (error) {
         toast({ title: "Erro ao Excluir", variant: "destructive" });
       }
