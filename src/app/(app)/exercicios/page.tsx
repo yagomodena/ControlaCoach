@@ -25,10 +25,12 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const exerciseSchema = z.object({
   name: z.string().min(2, { message: "O nome deve ter pelo menos 2 caracteres." }),
   muscleGroup: z.string().min(2, { message: "O grupo muscular deve ter pelo menos 2 caracteres." }),
+  newMuscleGroup: z.string().optional(),
   defaultSets: z.string().optional(),
   defaultReps: z.string().optional(),
   defaultRest: z.string().optional(),
@@ -42,9 +44,10 @@ interface ExerciseDialogProps {
   onOpenChange: (open: boolean) => void;
   exercise?: LibraryExercise | null;
   onSave: () => void;
+  existingMuscleGroups: string[];
 }
 
-function ExerciseDialog({ open, onOpenChange, exercise, onSave }: ExerciseDialogProps) {
+function ExerciseDialog({ open, onOpenChange, exercise, onSave, existingMuscleGroups }: ExerciseDialogProps) {
   const { toast } = useToast();
   const [userId, setUserId] = useState<string | null>(null);
 
@@ -53,17 +56,29 @@ function ExerciseDialog({ open, onOpenChange, exercise, onSave }: ExerciseDialog
     return () => unsubscribe();
   }, []);
 
-  const { control, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<ExerciseFormData>({
+  const { control, handleSubmit, reset, watch, setValue, formState: { errors, isSubmitting } } = useForm<ExerciseFormData>({
     resolver: zodResolver(exerciseSchema),
+    defaultValues: {
+        name: '',
+        muscleGroup: '',
+        newMuscleGroup: '',
+        defaultSets: '',
+        defaultReps: '',
+        defaultRest: '',
+        defaultNotes: '',
+    }
   });
+  
+  const newMuscleGroupValue = watch('newMuscleGroup');
 
   useEffect(() => {
     if (exercise) {
-      reset(exercise);
+      reset({ ...exercise, newMuscleGroup: '' });
     } else {
       reset({
         name: '',
         muscleGroup: '',
+        newMuscleGroup: '',
         defaultSets: '',
         defaultReps: '',
         defaultRest: '',
@@ -78,15 +93,31 @@ function ExerciseDialog({ open, onOpenChange, exercise, onSave }: ExerciseDialog
       return;
     }
 
+    const finalMuscleGroup = data.newMuscleGroup?.trim() || data.muscleGroup;
+
+    if (!finalMuscleGroup) {
+        toast({ title: "Grupo Muscular Obrigatório", description: "Selecione um grupo existente ou crie um novo.", variant: "destructive"});
+        return;
+    }
+
+    const dataToSave = {
+      name: data.name,
+      muscleGroup: finalMuscleGroup,
+      defaultSets: data.defaultSets,
+      defaultReps: data.defaultReps,
+      defaultRest: data.defaultRest,
+      defaultNotes: data.defaultNotes,
+    };
+
     try {
       if (exercise?.id) {
         // Update existing exercise
         const exerciseRef = doc(db, 'coaches', userId, 'libraryExercises', exercise.id);
-        await updateDoc(exerciseRef, data);
+        await updateDoc(exerciseRef, dataToSave);
         toast({ title: "Exercício Atualizado!", description: `${data.name} foi atualizado com sucesso.` });
       } else {
         // Add new exercise
-        await addDoc(collection(db, 'coaches', userId, 'libraryExercises'), data);
+        await addDoc(collection(db, 'coaches', userId, 'libraryExercises'), dataToSave);
         toast({ title: "Exercício Criado!", description: `${data.name} foi adicionado à biblioteca.` });
       }
       onSave();
@@ -112,11 +143,41 @@ function ExerciseDialog({ open, onOpenChange, exercise, onSave }: ExerciseDialog
             <Controller name="name" control={control} render={({ field }) => <Input {...field} placeholder="Ex: Supino Reto" />} />
             {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
           </div>
+
           <div className="space-y-2">
-            <Label htmlFor="muscleGroup">Grupo Muscular</Label>
-            <Controller name="muscleGroup" control={control} render={({ field }) => <Input {...field} placeholder="Ex: Peito, Costas, Pernas" />} />
-            {errors.muscleGroup && <p className="text-sm text-destructive">{errors.muscleGroup.message}</p>}
+              <Label htmlFor="muscleGroup">Grupo Muscular</Label>
+               <Controller 
+                  name="muscleGroup" 
+                  control={control} 
+                  render={({ field }) => (
+                      <Select 
+                        onValueChange={(value) => {
+                            field.onChange(value);
+                            setValue('newMuscleGroup', ''); // Clear new group input
+                        }} 
+                        value={field.value}
+                        disabled={!!newMuscleGroupValue}
+                      >
+                          <SelectTrigger id="muscleGroup">
+                              <SelectValue placeholder="Selecione um grupo existente..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                              {existingMuscleGroups.map(group => (
+                                  <SelectItem key={group} value={group}>{group}</SelectItem>
+                              ))}
+                          </SelectContent>
+                      </Select>
+                  )} 
+              />
+              {errors.muscleGroup && <p className="text-sm text-destructive">{errors.muscleGroup.message}</p>}
           </div>
+          
+           <div className="space-y-2">
+              <Label htmlFor="newMuscleGroup">Ou, novo grupo muscular</Label>
+              <Controller name="newMuscleGroup" control={control} render={({ field }) => <Input {...field} placeholder="Ex: Funcional" />} />
+          </div>
+
+
           <p className="text-sm text-muted-foreground pt-2">Valores Padrão (Opcional)</p>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -221,6 +282,11 @@ export default function ExerciciosPage() {
       }
     }
   };
+  
+  const existingMuscleGroups = useMemo(() => {
+    const groups = new Set(exercises.map(ex => ex.muscleGroup));
+    return Array.from(groups).sort();
+  }, [exercises]);
 
   const groupedExercises = useMemo(() => {
     const filtered = exercises.filter(ex => 
@@ -315,6 +381,7 @@ export default function ExerciciosPage() {
         onOpenChange={setIsDialogOpen}
         exercise={selectedExercise}
         onSave={fetchExercises}
+        existingMuscleGroups={existingMuscleGroups}
       />
     </>
   );
