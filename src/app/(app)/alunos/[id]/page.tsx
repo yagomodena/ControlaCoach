@@ -31,6 +31,7 @@ import { differenceInYears, parseISO, format, formatISO } from 'date-fns';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { CartesianGrid, XAxis, YAxis, Legend, Line, ComposedChart, ResponsiveContainer } from 'recharts';
 import { v4 as uuidv4 } from 'uuid';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 const NO_LOCATION_VALUE = "__NO_LOCATION__";
 
@@ -471,86 +472,86 @@ export default function AlunoDetailPage() {
     };
 
     return (
-      <Card className="bg-muted/30">
-        <CardHeader className="py-3 px-4">
-          <CardTitle className="text-lg">Treino de {day}</CardTitle>
-        </CardHeader>
-        <CardContent className="px-4 pb-4 space-y-3">
-          {fields.map((item, index) => (
-            <div key={item.id} className="p-3 border rounded-md bg-background space-y-2">
-              <div className="flex justify-between items-center">
-                 <p className="font-semibold text-primary">{item.name}</p>
-                 <Button type="button" variant="ghost" size="icon" className="text-destructive h-7 w-7" onClick={() => remove(index)}>
-                   <Trash2 className="h-4 w-4" />
-                 </Button>
-              </div>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                 <Controller
-                    name={`trainingSheetWorkouts.${day}.${index}.sets`}
-                    control={control}
-                    render={({ field }) => <Input {...field} placeholder="Séries"/>}
-                 />
-                 <Controller
-                    name={`trainingSheetWorkouts.${day}.${index}.reps`}
-                    control={control}
-                    render={({ field }) => <Input {...field} placeholder="Reps"/>}
-                 />
-                 <Controller
-                    name={`trainingSheetWorkouts.${day}.${index}.rest`}
-                    control={control}
-                    render={({ field }) => <Input {...field} placeholder="Descanso"/>}
-                 />
-                  <Controller
-                    name={`trainingSheetWorkouts.${day}.${index}.notes`}
-                    control={control}
-                    render={({ field }) => <Input {...field} placeholder="Obs (opcional)" className="col-span-2"/>}
-                 />
-              </div>
-            </div>
-          ))}
-          <div className="space-y-2">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 items-center">
-                <div>
-                  <Label htmlFor={`filter-${day}`} className="text-xs">Filtrar por Grupo</Label>
-                  <Select value={muscleGroupFilter} onValueChange={setMuscleGroupFilter}>
-                      <SelectTrigger id={`filter-${day}`}>
-                          <SelectValue placeholder="Filtrar por grupo..."/>
-                      </SelectTrigger>
-                      <SelectContent>
-                          {muscleGroups.map(group => (
-                              <SelectItem key={group} value={group} className="capitalize">
-                                  {group === 'all' ? 'Todos os Grupos' : group}
-                              </SelectItem>
-                          ))}
-                      </SelectContent>
-                  </Select>
+      <AccordionItem value={day}>
+        <AccordionTrigger>Treino de {day}</AccordionTrigger>
+        <AccordionContent>
+          <div className="space-y-3 pt-2">
+            {fields.map((item, index) => (
+              <div key={item.id} className="p-3 border rounded-md bg-background space-y-2">
+                <div className="flex justify-between items-center">
+                   <p className="font-semibold text-primary">{item.name}</p>
+                   <Button type="button" variant="ghost" size="icon" className="text-destructive h-7 w-7" onClick={() => remove(index)}>
+                     <Trash2 className="h-4 w-4" />
+                   </Button>
                 </div>
-                <div>
-                   <Label htmlFor={`add-exercise-${day}`} className="text-xs">Adicionar Exercício</Label>
-                   <div className="flex items-center gap-2">
-                      <Select onValueChange={handleAddExercise} value="">
-                          <SelectTrigger id={`add-exercise-${day}`} className="flex-grow">
-                              <SelectValue placeholder="Selecione..."/>
-                          </SelectTrigger>
-                          <SelectContent>
-                              {filteredExercises.length > 0 ? (
-                                filteredExercises.map(ex => (
-                                  <SelectItem key={ex.id} value={ex.id}>{ex.name}</SelectItem>
-                                ))  
-                              ) : (
-                                  <SelectItem value="none" disabled>Nenhum exercício encontrado</SelectItem>
-                              )}
-                          </SelectContent>
-                      </Select>
-                       <Button type="button" variant="outline" asChild>
-                          <Link href="/exercicios" target="_blank"><PlusCircle className="h-4 w-4"/></Link>
-                      </Button>
-                   </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                   <Controller
+                      name={`trainingSheetWorkouts.${day}.${index}.sets`}
+                      control={control}
+                      render={({ field }) => <Input {...field} placeholder="Séries"/>}
+                   />
+                   <Controller
+                      name={`trainingSheetWorkouts.${day}.${index}.reps`}
+                      control={control}
+                      render={({ field }) => <Input {...field} placeholder="Reps"/>}
+                   />
+                   <Controller
+                      name={`trainingSheetWorkouts.${day}.${index}.rest`}
+                      control={control}
+                      render={({ field }) => <Input {...field} placeholder="Descanso"/>}
+                   />
+                    <Controller
+                      name={`trainingSheetWorkouts.${day}.${index}.notes`}
+                      control={control}
+                      render={({ field }) => <Input {...field} placeholder="Obs (opcional)" className="col-span-2"/>}
+                   />
                 </div>
+              </div>
+            ))}
+            <div className="space-y-2 pt-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 items-center">
+                  <div>
+                    <Label htmlFor={`filter-${day}`} className="text-xs">Filtrar por Grupo</Label>
+                    <Select value={muscleGroupFilter} onValueChange={setMuscleGroupFilter}>
+                        <SelectTrigger id={`filter-${day}`}>
+                            <SelectValue placeholder="Filtrar por grupo..."/>
+                        </SelectTrigger>
+                        <SelectContent>
+                            {muscleGroups.map(group => (
+                                <SelectItem key={group} value={group} className="capitalize">
+                                    {group === 'all' ? 'Todos os Grupos' : group}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                     <Label htmlFor={`add-exercise-${day}`} className="text-xs">Adicionar Exercício</Label>
+                     <div className="flex items-center gap-2">
+                        <Select onValueChange={handleAddExercise} value="">
+                            <SelectTrigger id={`add-exercise-${day}`} className="flex-grow">
+                                <SelectValue placeholder="Selecione..."/>
+                            </SelectTrigger>
+                            <SelectContent>
+                                {filteredExercises.length > 0 ? (
+                                  filteredExercises.map(ex => (
+                                    <SelectItem key={ex.id} value={ex.id}>{ex.name}</SelectItem>
+                                  ))  
+                                ) : (
+                                    <SelectItem value="none" disabled>Nenhum exercício encontrado</SelectItem>
+                                )}
+                            </SelectContent>
+                        </Select>
+                         <Button type="button" variant="outline" asChild>
+                            <Link href="/exercicios" target="_blank"><PlusCircle className="h-4 w-4"/></Link>
+                        </Button>
+                     </div>
+                  </div>
+              </div>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </AccordionContent>
+      </AccordionItem>
     );
   };
 
@@ -637,11 +638,13 @@ export default function AlunoDetailPage() {
                                 }
                             </CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-4">
+                        <CardContent>
                             {sortDays(recurringClassDays).length > 0 ? (
-                                sortDays(recurringClassDays).map(day => (
-                                    <TrainingDayEditor key={day} day={day} />
-                                ))
+                                <Accordion type="multiple" className="w-full">
+                                  {sortDays(recurringClassDays).map(day => (
+                                      <TrainingDayEditor key={day} day={day} />
+                                  ))}
+                                </Accordion>
                             ) : (
                                 <p className="text-center text-muted-foreground py-8">
                                     Nenhum dia de aula recorrente selecionado.
