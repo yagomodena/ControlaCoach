@@ -152,19 +152,42 @@ export default function LandingPage() {
 
       {/* Pricing Section */}
       <section id="precos" className="py-16 md:py-20 bg-[#0D0D0D] text-white px-4 sm:px-6 lg:px-8">
-        <div className="max-w-4xl mx-auto text-center">
+        <div className="max-w-6xl mx-auto text-center">
           <h2 className="text-3xl sm:text-4xl font-bold font-headline mb-4">Planos e Preços</h2>
           <p className="text-lg text-gray-300 mb-12 sm:mb-16">Escolha o plano ideal para você e comece a transformar sua gestão.</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
+            {/* Plano Essencial */}
             <div className="bg-white text-[#0D0D0D] p-8 rounded-xl shadow-xl flex flex-col justify-between">
               <div>
-                <h3 className="text-2xl font-bold text-[#FF6B00] mb-2">Plano Mensal</h3>
+                <h3 className="text-2xl font-bold text-[#FF6B00] mb-2">Essencial</h3>
                 <p className="text-4xl font-bold mb-1">R$ 49<span className="text-2xl">,90</span><span className="text-lg font-normal text-gray-600">/mês</span></p>
-                <p className="text-gray-600 mb-6">Acesso completo a todas as funcionalidades.</p>
+                <p className="text-gray-600 mb-6">Ideal para começar a organizar sua base de alunos.</p>
                 <ul className="space-y-2 text-left mb-8">
-                  {['Alunos ilimitados', 'Agenda completa', 'Controle financeiro', 'Suporte prioritário'].map(feature => (
-                    <li key={feature} className="flex items-center"><ShieldCheck className="h-5 w-5 text-green-500 mr-2" />{feature}</li>
-                  ))}
+                  <li className="flex items-center"><ShieldCheck className="h-5 w-5 text-green-500 mr-2" />Até 60 alunos</li>
+                  <li className="flex items-center"><ShieldCheck className="h-5 w-5 text-green-500 mr-2" />Agenda e aulas</li>
+                  <li className="flex items-center"><ShieldCheck className="h-5 w-5 text-green-500 mr-2" />Controle financeiro</li>
+                  <li className="flex items-center"><ShieldCheck className="h-5 w-5 text-green-500 mr-2" />Suporte via email</li>
+                </ul>
+              </div>
+              <Link href="/cadastro" passHref>
+                <Button size="lg" className="w-full bg-gray-700 text-white hover:bg-gray-800 py-3 text-md font-semibold rounded-lg shadow-md">
+                  Começar Teste Gratuito
+                </Button>
+              </Link>
+            </div>
+
+            {/* Plano Pro */}
+            <div className="bg-white text-[#0D0D0D] p-8 rounded-xl shadow-xl border-2 border-[#FF6B00] flex flex-col justify-between relative">
+              <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-[#FF6B00] text-white px-4 py-1 text-sm font-semibold rounded-full">MAIS POPULAR</div>
+              <div>
+                <h3 className="text-2xl font-bold text-[#FF6B00] mb-2 mt-3">Pro</h3>
+                <p className="text-4xl font-bold mb-1">R$ 79<span className="text-2xl">,90</span><span className="text-lg font-normal text-gray-600">/mês</span></p>
+                <p className="text-gray-600 mb-6">Para profissionais que estão crescendo.</p>
+                <ul className="space-y-2 text-left mb-8">
+                  <li className="flex items-center"><ShieldCheck className="h-5 w-5 text-green-500 mr-2" />Até 120 alunos</li>
+                  <li className="flex items-center"><ShieldCheck className="h-5 w-5 text-green-500 mr-2" />Tudo do plano Essencial</li>
+                  <li className="flex items-center"><ShieldCheck className="h-5 w-5 text-green-500 mr-2" />Suporte prioritário</li>
+                  <li className="flex items-center"><ShieldCheck className="h-5 w-5 text-green-500 mr-2" />Acesso a novas funções</li>
                 </ul>
               </div>
               <Link href="/cadastro" passHref>
@@ -173,20 +196,22 @@ export default function LandingPage() {
                 </Button>
               </Link>
             </div>
-            <div className="bg-white text-[#0D0D0D] p-8 rounded-xl shadow-xl border-2 border-[#FF6B00] flex flex-col justify-between relative">
-              <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-[#FF6B00] text-white px-4 py-1 text-sm font-semibold rounded-full">MAIS POPULAR</div>
+
+            {/* Plano Premium */}
+            <div className="bg-white text-[#0D0D0D] p-8 rounded-xl shadow-xl flex flex-col justify-between">
               <div>
-                <h3 className="text-2xl font-bold text-[#FF6B00] mb-2 mt-3">Plano Anual</h3>
-                <p className="text-4xl font-bold mb-1">R$ 497<span className="text-lg font-normal text-gray-600">/ano</span></p>
-                <p className="text-gray-600 mb-6">Economize 17% (equivale a R$ 41,41/mês).</p>
+                <h3 className="text-2xl font-bold text-[#FF6B00] mb-2">Premium</h3>
+                <p className="text-4xl font-bold mb-1">R$ 129<span className="text-2xl">,90</span><span className="text-lg font-normal text-gray-600">/mês</span></p>
+                <p className="text-gray-600 mb-6">Para quem não quer se preocupar com limites.</p>
                 <ul className="space-y-2 text-left mb-8">
-                  {['Tudo do Plano Mensal', 'Desconto exclusivo', 'Acesso antecipado a novidades'].map(feature => (
-                    <li key={feature} className="flex items-center"><ShieldCheck className="h-5 w-5 text-green-500 mr-2" />{feature}</li>
-                  ))}
+                   <li className="flex items-center"><ShieldCheck className="h-5 w-5 text-green-500 mr-2" />Alunos ilimitados</li>
+                   <li className="flex items-center"><ShieldCheck className="h-5 w-5 text-green-500 mr-2" />Tudo do plano Pro</li>
+                   <li className="flex items-center"><ShieldCheck className="h-5 w-5 text-green-500 mr-2" />Relatórios avançados</li>
+                   <li className="flex items-center"><ShieldCheck className="h-5 w-5 text-green-500 mr-2" />Suporte dedicado</li>
                 </ul>
               </div>
-              <Link href="/cadastro" passHref>
-                <Button size="lg" className="w-full bg-[#FF6B00] text-white hover:bg-[#FF8C42] py-3 text-md font-semibold rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105">
+               <Link href="/cadastro" passHref>
+                <Button size="lg" className="w-full bg-gray-700 text-white hover:bg-gray-800 py-3 text-md font-semibold rounded-lg shadow-md">
                   Começar Teste Gratuito
                 </Button>
               </Link>
