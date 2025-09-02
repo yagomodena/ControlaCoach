@@ -232,6 +232,25 @@ export default function ExerciciosPage() {
   const [searchTerm, setSearchTerm] = useState('');
 
   const refreshData = useCallback(() => {
+    // This function is now just a placeholder for clarity,
+    // as onSnapshot handles real-time updates automatically.
+    // We keep it in case we need to add manual refresh logic later.
+  }, []);
+  
+  useEffect(() => {
+    const unsubscribeAuth = auth.onAuthStateChanged(user => {
+      if (user) {
+        setUserId(user.uid);
+      } else {
+        setUserId(null);
+        toast({ title: "Autenticação Necessária", variant: "destructive" });
+        router.push('/login');
+      }
+    });
+    return () => unsubscribeAuth();
+  }, [router, toast]);
+  
+  useEffect(() => {
     if (!userId) {
       setExercises([]);
       setIsLoading(false);
@@ -252,28 +271,8 @@ export default function ExerciciosPage() {
       setIsLoading(false);
     });
 
-    return unsubscribe;
+    return () => unsubscribe();
   }, [userId, toast]);
-  
-  useEffect(() => {
-    const unsubscribeAuth = auth.onAuthStateChanged(user => {
-      if (user) {
-        setUserId(user.uid);
-      } else {
-        setUserId(null);
-        toast({ title: "Autenticação Necessária", variant: "destructive" });
-        router.push('/login');
-      }
-    });
-    return () => unsubscribeAuth();
-  }, [router, toast]);
-  
-  useEffect(() => {
-    const unsubscribe = refreshData();
-    return () => {
-      if(unsubscribe) unsubscribe();
-    };
-  }, [userId, refreshData]);
 
 
   const handleAddNew = () => {
@@ -397,12 +396,11 @@ export default function ExerciciosPage() {
         open={isDialogOpen}
         onOpenChange={setIsDialogOpen}
         exercise={selectedExercise}
-        onSave={() => {
-          // No need to call refreshData here since the onSnapshot listener will handle it.
-          // This onSave prop is more for things like closing the dialog or resetting form state if needed.
-        }}
+        onSave={refreshData}
         existingMuscleGroups={existingMuscleGroups}
       />
     </>
   );
 }
+
+    
