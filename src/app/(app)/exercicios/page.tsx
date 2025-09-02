@@ -70,6 +70,7 @@ function ExerciseDialog({ open, onOpenChange, exercise, onSave, existingMuscleGr
   });
   
   const newMuscleGroupValue = watch('newMuscleGroup');
+  const muscleGroupValue = watch('muscleGroup');
 
   useEffect(() => {
     if (exercise) {
@@ -103,10 +104,10 @@ function ExerciseDialog({ open, onOpenChange, exercise, onSave, existingMuscleGr
     const dataToSave = {
       name: data.name,
       muscleGroup: finalMuscleGroup,
-      defaultSets: data.defaultSets,
-      defaultReps: data.defaultReps,
-      defaultRest: data.defaultRest,
-      defaultNotes: data.defaultNotes,
+      defaultSets: data.defaultSets || '',
+      defaultReps: data.defaultReps || '',
+      defaultRest: data.defaultRest || '',
+      defaultNotes: data.defaultNotes || '',
     };
 
     try {
@@ -152,8 +153,12 @@ function ExerciseDialog({ open, onOpenChange, exercise, onSave, existingMuscleGr
                   render={({ field }) => (
                       <Select 
                         onValueChange={(value) => {
-                            field.onChange(value);
-                            setValue('newMuscleGroup', ''); // Clear new group input
+                            if (value !== 'create-new') {
+                                field.onChange(value);
+                                setValue('newMuscleGroup', ''); // Clear new group input
+                            } else {
+                                field.onChange(''); // Clear selection if 'create new' is chosen
+                            }
                         }} 
                         value={field.value}
                         disabled={!!newMuscleGroupValue}
@@ -169,7 +174,7 @@ function ExerciseDialog({ open, onOpenChange, exercise, onSave, existingMuscleGr
                       </Select>
                   )} 
               />
-              {errors.muscleGroup && <p className="text-sm text-destructive">{errors.muscleGroup.message}</p>}
+              {!muscleGroupValue && !newMuscleGroupValue && <p className="text-sm text-destructive">{errors.muscleGroup?.message}</p>}
           </div>
           
            <div className="space-y-2">
@@ -182,20 +187,20 @@ function ExerciseDialog({ open, onOpenChange, exercise, onSave, existingMuscleGr
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="defaultSets">Séries</Label>
-              <Controller name="defaultSets" control={control} render={({ field }) => <Input {...field} placeholder="Ex: 3" />} />
+              <Controller name="defaultSets" control={control} render={({ field }) => <Input {...field} value={field.value ?? ''} placeholder="Ex: 3" />} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="defaultReps">Repetições</Label>
-              <Controller name="defaultReps" control={control} render={({ field }) => <Input {...field} placeholder="Ex: 10-12" />} />
+              <Controller name="defaultReps" control={control} render={({ field }) => <Input {...field} value={field.value ?? ''} placeholder="Ex: 10-12" />} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="defaultRest">Descanso</Label>
-              <Controller name="defaultRest" control={control} render={({ field }) => <Input {...field} placeholder="Ex: 60s" />} />
+              <Controller name="defaultRest" control={control} render={({ field }) => <Input {...field} value={field.value ?? ''} placeholder="Ex: 60s" />} />
             </div>
           </div>
            <div className="space-y-2">
               <Label htmlFor="defaultNotes">Observações</Label>
-              <Controller name="defaultNotes" control={control} render={({ field }) => <Input {...field} placeholder="Ex: Focar na execução lenta" />} />
+              <Controller name="defaultNotes" control={control} render={({ field }) => <Input {...field} value={field.value ?? ''} placeholder="Ex: Focar na execução lenta" />} />
             </div>
 
           <DialogFooter className="pt-4">
@@ -235,13 +240,14 @@ export default function ExerciciosPage() {
     });
     return () => unsubscribeAuth();
   }, [router, toast]);
-
-  const fetchExercises = () => {
+  
+  useEffect(() => {
     if (!userId) {
       setExercises([]);
       setIsLoading(false);
-      return () => {};
+      return;
     }
+    
     setIsLoading(true);
     const exercisesCollectionRef = collection(db, 'coaches', userId, 'libraryExercises');
     const q = query(exercisesCollectionRef, orderBy('muscleGroup'), orderBy('name'));
@@ -255,13 +261,9 @@ export default function ExerciciosPage() {
       toast({ title: "Erro ao Carregar Exercícios", variant: "destructive" });
       setIsLoading(false);
     });
-    return unsubscribe;
-  };
-  
-  useEffect(() => {
-    const unsubscribe = fetchExercises();
+
     return () => unsubscribe();
-  }, [userId]);
+  }, [userId, toast]);
 
 
   const handleAddNew = () => {
@@ -280,7 +282,6 @@ export default function ExerciciosPage() {
       try {
         await deleteDoc(doc(db, 'coaches', userId, 'libraryExercises', exercise.id));
         toast({ title: "Exercício Excluído!" });
-        // No manual re-fetch needed due to onSnapshot listener
       } catch (error) {
         toast({ title: "Erro ao Excluir", variant: "destructive" });
       }
@@ -384,7 +385,7 @@ export default function ExerciciosPage() {
         open={isDialogOpen}
         onOpenChange={setIsDialogOpen}
         exercise={selectedExercise}
-        onSave={fetchExercises}
+        onSave={() => {}}
         existingMuscleGroups={existingMuscleGroups}
       />
     </>
