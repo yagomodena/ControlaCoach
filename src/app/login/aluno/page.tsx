@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, KeyRound, Loader2, User } from 'lucide-react';
 import { db } from '@/firebase';
 import { doc, getDoc } from 'firebase/firestore';
+import type { Student } from '@/types';
 
 export default function AlunoLoginPage() {
   const router = useRouter();
@@ -37,8 +38,19 @@ export default function AlunoLoginPage() {
       const studentDocSnap = await getDoc(studentDocRef);
 
       if (studentDocSnap.exists()) {
-         // The student exists. For this ID-based login, we'll store the ID
-         // in session storage and redirect.
+         const studentData = studentDocSnap.data() as Student;
+         
+         if (studentData.status === 'inactive') {
+            setError('Sua conta está inativa. Por favor, entre em contato com seu treinador para reativá-la.');
+            toast({
+                title: 'Acesso Negado',
+                description: 'Sua conta está inativa.',
+                variant: 'destructive',
+            });
+            setIsLoading(false);
+            return;
+         }
+
          sessionStorage.setItem('fitplanner_student_id', studentDocSnap.id);
 
          toast({

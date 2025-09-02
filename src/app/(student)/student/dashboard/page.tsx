@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Users, CalendarCheck2, Dumbbell, Activity, Loader2 } from "lucide-react";
+import { Users, CalendarCheck2, Dumbbell, Activity, Loader2, AlertTriangle } from "lucide-react";
 import { auth, db } from '@/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import type { Student } from '@/types';
@@ -27,7 +27,12 @@ export default function StudentDashboardPage() {
           const studentDocSnap = await getDoc(studentDocRef);
 
           if (studentDocSnap.exists()) {
-            setStudent({ ...studentDocSnap.data(), id: studentDocSnap.id } as Student);
+            const studentData = { ...studentDocSnap.data(), id: studentDocSnap.id } as Student;
+            if (studentData.status === 'inactive') {
+              setError("Sua conta está inativa. Por favor, entre em contato com seu treinador para reativá-la.");
+            } else {
+              setStudent(studentData);
+            }
           } else {
             setError("Seus dados de aluno não foram encontrados. Por favor, entre em contato com seu treinador.");
           }
@@ -57,12 +62,13 @@ export default function StudentDashboardPage() {
   
   if (error) {
      return (
-        <Card className="shadow-lg">
-            <CardHeader>
-                <CardTitle className="text-destructive">Erro ao Carregar Painel</CardTitle>
+        <Card className="shadow-lg max-w-lg mx-auto mt-10">
+            <CardHeader className="text-center">
+                <AlertTriangle className="mx-auto h-12 w-12 text-destructive mb-4" />
+                <CardTitle className="text-destructive text-2xl">Acesso Negado</CardTitle>
             </CardHeader>
             <CardContent>
-                <p className="text-destructive">{error}</p>
+                <p className="text-center text-muted-foreground">{error}</p>
             </CardContent>
         </Card>
      )
