@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PlusCircle, Edit, Trash2, Dumbbell, Loader2, Search } from "lucide-react";
@@ -73,20 +73,22 @@ function ExerciseDialog({ open, onOpenChange, exercise, onSave, existingMuscleGr
   const muscleGroupValue = watch('muscleGroup');
 
   useEffect(() => {
-    if (exercise) {
-      reset({ ...exercise, newMuscleGroup: '' });
-    } else {
-      reset({
-        name: '',
-        muscleGroup: '',
-        newMuscleGroup: '',
-        defaultSets: '',
-        defaultReps: '',
-        defaultRest: '',
-        defaultNotes: '',
-      });
+    if (open) {
+      if (exercise) {
+        reset({ ...exercise, muscleGroup: exercise.muscleGroup || '', newMuscleGroup: '' });
+      } else {
+        reset({
+          name: '',
+          muscleGroup: '',
+          newMuscleGroup: '',
+          defaultSets: '',
+          defaultReps: '',
+          defaultRest: '',
+          defaultNotes: '',
+        });
+      }
     }
-  }, [exercise, reset]);
+  }, [exercise, open, reset]);
 
   const onSubmit = async (data: ExerciseFormData) => {
     if (!userId) {
@@ -160,7 +162,7 @@ function ExerciseDialog({ open, onOpenChange, exercise, onSave, existingMuscleGr
                                 field.onChange(''); // Clear selection if 'create new' is chosen
                             }
                         }} 
-                        value={field.value}
+                        value={field.value || ''}
                         disabled={!!newMuscleGroupValue}
                       >
                           <SelectTrigger id="muscleGroup">
@@ -174,12 +176,12 @@ function ExerciseDialog({ open, onOpenChange, exercise, onSave, existingMuscleGr
                       </Select>
                   )} 
               />
-              {!muscleGroupValue && !newMuscleGroupValue && <p className="text-sm text-destructive">{errors.muscleGroup?.message}</p>}
+              {errors.muscleGroup && !newMuscleGroupValue && <p className="text-sm text-destructive">{errors.muscleGroup.message}</p>}
           </div>
           
            <div className="space-y-2">
               <Label htmlFor="newMuscleGroup">Ou, novo grupo muscular</Label>
-              <Controller name="newMuscleGroup" control={control} render={({ field }) => <Input {...field} placeholder="Ex: Funcional" />} />
+              <Controller name="newMuscleGroup" control={control} render={({ field }) => <Input {...field} value={field.value ?? ''} placeholder="Ex: Funcional" />} />
           </div>
 
 
@@ -208,6 +210,7 @@ function ExerciseDialog({ open, onOpenChange, exercise, onSave, existingMuscleGr
               <Button type="button" variant="outline">Cancelar</Button>
             </DialogClose>
             <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {isSubmitting ? 'Salvando...' : 'Salvar'}
             </Button>
           </DialogFooter>
@@ -241,11 +244,11 @@ export default function ExerciciosPage() {
     return () => unsubscribeAuth();
   }, [router, toast]);
   
-  useEffect(() => {
+  const fetchExercises = useCallback(() => {
     if (!userId) {
       setExercises([]);
       setIsLoading(false);
-      return;
+      return () => {};
     }
     
     setIsLoading(true);
@@ -262,8 +265,13 @@ export default function ExerciciosPage() {
       setIsLoading(false);
     });
 
-    return () => unsubscribe();
+    return unsubscribe;
   }, [userId, toast]);
+
+  useEffect(() => {
+    const unsubscribe = fetchExercises();
+    return () => unsubscribe();
+  }, [fetchExercises]);
 
 
   const handleAddNew = () => {
@@ -385,7 +393,7 @@ export default function ExerciciosPage() {
         open={isDialogOpen}
         onOpenChange={setIsDialogOpen}
         exercise={selectedExercise}
-        onSave={() => {}}
+        onSave={fetchExercises}
         existingMuscleGroups={existingMuscleGroups}
       />
     </>
