@@ -29,7 +29,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 const exerciseSchema = z.object({
   name: z.string().min(2, { message: "O nome deve ter pelo menos 2 caracteres." }),
-  muscleGroup: z.string().min(2, { message: "O grupo muscular deve ter pelo menos 2 caracteres." }),
+  muscleGroup: z.string().min(2, { message: "O grupo muscular deve ter pelo menos 2 caracteres." }).optional().or(z.literal('')),
   newMuscleGroup: z.string().optional(),
   defaultSets: z.string().optional(),
   defaultReps: z.string().optional(),
@@ -231,24 +231,11 @@ export default function ExerciciosPage() {
   const [selectedExercise, setSelectedExercise] = useState<LibraryExercise | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
-  useEffect(() => {
-    const unsubscribeAuth = auth.onAuthStateChanged(user => {
-      if (user) {
-        setUserId(user.uid);
-      } else {
-        setUserId(null);
-        toast({ title: "Autenticação Necessária", variant: "destructive" });
-        router.push('/login');
-      }
-    });
-    return () => unsubscribeAuth();
-  }, [router, toast]);
-  
-  const fetchExercises = useCallback(() => {
+  const refreshData = useCallback(() => {
     if (!userId) {
       setExercises([]);
       setIsLoading(false);
-      return () => {};
+      return;
     }
     
     setIsLoading(true);
@@ -267,11 +254,26 @@ export default function ExerciciosPage() {
 
     return unsubscribe;
   }, [userId, toast]);
-
+  
   useEffect(() => {
-    const unsubscribe = fetchExercises();
-    return () => unsubscribe();
-  }, [fetchExercises]);
+    const unsubscribeAuth = auth.onAuthStateChanged(user => {
+      if (user) {
+        setUserId(user.uid);
+      } else {
+        setUserId(null);
+        toast({ title: "Autenticação Necessária", variant: "destructive" });
+        router.push('/login');
+      }
+    });
+    return () => unsubscribeAuth();
+  }, [router, toast]);
+  
+  useEffect(() => {
+    const unsubscribe = refreshData();
+    return () => {
+      if(unsubscribe) unsubscribe();
+    };
+  }, [userId, refreshData]);
 
 
   const handleAddNew = () => {
@@ -290,7 +292,9 @@ export default function ExerciciosPage() {
       try {
         await deleteDoc(doc(db, 'coaches', userId, 'libraryExercises', exercise.id));
         toast({ title: "Exercício Excluído!" });
+        // The onSnapshot listener will automatically update the UI
       } catch (error) {
+        console.error("Error deleting exercise:", error);
         toast({ title: "Erro ao Excluir", variant: "destructive" });
       }
     }
@@ -393,7 +397,10 @@ export default function ExerciciosPage() {
         open={isDialogOpen}
         onOpenChange={setIsDialogOpen}
         exercise={selectedExercise}
-        onSave={fetchExercises}
+        onSave={() => {
+          // No need to call refreshData here since the onSnapshot listener will handle it.
+          // This onSave prop is more for things like closing the dialog or resetting form state if needed.
+        }}
         existingMuscleGroups={existingMuscleGroups}
       />
     </>
