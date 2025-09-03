@@ -9,9 +9,10 @@ import { useEffect, useState } from 'react';
 type LogoProps = {
   collapsed?: boolean;
   userType?: 'coach' | 'student';
+  hideTextOnRegistration?: boolean; // New prop
 };
 
-export function Logo({ collapsed = false, userType = 'coach' }: LogoProps) {
+export function Logo({ collapsed = false, userType = 'coach', hideTextOnRegistration = false }: LogoProps) {
   const { theme, systemTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
@@ -50,7 +51,7 @@ export function Logo({ collapsed = false, userType = 'coach' }: LogoProps) {
         />
       )}
 
-      {!collapsed && (
+      {!collapsed && !hideTextOnRegistration && (
         <span className="font-headline text-xl font-bold transition-colors duration-200 flex">
           <span className="text-accent">Fit</span>
           <span className="text-black dark:text-white">Planner</span>

@@ -101,7 +101,7 @@ export default function CadastroPage() {
       <Card className="w-full max-w-md shadow-xl">
         <CardHeader className="space-y-1 text-center">
           <div className="mx-auto mb-6">
-            <Logo />
+            <Logo hideTextOnRegistration={true}/>
           </div>
           <CardTitle className="text-2xl font-headline">Crie sua Conta</CardTitle>
           <CardDescription>
