@@ -164,6 +164,7 @@ export interface CoachProfileSettings {
   coachEmail: string;
   notificationsEnabled: boolean;
   defaultPaymentReminderDays: number;
+  plan: 'Essencial' | 'Pro' | 'Premium'; // Added plan
 }
 
 export interface LibraryExercise {
@@ -189,4 +190,3 @@ export const getDayOfWeekName = (dayNumber: number): DayOfWeek | undefined => {
   };
   return map[dayNumber];
 };
-

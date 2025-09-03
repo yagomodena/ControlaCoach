@@ -169,7 +169,7 @@ export default function LandingPage() {
                   <li className="flex items-center"><ShieldCheck className="h-5 w-5 text-green-500 mr-2" />Suporte via email</li>
                 </ul>
               </div>
-              <Link href="/cadastro" passHref>
+              <Link href="/cadastro?plan=Essencial" passHref>
                 <Button size="lg" className="w-full bg-gray-700 text-white hover:bg-gray-800 py-3 text-md font-semibold rounded-lg shadow-md">
                   Começar Teste Gratuito
                 </Button>
@@ -190,7 +190,7 @@ export default function LandingPage() {
                   <li className="flex items-center"><ShieldCheck className="h-5 w-5 text-green-500 mr-2" />Acesso a novas funções</li>
                 </ul>
               </div>
-              <Link href="/cadastro" passHref>
+              <Link href="/cadastro?plan=Pro" passHref>
                 <Button size="lg" className="w-full bg-[#FF6B00] text-white hover:bg-[#FF8C42] py-3 text-md font-semibold rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105">
                   Começar Teste Gratuito
                 </Button>
@@ -210,7 +210,7 @@ export default function LandingPage() {
                    <li className="flex items-center"><ShieldCheck className="h-5 w-5 text-green-500 mr-2" />Suporte dedicado</li>
                 </ul>
               </div>
-               <Link href="/cadastro" passHref>
+               <Link href="/cadastro?plan=Premium" passHref>
                 <Button size="lg" className="w-full bg-gray-700 text-white hover:bg-gray-800 py-3 text-md font-semibold rounded-lg shadow-md">
                   Começar Teste Gratuito
                 </Button>

@@ -1,9 +1,9 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -15,7 +15,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Logo } from '@/components/logo';
 import { Eye, EyeOff, CreditCard } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { auth, db } from '@/firebase'; // Import Firebase auth and db
+import { auth, db } from '@/firebase'; 
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 
@@ -26,6 +26,7 @@ const registrationSchema = z.object({
   confirmPassword: z.string(),
   cpf: z.string().min(11, { message: 'CPF inválido. Deve ter 11 dígitos.' }).max(14, {message: 'CPF inválido. Máximo de 14 caracteres com formatação.'}),
   paymentMethod: z.enum(['card', 'pix', 'boleto'], { required_error: 'Selecione um meio de pagamento.' }),
+  plan: z.string().optional(), // Added plan field
 }).refine((data) => data.password === data.confirmPassword, {
   message: "As senhas não coincidem.",
   path: ["confirmPassword"],
@@ -35,11 +36,13 @@ type RegistrationFormData = z.infer<typeof registrationSchema>;
 
 export default function CadastroPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState('Essencial');
 
-  const { control, handleSubmit, formState: { errors, isSubmitting } } = useForm<RegistrationFormData>({
+  const { control, handleSubmit, setValue, formState: { errors, isSubmitting } } = useForm<RegistrationFormData>({
     resolver: zodResolver(registrationSchema),
     defaultValues: {
       fullName: '',
@@ -48,8 +51,15 @@ export default function CadastroPage() {
       confirmPassword: '',
       cpf: '',
       paymentMethod: undefined,
+      plan: 'Essencial',
     }
   });
+
+  useEffect(() => {
+    const planFromUrl = searchParams.get('plan') || 'Essencial';
+    setSelectedPlan(planFromUrl);
+    setValue('plan', planFromUrl);
+  }, [searchParams, setValue]);
 
   const onSubmit = async (data: RegistrationFormData) => {
     try {
@@ -63,6 +73,7 @@ export default function CadastroPage() {
       });
 
       // Store additional user information in Firestore
+      // Main user document
       await setDoc(doc(db, "users", user.uid), {
         uid: user.uid,
         fullName: data.fullName,
@@ -70,6 +81,17 @@ export default function CadastroPage() {
         cpf: data.cpf,
         paymentMethod: data.paymentMethod,
         createdAt: new Date().toISOString(),
+        plan: data.plan, // Save the plan
+      });
+
+      // Coach specific document
+       await setDoc(doc(db, "coaches", user.uid), {
+        uid: user.uid,
+        name: data.fullName,
+        email: data.email,
+        plan: data.plan,
+        subscriptionStatus: 'trialing',
+        studentCount: 0,
       });
 
       toast({
@@ -105,6 +127,7 @@ export default function CadastroPage() {
           </div>
           <CardTitle className="text-2xl font-headline">Crie sua Conta</CardTitle>
           <CardDescription>
+            Plano Selecionado: <span className="font-bold text-primary">{selectedPlan}</span>.
             Comece a gerenciar seus treinos de forma profissional.
           </CardDescription>
         </CardHeader>
