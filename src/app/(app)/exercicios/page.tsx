@@ -19,6 +19,16 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useForm, Controller } from 'react-hook-form';
@@ -230,11 +240,13 @@ export default function ExerciciosPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedExercise, setSelectedExercise] = useState<LibraryExercise | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [exerciseToDelete, setExerciseToDelete] = useState<LibraryExercise | null>(null);
 
   const refreshData = useCallback(() => {
-    // This function is now just a placeholder for clarity,
-    // as onSnapshot handles real-time updates automatically.
-    // We keep it in case we need to add manual refresh logic later.
+    // This is a placeholder, as onSnapshot handles real-time updates.
+    // Kept for clarity in case of future need for manual refresh.
   }, []);
   
   useEffect(() => {
@@ -285,17 +297,26 @@ export default function ExerciciosPage() {
     setIsDialogOpen(true);
   };
 
-  const handleDelete = async (exercise: LibraryExercise) => {
-    if (!userId) return;
-    if (window.confirm(`Tem certeza que deseja excluir o exercício "${exercise.name}"?`)) {
-      try {
-        await deleteDoc(doc(db, 'coaches', userId, 'libraryExercises', exercise.id));
-        toast({ title: "Exercício Excluído!" });
-        // The onSnapshot listener will automatically update the UI
-      } catch (error) {
-        console.error("Error deleting exercise:", error);
-        toast({ title: "Erro ao Excluir", variant: "destructive" });
-      }
+  const confirmDelete = (exercise: LibraryExercise) => {
+    setExerciseToDelete(exercise);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (!userId || !exerciseToDelete) {
+      toast({ title: "Erro", description: "Usuário ou exercício inválido.", variant: "destructive" });
+      setIsDeleteDialogOpen(false);
+      return;
+    }
+    try {
+      await deleteDoc(doc(db, 'coaches', userId, 'libraryExercises', exerciseToDelete.id));
+      toast({ title: "Exercício Excluído!" });
+    } catch (error) {
+      console.error("Error deleting exercise:", error);
+      toast({ title: "Erro ao Excluir", variant: "destructive" });
+    } finally {
+      setIsDeleteDialogOpen(false);
+      setExerciseToDelete(null);
     }
   };
   
@@ -371,7 +392,7 @@ export default function ExerciciosPage() {
                                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(ex)}>
                                     <Edit className="h-4 w-4"/>
                                 </Button>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDelete(ex)}>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => confirmDelete(ex)}>
                                     <Trash2 className="h-4 w-4"/>
                                 </Button>
                             </div>
@@ -399,8 +420,20 @@ export default function ExerciciosPage() {
         onSave={refreshData}
         existingMuscleGroups={existingMuscleGroups}
       />
+       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. Isso excluirá permanentemente o exercício <span className="font-medium text-foreground">"{exerciseToDelete?.name}"</span> da sua biblioteca.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setExerciseToDelete(null)}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete}>Continuar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
-
-    
