@@ -56,6 +56,7 @@ export default function CadastroPage() {
   });
 
   useEffect(() => {
+    // This now runs only on the client-side, after the component has mounted.
     const planFromUrl = searchParams.get('plan') || 'Essencial';
     setSelectedPlan(planFromUrl);
     setValue('plan', planFromUrl);
